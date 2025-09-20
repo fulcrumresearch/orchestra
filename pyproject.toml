@@ -1,0 +1,11 @@
+[project]
+name = "kerberos"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "claude-code-sdk>=0.0.23",
+    "rich>=14.1.0",
+    "textual>=6.1.0",
+]
