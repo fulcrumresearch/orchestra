@@ -294,13 +294,15 @@ class KerberosApp(App):
         # Get attach command for tmux
         attach_cmd = self._get_tmux_attach_command(session.session_id)
 
-        try:
-            self.term.stop()
-        except Exception:
-            pass
+        # Only restart terminal if command actually changes
+        if getattr(self.term, 'command', None) != attach_cmd:
+            try:
+                self.term.stop()
+            except Exception:
+                pass
 
-        self.term.command = attach_cmd
-        self.term.start()
+            self.term.command = attach_cmd
+            self.term.start()
 
         # Focus back to terminal
         self.set_focus(self.term)
@@ -315,10 +317,8 @@ class KerberosApp(App):
 
     def _get_tmux_attach_command(self, session_id: str) -> str:
         """Get the tmux attach command for a session"""
-        return (
-            f"/usr/bin/env bash -lc "
-            f"'exec env TERM=xterm-256color tmux attach -t {session_id}'"
-        )
+        # Direct tmux attach without extra shell wrapping for better performance
+        return f"tmux attach -t {session_id}"
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle session selection from list"""
@@ -330,5 +330,7 @@ class KerberosApp(App):
 
 
 if __name__ == "__main__":
+    # Set terminal environment for better performance
     os.environ.setdefault("TERM", "xterm-256color")
+    os.environ.setdefault("TMUX_TMPDIR", "/tmp")  # Use local tmp for better performance
     KerberosApp().run()
