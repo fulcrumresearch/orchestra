@@ -113,10 +113,16 @@ class KerberosApp(App):
 
     #term {{
         height: 1fr;
+        overflow: auto;
     }}
 
     #term:focus {{
         border: solid #00ff9f;
+    }}
+
+    Terminal {{
+        overflow: auto;
+        width: 100%;
     }}
     """
 
@@ -126,6 +132,8 @@ class KerberosApp(App):
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
         Binding("ctrl+b", "focus_sidebar", "Sessions", priority=True),
         Binding("ctrl+l", "focus_terminal", "Terminal", priority=True),
+        Binding("ctrl+shift+c", "copy_to_clipboard", "Copy", priority=False),
+        Binding("ctrl+shift+v", "paste_from_clipboard", "Paste", priority=False),
     ]
 
     def __init__(self):
@@ -326,6 +334,20 @@ class KerberosApp(App):
         session = getattr(item, "data", None)
         if session and isinstance(session, Session):
             self._attach_to_session(session)
+
+    def action_copy_to_clipboard(self) -> None:
+        """Copy selected text to clipboard"""
+        # This will pass through to the terminal's native copy handling
+        if self.focused == self.term:
+            # Let the terminal handle the copy operation
+            pass
+
+    def action_paste_from_clipboard(self) -> None:
+        """Paste from clipboard"""
+        # This will pass through to the terminal's native paste handling
+        if self.focused == self.term:
+            # Let the terminal handle the paste operation
+            pass
 
 
 
