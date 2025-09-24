@@ -27,7 +27,7 @@ def tmux(args: list[str]) -> subprocess.CompletedProcess:
     )
 
 
-class TmuxAgent(AgentProtocol):
+class TmuxProtocol(AgentProtocol):
     """TMux implementation of the AgentProtocol"""
 
     def __init__(self, default_command: str = "claude"):
@@ -49,7 +49,7 @@ class TmuxAgent(AgentProtocol):
         Returns:
             bool: True if session started successfully, False otherwise
         """
-        logger.info(f"TmuxAgent.start called for session {session.session_id}")
+        logger.info(f"TmuxProtocol.start called for session {session.session_id}")
 
         # Ensure work_path is set
         if not session.work_path:
