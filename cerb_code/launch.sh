@@ -94,9 +94,10 @@ else
     # Create new session with a window
     tmux new-session -d -s "$SESSION_NAME" -n "$WINDOW_NAME"
 
-    # Add custom keybinding: Ctrl+S to switch/toggle between panes
+    # Add custom keybinding: Ctrl+S to cycle through all 3 panes
     # -n means no prefix needed (direct binding)
-    tmux bind-key -n C-s last-pane
+    # This will rotate through panes 0 -> 1 -> 2 -> 0
+    tmux bind-key -n C-s select-pane -t :.+
 
     # Create the L-shaped layout
     create_layout "$SESSION_NAME:$WINDOW_NAME"
