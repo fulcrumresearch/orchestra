@@ -11,6 +11,7 @@ dependencies = [
 [project.scripts]
 cerb = "cerb_code.cerb_launcher:main"
 cerb-sidebar = "cerb_code.kerberos:main"
+cerb-monitor = "cerb_code.monitor:main"
 
 [tool.setuptools]
 packages = ["cerb_code", "lib"]

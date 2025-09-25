@@ -16,29 +16,73 @@ if [[ ! -f "$KERBEROS_PY" ]]; then
     exit 1
 fi
 
+# Function to create the L-shaped layout
+create_layout() {
+    local target_prefix="$1"  # Either empty or "SESSION:WINDOW"
+
+    # Set target flag for tmux commands (empty if no prefix)
+    local target_flag=""
+    local pane1_target="1"
+    if [[ -n "$target_prefix" ]]; then
+        target_flag="-t $target_prefix"
+        pane1_target="${target_prefix}.1"
+    fi
+
+    # Get window width and calculate right pane size (sidebar is 30 cols)
+    WIN_WIDTH=$(tmux display-message -p $target_flag '#{window_width}')
+    RIGHT_SIZE=$((WIN_WIDTH - 30))
+
+    # Split horizontally: left (sidebar) | right (rest)
+    tmux split-window -h $target_flag -l "$RIGHT_SIZE"
+
+    # Now split the right pane (pane 1) vertically
+    tmux select-pane -t "$pane1_target"
+
+    # Get height of the selected pane and calculate bottom size (30% for monitor)
+    PANE_HEIGHT=$(tmux display-message -p '#{pane_height}')
+    BOTTOM_SIZE=$((PANE_HEIGHT * 30 / 100))
+    tmux split-window -v -l "$BOTTOM_SIZE"
+
+    # Now we have L-shape:
+    # Pane 0: Sidebar (left)
+    # Pane 1: Claude session (top-right)
+    # Pane 2: Monitor (bottom-right)
+
+    # Start the apps in each pane
+    for pane in 0 1 2; do
+        if [[ -n "$target_prefix" ]]; then
+            pane_target="${target_prefix}.${pane}"
+        else
+            pane_target="$pane"
+        fi
+
+        case $pane in
+            0) # Sidebar
+                tmux send-keys -t "$pane_target" "cerb-sidebar" C-m
+                ;;
+            1) # Claude session area
+                tmux send-keys -t "$pane_target" "echo 'Use the sidebar to create or select a Claude session'; echo 'Press Ctrl+N in the sidebar to create a new session'" C-m
+                ;;
+            2) # Monitor area
+                tmux send-keys -t "$pane_target" "echo 'Monitor will appear here when you select a session'" C-m
+                ;;
+        esac
+    done
+
+    # Focus on the sidebar
+    if [[ -n "$target_prefix" ]]; then
+        tmux select-pane -t "${target_prefix}.0"
+    else
+        tmux select-pane -t 0
+    fi
+}
+
 # Check if we're already in a tmux session
 # If we are, we can still run this in a new window
 if [[ -n "${TMUX:-}" ]]; then
     # Create new window in current session
     tmux new-window -n "kerberos"
-
-    # Split window horizontally (left: sidebar 30 cols, right: main takes the rest)
-    # The split creates a new pane to the right, we want it to take remaining space
-    # So we calculate: total width - 30 for the right pane
-    WIN_WIDTH=$(tmux display-message -p '#{window_width}')
-    RIGHT_SIZE=$((WIN_WIDTH - 30))
-    tmux split-window -h -l $RIGHT_SIZE
-
-    # Run kerberos.py in left pane (pane 0)
-    tmux select-pane -t 0
-    tmux send-keys "cerb-sidebar" C-m
-
-    # Right pane (pane 1) starts with a message
-    tmux select-pane -t 1
-    tmux send-keys "echo 'Use the sidebar to create or select a Claude session'; echo 'Press Ctrl+N in the sidebar to create a new session'" C-m
-
-    # Focus on the left pane (sidebar)
-    tmux select-pane -t 0
+    create_layout ""  # Empty prefix since we're in the current window
 else
     # Not in tmux, create new session
     SESSION_NAME="kerberos"
@@ -54,22 +98,8 @@ else
     # -n means no prefix needed (direct binding)
     tmux bind-key -n C-s last-pane
 
-    # Split window horizontally (left: sidebar 30 cols, right: main takes the rest)
-    # Get window width and calculate right pane size
-    WIN_WIDTH=$(tmux display-message -p -t "$SESSION_NAME:$WINDOW_NAME" '#{window_width}')
-    RIGHT_SIZE=$((WIN_WIDTH - 30))
-    tmux split-window -h -l $RIGHT_SIZE -t "$SESSION_NAME:$WINDOW_NAME"
-
-    # Select left pane (pane 0) and run kerberos.py
-    tmux select-pane -t "$SESSION_NAME:$WINDOW_NAME.0"
-    tmux send-keys -t "$SESSION_NAME:$WINDOW_NAME.0" "cerb-sidebar" C-m
-
-    # Right pane (pane 1) starts with a message
-    tmux select-pane -t "$SESSION_NAME:$WINDOW_NAME.1"
-    tmux send-keys -t "$SESSION_NAME:$WINDOW_NAME.1" "echo 'Use the sidebar to create or select a Claude session'; echo 'Press Ctrl+N in the sidebar to create a new session'" C-m
-
-    # Focus on the left pane (sidebar)
-    tmux select-pane -t "$SESSION_NAME:$WINDOW_NAME.0"
+    # Create the L-shaped layout
+    create_layout "$SESSION_NAME:$WINDOW_NAME"
 
     # Attach to the session
     exec tmux attach-session -t "$SESSION_NAME"

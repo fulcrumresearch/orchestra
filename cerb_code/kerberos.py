@@ -317,6 +317,12 @@ class KerberosApp(App):
         subprocess.run(["tmux", "respawn-pane", "-t", right_pane, "-k", cmd],
                       capture_output=True, text=True)
 
+        # Update monitor pane (bottom pane - pane 2 in our L-shaped layout)
+        # The layout is: 0=sidebar, 1=claude session (top-right), 2=monitor (bottom-right)
+        monitor_cmd = f"cerb-monitor --session {session.session_id} --path {session.work_path}"
+        subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", monitor_cmd],
+                      capture_output=True, text=True)
+
         # Auto-focus the right pane so user can start typing immediately
         subprocess.run(["tmux", "select-pane", "-t", right_pane],
                       capture_output=True, text=True)
