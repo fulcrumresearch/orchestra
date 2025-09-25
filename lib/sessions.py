@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 import json
 import subprocess
+from .prompts import MERGE_CHILD_COMMAND
 
 SESSIONS_FILE = Path.home() / ".kerberos" / "sessions.json"
 
@@ -110,6 +111,14 @@ class Session:
                     capture_output=True,
                     text=True
                 )
+
+            # Create .claude/commands directory and add merge-child command
+            claude_commands_dir = Path(self.work_path) / ".claude" / "commands"
+            claude_commands_dir.mkdir(parents=True, exist_ok=True)
+
+            merge_command_path = claude_commands_dir / "merge-child.md"
+            merge_command_path.write_text(MERGE_CHILD_COMMAND)
+
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed to create worktree: {e.stderr}")
 
