@@ -276,12 +276,33 @@ class KerberosApp(App):
                       capture_output=True, text=True)
 
         # Remove from sessions list
+        deleted_index = next((i for i, s in enumerate(self.sessions) if s.session_id == self.current_session.session_id), -1)
         self.sessions = [s for s in self.sessions if s.session_id != self.current_session.session_id]
         save_sessions(self.sessions)
 
         # Clear current session
         self.current_session = None
-        self.hud.set_session("")
+
+        # Switch to an adjacent session if available
+        if self.sessions:
+            # Try to select the session at the same index, or the previous one if we deleted the last
+            new_index = min(deleted_index, len(self.sessions) - 1)
+            if new_index >= 0:
+                self._attach_to_session(self.sessions[new_index])
+            else:
+                # No sessions left, just update HUD
+                self.hud.set_session("")
+        else:
+            # No sessions left, show empty state in right pane
+            self.hud.set_session("")
+            # Clear the right pane with a message
+            right_pane = "{right}"
+            msg_cmd = "echo 'No active sessions. Press Ctrl+N to create a new session.'"
+            subprocess.run(["tmux", "respawn-pane", "-t", right_pane, "-k", msg_cmd],
+                          capture_output=True, text=True)
+            # Also clear the monitor pane
+            subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", "echo 'No session to monitor'"],
+                          capture_output=True, text=True)
 
         # Refresh the list
         self.call_later(self.action_refresh)
