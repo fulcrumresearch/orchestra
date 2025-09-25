@@ -182,12 +182,13 @@ class KerberosApp(App):
             session_name = event.value.strip()
 
             if not session_name:
-                # Generate default name if empty
+                # Generate default name with cerb-reponame format
+                repo_name = self._get_repo_name()
                 session_num = 1
                 existing_ids = {s.session_id for s in self.sessions}
-                while f"claude-{session_num}" in existing_ids:
+                while f"cerb-{repo_name}-{session_num}" in existing_ids:
                     session_num += 1
-                session_name = f"claude-{session_num}"
+                session_name = f"cerb-{repo_name}-{session_num}"
 
             # Add visual feedback
             self.session_input.placeholder = f"Creating {session_name}..."
@@ -335,6 +336,10 @@ class KerberosApp(App):
         save_sessions(self.sessions)
 
 
+
+    def _get_repo_name(self) -> str:
+        """Get the current directory name"""
+        return Path.cwd().name
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle session selection from list when clicked"""
