@@ -1,13 +1,14 @@
 from __future__ import annotations
 import os, shutil, subprocess
 from pathlib import Path
+import asyncio
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Static, ListView, ListItem, Label, Input
 
-from lib.sessions import Session, AgentType, load_sessions, save_sessions
+from lib.sessions import Session, AgentType, load_sessions, save_sessions, SESSIONS_FILE
 from lib.tmux_agent import TmuxProtocol
 from lib.logger import get_logger
 
@@ -119,6 +120,8 @@ class KerberosApp(App):
         self.current_session: Session | None = None
         # Create a shared TmuxProtocol for all sessions
         self.agent = TmuxProtocol(default_command="claude")
+        self._last_session_mtime = None
+        self._watch_task = None
         logger.info("KerberosApp initialized")
 
     def compose(self) -> ComposeResult:
@@ -146,6 +149,9 @@ class KerberosApp(App):
 
         # Focus the session list by default
         self.set_focus(self.session_list)
+
+        # Start watching sessions file for changes
+        self._watch_task = asyncio.create_task(self._watch_sessions_file())
 
     async def action_refresh(self) -> None:
         """Refresh the session list"""
@@ -376,6 +382,24 @@ class KerberosApp(App):
         save_sessions(self.sessions)
 
 
+
+    async def _watch_sessions_file(self) -> None:
+        """Watch sessions.json for changes and refresh when modified"""
+        while True:
+            try:
+                if SESSIONS_FILE.exists():
+                    current_mtime = SESSIONS_FILE.stat().st_mtime
+                    if self._last_session_mtime is not None and current_mtime != self._last_session_mtime:
+                        logger.info("Sessions file changed, refreshing...")
+                        # Reload sessions from disk
+                        self.sessions = load_sessions(protocol=self.agent)
+                        await self.action_refresh()
+                    self._last_session_mtime = current_mtime
+            except Exception as e:
+                logger.error(f"Error watching sessions file: {e}")
+
+            # Check every second
+            await asyncio.sleep(1)
 
     def _get_repo_name(self) -> str:
         """Get the current directory name"""
