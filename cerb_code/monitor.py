@@ -7,16 +7,17 @@ from datetime import datetime
 
 from textual.app import App, ComposeResult
 from textual.widgets import Static, Label, TabbedContent, TabPane, RichLog
-from textual.containers import Container, VerticalScroll
+from textual.containers import Container
+from textual.binding import Binding
 from textual.reactive import reactive
 from rich.syntax import Syntax
 from rich.text import Text
 
-class DiffTab(VerticalScroll):
-    """Scrollable container for diff display"""
+class DiffTab(Container):
+    """Container for diff display"""
 
     def compose(self) -> ComposeResult:
-        self.diff_log = RichLog(highlight=True, markup=True)
+        self.diff_log = RichLog(highlight=True, markup=True, auto_scroll=False)
         yield self.diff_log
 
     def on_mount(self) -> None:
@@ -71,7 +72,7 @@ class DiffTab(VerticalScroll):
         except Exception as e:
             self.diff_log.write(f"[red]Error: {str(e)}[/red]")
 
-class ModelMonitorTab(VerticalScroll):
+class ModelMonitorTab(Container):
     """Tab for monitoring model activity"""
 
     def compose(self) -> ComposeResult:
@@ -81,76 +82,69 @@ class ModelMonitorTab(VerticalScroll):
 class MonitorApp(App):
     """Main monitor application"""
 
+    BINDINGS = [
+        Binding("up", "scroll_up", "Scroll Up", show=False),
+        Binding("down", "scroll_down", "Scroll Down", show=False),
+        Binding("page_up", "page_up", "Page Up", show=False),
+        Binding("page_down", "page_down", "Page Down", show=False),
+        Binding("home", "scroll_home", "Home", show=False),
+        Binding("end", "scroll_end", "End", show=False),
+    ]
+
     CSS = """
     Screen {
-        background: #000000;
+        background: #0a0a0a;
     }
 
     #header {
         height: 1;
         padding: 0 1;
-        background: #000000;
-        color: #C0FFFD;  /* Teal accent - Fulcrum */
-        border-bottom: solid #6C71C4;  /* Purple accent - Fulcrum */
+        background: #0a0a0a;
+        color: #00ff9f;
+        text-style: bold;
+        border-bottom: solid #333333;
     }
 
     TabbedContent {
-        background: #000000;
+        background: transparent;
         height: 1fr;
     }
 
-    Tabs {
-        background: #000000;
-        color: #C0FFFD;
-        height: 3;
-        padding: 0;
-    }
-
-    Tab {
-        padding: 1 2;
-        color: #666666;
-        background: #000000;
-    }
-
     Tab.-active {
-        color: #C0FFFD;
-        text-style: bold;
-        background: #000000;
-        border-bottom: tall #6C71C4;
-    }
-
-    Tab:hover {
-        color: #C0FFFD;
-        background: #111111;
+        color: #00ff9f;
+        background: transparent !important;
     }
 
     TabPane {
-        background: #000000;
+        background: #0a0a0a;
         padding: 1;
         height: 1fr;
     }
 
     DiffTab {
         height: 100%;
-        background: #000000;
+        background: transparent;
     }
 
     ModelMonitorTab {
         height: 100%;
-        background: #000000;
+        background: transparent;
         padding: 1;
     }
 
-    TextLog {
-        background: #000000;
-        color: #ffffff;
+    DiffTab RichLog {
         height: 100%;
-        scrollbar-background: #111111;
-        scrollbar-color: #6C71C4;
+        scrollbar-size: 1 1;
+    }
+
+    RichLog {
+        background: #0a0a0a;
+        color: #cccccc;
+        height: 100%;
     }
 
     Label {
-        color: #C0FFFD;
+        color: #00ff9f;
     }
     """
 
@@ -177,6 +171,30 @@ class MonitorApp(App):
         """Set up refresh timer"""
         # No need for constant header updates - keep it minimal
         pass
+
+    def action_scroll_up(self) -> None:
+        """Scroll up in the current tab"""
+        self.query_one(RichLog).action_scroll_up()
+
+    def action_scroll_down(self) -> None:
+        """Scroll down in the current tab"""
+        self.query_one(RichLog).action_scroll_down()
+
+    def action_page_up(self) -> None:
+        """Page up in the current tab"""
+        self.query_one(RichLog).action_page_up()
+
+    def action_page_down(self) -> None:
+        """Page down in the current tab"""
+        self.query_one(RichLog).action_page_down()
+
+    def action_scroll_home(self) -> None:
+        """Scroll to top in the current tab"""
+        self.query_one(RichLog).action_scroll_home()
+
+    def action_scroll_end(self) -> None:
+        """Scroll to bottom in the current tab"""
+        self.query_one(RichLog).action_scroll_end()
 
 
 def main():

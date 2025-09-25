@@ -97,6 +97,9 @@ else
     # Create new session with a window
     tmux new-session -d -s "$SESSION_NAME" -n "$WINDOW_NAME"
 
+    # Enable mouse support for scrolling and pane selection
+    tmux set -t "$SESSION_NAME" -g mouse on
+
     # Add custom keybinding: Ctrl+S to cycle through all 3 panes
     # -n means no prefix needed (direct binding)
     # This will rotate through panes 0 -> 1 -> 2 -> 0
