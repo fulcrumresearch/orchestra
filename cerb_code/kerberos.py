@@ -155,6 +155,12 @@ class KerberosApp(App):
 
     async def action_refresh(self) -> None:
         """Refresh the session list"""
+        # Save the current selection
+        current_index = self.session_list.index
+        selected_session_id = None
+        if current_index is not None and 0 <= current_index < len(self.flat_sessions):
+            selected_session_id = self.flat_sessions[current_index].session_id
+
         self.session_list.clear()
         self.flat_sessions = []  # Keep flat list for selection
 
@@ -183,6 +189,13 @@ class KerberosApp(App):
 
         for session in self.sessions:
             add_session_tree(session)
+
+        # Restore the selection if the session still exists
+        if selected_session_id:
+            for i, session in enumerate(self.flat_sessions):
+                if session.session_id == selected_session_id:
+                    self.session_list.index = i
+                    break
 
         # Save updated session states
         save_sessions(self.sessions)
