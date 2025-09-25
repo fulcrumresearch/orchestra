@@ -115,6 +115,7 @@ class KerberosApp(App):
         super().__init__()
         logger.info("KerberosApp initializing")
         self.sessions: list[Session] = []
+        self.flat_sessions: list[Session] = []  # Flattened list for selection
         self.current_session: Session | None = None
         # Create a shared TmuxProtocol for all sessions
         self.agent = TmuxProtocol(default_command="claude")
@@ -149,21 +150,33 @@ class KerberosApp(App):
     async def action_refresh(self) -> None:
         """Refresh the session list"""
         self.session_list.clear()
+        self.flat_sessions = []  # Keep flat list for selection
 
         if not self.sessions:
             self.session_list.append(ListItem(Label("No sessions yet")))
             self.session_list.append(ListItem(Label("Press ⌃N to create")))
             return
 
-        # Update active status based on tmux state
-        for session in self.sessions:
+        # Add sessions to list with hierarchy
+        def add_session_tree(session, indent=0):
+            # Update status for this session
             status = self.agent.get_status(session.session_id)
             session.active = status.get("attached", False)
 
-        # Add sessions to list
-        for session in self.sessions:
-            item = ListItem(Label(session.display_name))
+            # Keep track in flat list for selection
+            self.flat_sessions.append(session)
+
+            # Display with indentation
+            prefix = "  " * indent
+            item = ListItem(Label(f"{prefix}{session.display_name}"))
             self.session_list.append(item)
+
+            # Add children recursively
+            for child in session.children:
+                add_session_tree(child, indent + 1)
+
+        for session in self.sessions:
+            add_session_tree(session)
 
         # Save updated session states
         save_sessions(self.sessions)
@@ -263,18 +276,18 @@ class KerberosApp(App):
     def action_select_session(self) -> None:
         """Select the highlighted session"""
         index = self.session_list.index
-        if index is not None and 0 <= index < len(self.sessions):
-            session = self.sessions[index]
+        if index is not None and 0 <= index < len(self.flat_sessions):
+            session = self.flat_sessions[index]
             self._attach_to_session(session)
 
     def action_delete_session(self) -> None:
         """Delete the currently selected session"""
         # Get the currently highlighted session from the list instead of current_session
         index = self.session_list.index
-        if index is None or index >= len(self.sessions):
+        if index is None or index >= len(self.flat_sessions):
             return
 
-        session_to_delete = self.sessions[index]
+        session_to_delete = self.flat_sessions[index]
 
         # Kill the tmux session
         subprocess.run(["tmux", "kill-session", "-t", session_to_delete.session_id],
@@ -370,8 +383,8 @@ class KerberosApp(App):
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle session selection from list when clicked"""
-        if event.index is not None and 0 <= event.index < len(self.sessions):
-            session = self.sessions[event.index]
+        if event.index is not None and 0 <= event.index < len(self.flat_sessions):
+            session = self.flat_sessions[event.index]
             self._attach_to_session(session)
 
 

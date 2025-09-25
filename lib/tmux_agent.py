@@ -37,7 +37,20 @@ class TmuxProtocol(AgentProtocol):
         Args:
             default_command: Default command to run when starting a session
         """
-        self.default_command = default_command
+        # Add MCP config for cerb-subagent
+        mcp_config = {
+            "mcpServers": {
+                "cerb-subagent": {
+                    "command": "cerb-mcp",
+                    "args": [],
+                    "env": {}
+                }
+            }
+        }
+
+        import json
+        mcp_config_str = json.dumps(mcp_config)
+        self.default_command = f"{default_command} --mcp-config '{mcp_config_str}'"
 
     def start(self, session: "Session") -> bool:
         """
@@ -101,3 +114,17 @@ class TmuxProtocol(AgentProtocol):
             }
         except (ValueError, IndexError):
             return {"exists": True, "error": "Failed to parse tmux output"}
+
+    def send_message(self, session_id: str, message: str) -> bool:
+        """
+        Send a message to a tmux session.
+
+        Args:
+            session_id: ID of the session
+            message: Text to send to the session
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        result = tmux(["send-keys", "-t", session_id, message, "Enter"])
+        return result.returncode == 0

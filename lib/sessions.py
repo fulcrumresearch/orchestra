@@ -113,7 +113,7 @@ class Session:
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed to create worktree: {e.stderr}")
 
-    def spawn_executor(self, instructions: str, session_id: str) -> "Session":
+    def spawn_executor(self, session_id: str, instructions: str) -> "Session":
         """Spawn an executor session as a child of this session"""
         if not self.work_path:
             raise ValueError("Work path is not set")
@@ -121,10 +121,23 @@ class Session:
         new_session = Session(
             session_id=session_id,
             agent_type=AgentType.EXECUTOR,
-            source_path=self.work_path,
+            protocol=self.protocol,  # Inherit parent's protocol
+            source_path=self.work_path,  # Child's source is parent's work directory
         )
 
+        # Prepare the child session (creates its own worktree)
+        new_session.prepare()
+
+        # Add to children
         self.children.append(new_session)
+
+        # Start the session
+        if not new_session.start():
+            raise RuntimeError(f"Failed to start child session {session_id}")
+
+        # Send instructions to the session
+        self.protocol.send_message(session_id, instructions)
+
         return new_session
 
     @property
