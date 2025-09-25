@@ -28,9 +28,9 @@ create_layout() {
         pane1_target="${target_prefix}.1"
     fi
 
-    # Get window width and calculate right pane size (sidebar is 30 cols)
+    # Get window width and calculate right pane size (sidebar is 15 cols)
     WIN_WIDTH=$(tmux display-message -p $target_flag '#{window_width}')
-    RIGHT_SIZE=$((WIN_WIDTH - 30))
+    RIGHT_SIZE=$((WIN_WIDTH - 15))
 
     # Split horizontally: left (sidebar) | right (rest)
     tmux split-window -h $target_flag -l "$RIGHT_SIZE"

@@ -13,7 +13,7 @@ from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
-SIDEBAR_WIDTH = 30  # columns
+SIDEBAR_WIDTH = 15  # columns
 
 
 class HUD(Static):
@@ -269,41 +269,47 @@ class KerberosApp(App):
 
     def action_delete_session(self) -> None:
         """Delete the currently selected session"""
-        if not self.current_session:
+        # Get the currently highlighted session from the list instead of current_session
+        index = self.session_list.index
+        if index is None or index >= len(self.sessions):
             return
 
+        session_to_delete = self.sessions[index]
+
         # Kill the tmux session
-        subprocess.run(["tmux", "kill-session", "-t", self.current_session.session_id],
+        subprocess.run(["tmux", "kill-session", "-t", session_to_delete.session_id],
                       capture_output=True, text=True)
 
         # Remove from sessions list
-        deleted_index = next((i for i, s in enumerate(self.sessions) if s.session_id == self.current_session.session_id), -1)
-        self.sessions = [s for s in self.sessions if s.session_id != self.current_session.session_id]
+        self.sessions = [s for s in self.sessions if s.session_id != session_to_delete.session_id]
         save_sessions(self.sessions)
 
-        # Clear current session
-        self.current_session = None
+        # If we deleted the current session, handle the right pane
+        if self.current_session and self.current_session.session_id == session_to_delete.session_id:
+            self.current_session = None
 
-        # Switch to an adjacent session if available
-        if self.sessions:
-            # Try to select the session at the same index, or the previous one if we deleted the last
-            new_index = min(deleted_index, len(self.sessions) - 1)
-            if new_index >= 0:
-                self._attach_to_session(self.sessions[new_index])
+            if self.sessions:
+                # Try to select the session at the same index, or the previous one if we deleted the last
+                new_index = min(index, len(self.sessions) - 1)
+                if new_index >= 0:
+                    # Move the list highlight to the new index
+                    self.session_list.index = new_index
+                    # Attach to the new session
+                    self._attach_to_session(self.sessions[new_index])
             else:
-                # No sessions left, just update HUD
+                # No sessions left, show empty state
                 self.hud.set_session("")
-        else:
-            # No sessions left, show empty state in right pane
-            self.hud.set_session("")
-            # Clear the right pane with a message
-            right_pane = "{right}"
-            msg_cmd = "echo 'No active sessions. Press Ctrl+N to create a new session.'"
-            subprocess.run(["tmux", "respawn-pane", "-t", right_pane, "-k", msg_cmd],
-                          capture_output=True, text=True)
-            # Also clear the monitor pane
-            subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", "echo 'No session to monitor'"],
-                          capture_output=True, text=True)
+                # Clear the right pane with a message
+                right_pane = "{right}"
+                msg_cmd = "echo 'No active sessions. Press Ctrl+N to create a new session.'"
+                subprocess.run(["tmux", "respawn-pane", "-t", right_pane, "-k", msg_cmd],
+                              capture_output=True, text=True)
+                # Also clear the monitor pane
+                subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", "echo 'No session to monitor'"],
+                              capture_output=True, text=True)
+
+        # Keep focus on the session list
+        self.set_focus(self.session_list)
 
         # Refresh the list
         self.call_later(self.action_refresh)
