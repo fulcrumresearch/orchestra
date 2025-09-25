@@ -147,17 +147,52 @@ class Session:
         return f"{status} {self.session_id}"
 
 
+def ensure_default_session(sessions: List[Session], protocol=None) -> List[Session]:
+    """Ensure main session exists at the beginning of the sessions list"""
+    # Look for existing main session
+    main_session = None
+    other_sessions = []
+
+    for session in sessions:
+        if session.session_id == "main":
+            main_session = session
+        else:
+            other_sessions.append(session)
+
+    # If main doesn't exist, create it
+    if not main_session:
+        main_session = Session(
+            session_id="main",
+            agent_type=AgentType.DESIGNER,
+            protocol=protocol,
+            source_path=str(Path.cwd()),
+            active=False
+        )
+
+        # For the main session, use the source directory directly instead of a worktree
+        # This avoids the issue of multiple worktrees for the same branch
+        main_session.work_path = main_session.source_path
+
+    # Always put main first
+    return [main_session] + other_sessions
+
+
 def load_sessions(protocol=None) -> List[Session]:
     """Load all sessions from JSON file"""
-    if not SESSIONS_FILE.exists():
-        return []
+    sessions = []
 
-    try:
-        with open(SESSIONS_FILE, "r") as f:
-            data = json.load(f)
-            return [Session.from_dict(session_data, protocol) for session_data in data]
-    except (json.JSONDecodeError, KeyError):
-        return []
+    if SESSIONS_FILE.exists():
+        try:
+            with open(SESSIONS_FILE, "r") as f:
+                data = json.load(f)
+                sessions = [Session.from_dict(session_data, protocol) for session_data in data]
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # Ensure main-default exists and is at the top
+    sessions = ensure_default_session(sessions, protocol)
+
+    return sessions
 
 
 def save_sessions(sessions: List[Session]) -> None:
