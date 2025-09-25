@@ -77,15 +77,18 @@ create_layout() {
     fi
 }
 
+# Get directory name for session naming
+REPO_NAME=$(basename "$(pwd)")
+
 # Check if we're already in a tmux session
 # If we are, we can still run this in a new window
 if [[ -n "${TMUX:-}" ]]; then
     # Create new window in current session
-    tmux new-window -n "kerberos"
+    tmux new-window -n "cerb-${REPO_NAME}"
     create_layout ""  # Empty prefix since we're in the current window
 else
     # Not in tmux, create new session
-    SESSION_NAME="kerberos"
+    SESSION_NAME="cerb-${REPO_NAME}"
     WINDOW_NAME="main"
 
     # Kill existing session if it exists
