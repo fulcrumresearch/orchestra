@@ -31,7 +31,7 @@ if [[ -n "${TMUX:-}" ]]; then
 
     # Run kerberos.py in left pane (pane 0)
     tmux select-pane -t 0
-    tmux send-keys "cd '$SCRIPT_DIR' && uv run python3 '$KERBEROS_PY'" C-m
+    tmux send-keys "cerb-sidebar" C-m
 
     # Right pane (pane 1) starts with a message
     tmux select-pane -t 1
@@ -62,7 +62,7 @@ else
 
     # Select left pane (pane 0) and run kerberos.py
     tmux select-pane -t "$SESSION_NAME:$WINDOW_NAME.0"
-    tmux send-keys -t "$SESSION_NAME:$WINDOW_NAME.0" "cd '$SCRIPT_DIR' && uv run python3 '$KERBEROS_PY'" C-m
+    tmux send-keys -t "$SESSION_NAME:$WINDOW_NAME.0" "cerb-sidebar" C-m
 
     # Right pane (pane 1) starts with a message
     tmux select-pane -t "$SESSION_NAME:$WINDOW_NAME.1"

@@ -338,8 +338,12 @@ class KerberosApp(App):
 
 
 
-if __name__ == "__main__":
+def main():
+    """Entry point for running the kerberos app"""
     # Set terminal environment for better performance
     os.environ.setdefault("TERM", "xterm-256color")
     os.environ.setdefault("TMUX_TMPDIR", "/tmp")  # Use local tmp for better performance
     KerberosApp().run()
+
+if __name__ == "__main__":
+    main()

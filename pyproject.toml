@@ -1,12 +1,23 @@
 [project]
-name = "kerberos"
-version = "0.1.0"
-description = "Add your description here"
+name = "cerb-code"
+version = "0.1.2"
+description = "Terminal UI for managing multiple Claude sessions with tmux"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "claude-code-sdk>=0.0.23",
-    "rich>=14.1.0",
-    "textual",
-    "textual-terminal @ git+https://github.com/mitosch/textual-terminal.git@refs/pull/13/head",
+    "textual>=5.3.0",
 ]
+
+[project.scripts]
+cerb = "cerb_code.cerb_launcher:main"
+cerb-sidebar = "cerb_code.kerberos:main"
+
+[tool.setuptools]
+packages = ["cerb_code", "lib"]
+
+[tool.setuptools.package-data]
+cerb_code = ["launch.sh"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
