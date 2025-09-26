@@ -147,6 +147,12 @@ class KerberosApp(App):
         self.sessions = load_sessions(protocol=self.agent)
         await self.action_refresh()
 
+        # Auto-load 'main' session if it exists
+        for session in self.sessions:
+            if session.session_id == "main":
+                self._attach_to_session(session)
+                break
+
         # Focus the session list by default
         self.set_focus(self.session_list)
 
@@ -369,22 +375,21 @@ class KerberosApp(App):
 
         # Use tmux's respawn-pane to replace the right pane content with our session
         # This avoids the nested tmux issue
-        right_pane = "{right}"
+        # The layout is: 0=sidebar, 1=claude session (top-right), 2=monitor (bottom-right)
 
-        # Kill whatever's in the right pane and respawn it with a new shell attached to our session
+        # Kill whatever's in pane 1 and respawn it with a new shell attached to our session
         # We use TMUX= to override the TMUX env var, allowing the attach
         cmd = f"TMUX= tmux attach-session -t {session.session_id}"
-        subprocess.run(["tmux", "respawn-pane", "-t", right_pane, "-k", cmd],
+        subprocess.run(["tmux", "respawn-pane", "-t", "1", "-k", cmd],
                       capture_output=True, text=True)
 
         # Update monitor pane (bottom pane - pane 2 in our L-shaped layout)
-        # The layout is: 0=sidebar, 1=claude session (top-right), 2=monitor (bottom-right)
         monitor_cmd = f"cerb-monitor --session {session.session_id} --path {session.work_path}"
         subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", monitor_cmd],
                       capture_output=True, text=True)
 
-        # Auto-focus the right pane so user can start typing immediately
-        subprocess.run(["tmux", "select-pane", "-t", right_pane],
+        # Auto-focus pane 1 (the Claude session) so user can start typing immediately
+        subprocess.run(["tmux", "select-pane", "-t", "1"],
                       capture_output=True, text=True)
 
         # Update HUD with session name

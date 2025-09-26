@@ -136,8 +136,8 @@ class MonitorApp(App):
         height: 1;
         padding: 0 1;
         background: #000000;
-        color: #C0FFFD;  /* Teal accent - Fulcrum */
-        border-bottom: solid #6C71C4;  /* Purple accent - Fulcrum */
+        color: #00ff00;
+        border-bottom: solid #ffffff;
     }
 
     TabbedContent {
@@ -146,28 +146,27 @@ class MonitorApp(App):
     }
 
     Tabs {
-        background: #000000;
-        color: #C0FFFD;
+        background: #1a1a1a;
         height: 3;
-        padding: 0;
     }
 
     Tab {
         padding: 1 2;
-        color: #666666;
-        background: #000000;
+        color: #ffffff;
+        background: #2a2a2a;
+        border: solid #444444;
     }
 
     Tab.-active {
-        color: #C0FFFD;
+        color: #00ff00;
         text-style: bold;
-        background: #000000;
-        border-bottom: tall #6C71C4;
+        background: #3a3a3a;
+        border: solid #00ff00;
     }
 
     Tab:hover {
-        color: #C0FFFD;
-        background: #111111;
+        color: #00ff00;
+        background: #333333;
     }
 
     TabPane {
@@ -187,16 +186,14 @@ class MonitorApp(App):
         padding: 1;
     }
 
-    TextLog {
+    RichLog {
         background: #000000;
         color: #ffffff;
         height: 100%;
-        scrollbar-background: #111111;
-        scrollbar-color: #6C71C4;
     }
 
     Label {
-        color: #C0FFFD;
+        color: #00ff00;
     }
     """
 

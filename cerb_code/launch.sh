@@ -28,54 +28,50 @@ create_layout() {
         pane1_target="${target_prefix}.1"
     fi
 
-    # Get window width and calculate right pane size (sidebar is 15 cols)
-    WIN_WIDTH=$(tmux display-message -p $target_flag '#{window_width}')
-    RIGHT_SIZE=$((WIN_WIDTH - 15))
+    # Get window width and set right pane to 90% of it
+    if [[ -n "$target_prefix" ]]; then
+        WIN_WIDTH=$(tmux display-message -p -t "$target_prefix" '#{window_width}')
+    else
+        WIN_WIDTH=$(tmux display-message -p '#{window_width}')
+    fi
+    RIGHT_SIZE=$(( WIN_WIDTH * 90 / 100 ))
 
-    # Split horizontally: left (sidebar) | right (rest)
-    tmux split-window -h $target_flag -l "$RIGHT_SIZE"
+    # Safety clamps (optional, but harmless)
+    (( RIGHT_SIZE < 20 )) && RIGHT_SIZE=20
+    (( RIGHT_SIZE > WIN_WIDTH - 1 )) && RIGHT_SIZE=$(( WIN_WIDTH - 1 ))
 
-    # Now split the right pane (pane 1) vertically
+    # Split horizontally so the NEW RIGHT pane is 90% width
+    # (left becomes the ~10% sidebar automatically)
+    tmux split-window -h -l "$RIGHT_SIZE" $target_flag
+
+    # Now split the right pane (pane 1) vertically for the monitor
     tmux select-pane -t "$pane1_target"
-
-    # Get height of the selected pane and calculate bottom size (30% for monitor)
     PANE_HEIGHT=$(tmux display-message -p '#{pane_height}')
-    BOTTOM_SIZE=$((PANE_HEIGHT * 30 / 100))
+    BOTTOM_SIZE=$(( PANE_HEIGHT * 30 / 100 ))
     tmux split-window -v -l "$BOTTOM_SIZE"
 
-    # Now we have L-shape:
-    # Pane 0: Sidebar (left)
-    # Pane 1: Claude session (top-right)
-    # Pane 2: Monitor (bottom-right)
-
-    # Start the apps in each pane
+    # Seed panes
     for pane in 0 1 2; do
         if [[ -n "$target_prefix" ]]; then
             pane_target="${target_prefix}.${pane}"
         else
             pane_target="$pane"
         fi
-
         case $pane in
-            0) # Sidebar
-                tmux send-keys -t "$pane_target" "cerb-sidebar" C-m
-                ;;
-            1) # Claude session area
-                tmux send-keys -t "$pane_target" "echo 'Use the sidebar to create or select a Claude session'; echo 'Press Ctrl+N in the sidebar to create a new session'" C-m
-                ;;
-            2) # Monitor area
-                tmux send-keys -t "$pane_target" "echo 'Monitor will appear here when you select a session'" C-m
-                ;;
+            0) tmux send-keys -t "$pane_target" "cerb-sidebar" C-m ;;
+            1) tmux send-keys -t "$pane_target" "echo 'Use the sidebar to create or select a Claude session'; echo 'Press Ctrl+N in the sidebar to create a new session'" C-m ;;
+            2) tmux send-keys -t "$pane_target" "echo 'Monitor will appear here when you select a session'" C-m ;;
         esac
     done
 
-    # Focus on the sidebar
+    # Focus on the sidebar (left)
     if [[ -n "$target_prefix" ]]; then
         tmux select-pane -t "${target_prefix}.0"
     else
         tmux select-pane -t 0
     fi
 }
+
 
 # Get directory name for session naming
 REPO_NAME=$(basename "$(pwd)")
