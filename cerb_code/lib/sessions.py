@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 import json
 import subprocess
-from .prompts import MERGE_CHILD_COMMAND
+from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF
 
 SESSIONS_FILE = Path.home() / ".kerberos" / "sessions.json"
 
@@ -137,6 +137,14 @@ class Session:
         # Prepare the child session (creates its own worktree)
         new_session.prepare()
 
+        # Create .claude/settings.json with hook configuration for monitoring
+        claude_dir = Path(new_session.work_path) / ".claude"
+        claude_dir.mkdir(parents=True, exist_ok=True)
+
+        settings_path = claude_dir / "settings.json"
+
+        settings_path.write_text(json.dumps(PROJECT_CONF.format(session_id), indent=2))
+
         # Add to children
         self.children.append(new_session)
 
@@ -186,7 +194,7 @@ def ensure_default_session(sessions: List[Session], protocol=None) -> List[Sessi
     return [main_session] + other_sessions
 
 
-def load_sessions(protocol=None) -> List[Session]:
+def load_sessions(protocol=None, flat=False) -> List[Session]:
     """Load all sessions from JSON file"""
     sessions = []
 
@@ -198,10 +206,24 @@ def load_sessions(protocol=None) -> List[Session]:
         except (json.JSONDecodeError, KeyError):
             pass
 
-    # Ensure main-default exists and is at the top
     sessions = ensure_default_session(sessions, protocol)
 
-    return sessions
+    if flat:
+        def _flatten_tree(nodes: List[Session]) -> List[Session]:
+                flat_list: List[Session] = []
+                stack = list(nodes)[::-1]
+                while stack:
+                    node = stack.pop()
+                    flat_list.append(node)
+                    children = getattr(node, "children", None) or []
+                    # push children in reverse so first child is processed next
+                    for child in reversed(children):
+                        stack.append(child)
+                return flat_list
+
+        return _flatten_tree(sessions)
+    else:
+        return sessions
 
 
 def save_sessions(sessions: List[Session]) -> None:

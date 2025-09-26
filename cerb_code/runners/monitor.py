@@ -28,15 +28,20 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-
+import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 
-from lib.monitor import SessionMonitor
-from lib.sessions import load_sessions
+from cerb_code.lib.monitor import SessionMonitor
+from cerb_code.lib.sessions import Session, load_sessions
+
+import os
+
+os.environ["CLAUDE_MONITOR_SKIP_FORWARD"] = "1"
 
 app = FastAPI(title="Claude Code Multi-Monitor", version="1.0")
 
@@ -46,21 +51,25 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | 
 # session_id -> SessionWorker
 _workers: Dict[str, SessionMonitor] = {}
 
-_sessions = {sess.session_id: sess for sess in load_sessions()}
+_sessions = {sess.session_id: sess for sess in load_sessions(flat=True)}
 
 def get_session(session_id: str) -> Session:
-    if not session_id in _sessions:
-        _sessions = load__sessions()
+    global _sessions
+    if session_id not in _sessions:
+        _sessions = {sess.session_id: sess for sess in load_sessions(flat=True)}
 
     session = _sessions.get(session_id)
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    return session
+
 async def get_or_create_worker(session_id: str, payload: Dict[str, Any]) -> SessionMonitor:
     worker = _workers.get(session_id)
 
     session = get_session(session_id)
+    print(session)
 
     if worker is None:
         worker = SessionMonitor(session=session)
@@ -107,3 +116,22 @@ async def hook(request: Request, session_id: str) -> Dict[str, str]:
         raise HTTPException(status_code=503, detail="queue full")
 
     return {"status": "ok", "session_id": session_id}
+
+
+def main():
+    """Entry point for the monitoring server"""
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8081
+
+    print(f"Starting Cerb Monitor Server on port {port}")
+    print(f"Hook endpoint: http://127.0.0.1:{port}/hook/{{session_id}}")
+
+    uvicorn.run(
+        app,
+        host="127.0.0.1",
+        port=port,
+        log_level="info"
+    )
+
+
+if __name__ == "__main__":
+    main()

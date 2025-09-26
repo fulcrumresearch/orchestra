@@ -7,13 +7,19 @@ requires-python = ">=3.11"
 dependencies = [
     "textual>=5.3.0",
     "mcp>=1.0.0",
+    "fastapi>=0.117.1",
+    "uvicorn>=0.37.0",
+    "requests>=2.32.5",
+    "claude-code-sdk>=0.0.23",
 ]
 
 [project.scripts]
 cerb = "cerb_code.runners.cerb_launcher:main"
 cerb-sidebar = "cerb_code.runners.kerberos:main"
-cerb-monitor = "cerb_code.runners.monitor:main"
+cerb-monitor = "cerb_code.runners.monitor_ui:main"
+cerb-monitor-server = "cerb_code.runners.monitor:main"
 cerb-mcp = "cerb_code.runners.mcp_server:main"
+cerb-hook = "cerb_code.runners.hook_monitor:main"
 
 [tool.setuptools]
 packages = ["cerb_code", "cerb_code.lib", "cerb_code.runners"]

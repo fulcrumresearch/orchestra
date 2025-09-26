@@ -31,7 +31,7 @@ PROJECT_CONF = """
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/forward.sh SessionStart"
+            "command": "cerb-hook {session_id}"
           }
         ]
       }
@@ -41,7 +41,7 @@ PROJECT_CONF = """
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/forward.sh UserPromptSubmit"
+            "command": "cerb-hook {session_id}"
           }
         ]
       }
@@ -52,7 +52,7 @@ PROJECT_CONF = """
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/forward.sh PreToolUse"
+            "command": "cerb-hook {session_id}"
           }
         ]
       }
@@ -63,7 +63,7 @@ PROJECT_CONF = """
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/forward.sh PostToolUse"
+            "command": "cerb-hook {session_id}"
           }
         ]
       }
@@ -73,7 +73,7 @@ PROJECT_CONF = """
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/forward.sh Stop"
+            "command": "cerb-hook {session_id}"
           }
         ]
       }
@@ -83,7 +83,7 @@ PROJECT_CONF = """
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/forward.sh SessionEnd"
+            "command": "cerb-hook {session_id}"
           }
         ]
       }

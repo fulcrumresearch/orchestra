@@ -1,13 +1,16 @@
-from lib.sessions import Session
+from .sessions import Session
+from .logger import get_logger
 
 from dataclasses import dataclass, field
-
 from claude_code_sdk import ClaudeCodeOptions, ClaudeSDKClient
-
 from textwrap import dedent
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
+from datetime import datetime, timezone
 import asyncio
+import json
 import time
+
+logger = get_logger(__name__)
 
 ALLOWED_TOOLS = ["Read", "Write"]
 PERMISSION_MODE = "acceptEdits"
@@ -69,6 +72,7 @@ class SessionMonitor:
             system_prompt=self.system_prompt,
             allowed_tools=self.allowed_tools,
             permission_mode=self.permission_mode,
+            hooks={}
         )
 
         self.client = ClaudeSDKClient(options=options)
