@@ -10,13 +10,13 @@ dependencies = [
 ]
 
 [project.scripts]
-cerb = "cerb_code.cerb_launcher:main"
-cerb-sidebar = "cerb_code.kerberos:main"
-cerb-monitor = "cerb_code.monitor:main"
-cerb-mcp = "cerb_code.mcp_server:main"
+cerb = "cerb_code.runners.cerb_launcher:main"
+cerb-sidebar = "cerb_code.runners.kerberos:main"
+cerb-monitor = "cerb_code.runners.monitor:main"
+cerb-mcp = "cerb_code.runners.mcp_server:main"
 
 [tool.setuptools]
-packages = ["cerb_code", "lib"]
+packages = ["cerb_code", "cerb_code.lib", "cerb_code.runners"]
 
 [tool.setuptools.package-data]
 cerb_code = ["launch.sh"]

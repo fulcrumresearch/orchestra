@@ -4,7 +4,7 @@ set -euo pipefail
 # Launcher script for Kerberos - sets up tmux with sidebar and main pane
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KERBEROS_PY="${SCRIPT_DIR}/kerberos.py"
+KERBEROS_PY="${SCRIPT_DIR}/runners/kerberos.py"
 
 if ! command -v tmux >/dev/null 2>&1; then
     echo "Error: tmux not found. Install tmux first (apt/brew install tmux)." >&2

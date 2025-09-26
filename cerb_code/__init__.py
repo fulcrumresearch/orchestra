@@ -1,1 +1,1 @@
-# Cerb-code package
+# Cerb/Kerberos library package

@@ -8,9 +8,9 @@ from textual.binding import Binding
 from textual.containers import Container
 from textual.widgets import Static, ListView, ListItem, Label, Input
 
-from lib.sessions import Session, AgentType, load_sessions, save_sessions, SESSIONS_FILE
-from lib.tmux_agent import TmuxProtocol
-from lib.logger import get_logger
+from cerb_code.lib.sessions import Session, AgentType, load_sessions, save_sessions, SESSIONS_FILE
+from cerb_code.lib.tmux_agent import TmuxProtocol
+from cerb_code.lib.logger import get_logger
 
 logger = get_logger(__name__)
 

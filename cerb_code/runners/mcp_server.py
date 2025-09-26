@@ -6,11 +6,8 @@ from pathlib import Path
 
 from mcp.server import FastMCP
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from lib.sessions import load_sessions, save_sessions, find_session
-from lib.tmux_agent import TmuxProtocol
+from cerb_code.lib.sessions import load_sessions, save_sessions, find_session
+from cerb_code.lib.tmux_agent import TmuxProtocol
 
 # Create FastMCP server instance
 mcp = FastMCP("cerb-subagent")
