@@ -455,9 +455,6 @@ class UnifiedApp(App):
         self.hud.set_session(session.session_id)
         self.current_session = session
 
-        # Save updated session states
-        save_sessions(self.sessions)
-
 
 
     async def _watch_sessions_file(self) -> None:
