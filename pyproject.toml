@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 cerb = "cerb_code.runners.cerb_launcher:main"
+cerb-ui = "cerb_code.runners.unified_ui:main"
 cerb-sidebar = "cerb_code.runners.kerberos:main"
 cerb-monitor = "cerb_code.runners.monitor_ui:main"
 cerb-monitor-server = "cerb_code.runners.monitor:main"
