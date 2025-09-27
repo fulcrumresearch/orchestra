@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 import json
 import subprocess
-from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT
+from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
 
 SESSIONS_FILE = Path.home() / ".kerberos" / "sessions.json"
 
@@ -38,36 +38,44 @@ class Session:
         return self.protocol.start(self)
 
     def add_instructions(self) -> None:
-        """Add agent-specific instructions to CLAUDE.md if not already present"""
+        """Add agent-specific instructions to CLAUDE.md"""
         if not self.work_path:
             return
 
-        # Only add instructions for designer agents
-        if self.agent_type != AgentType.DESIGNER:
-            return
-
         claude_dir = Path(self.work_path) / ".claude"
-        claude_md_path = claude_dir / "CLAUDE.md"
+        claude_dir.mkdir(parents=True, exist_ok=True)
 
-        # Read existing content if file exists
+        # Select the appropriate prompt based on agent type
+        if self.agent_type == AgentType.DESIGNER:
+            prompt_template = DESIGNER_PROMPT
+        else:  # AgentType.EXECUTOR
+            prompt_template = EXECUTOR_PROMPT
+
+        # Create/update kerberos.md with session-specific information
+        kerberos_md_path = claude_dir / "kerberos.md"
+        formatted_prompt = prompt_template.format(
+            session_id=self.session_id,
+            work_path=self.work_path
+        )
+        kerberos_md_path.write_text(formatted_prompt)
+
+        # Add import to CLAUDE.md if not already present
+        claude_md_path = claude_dir / "CLAUDE.md"
+        import_line = "@.claude/kerberos.md"
+
         existing_content = ""
         if claude_md_path.exists():
             existing_content = claude_md_path.read_text()
 
-        # Check if designer prompt is already present
-        if "Designer Agent Instructions" in existing_content:
-            return
+        # Check if import is already present
+        if import_line not in existing_content:
+            # Add import line at the beginning with a separator
+            if existing_content:
+                new_content = f"# Kerberos Session Configuration\n{import_line}\n\n{existing_content}"
+            else:
+                new_content = f"# Kerberos Session Configuration\n{import_line}\n"
 
-        # Create directory if needed
-        claude_dir.mkdir(parents=True, exist_ok=True)
-
-        # Append designer prompt (with separator if file had content)
-        if existing_content:
-            new_content = existing_content.rstrip() + "\n\n" + DESIGNER_PROMPT
-        else:
-            new_content = DESIGNER_PROMPT
-
-        claude_md_path.write_text(new_content)
+            claude_md_path.write_text(new_content)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize session to dictionary for JSON storage"""
@@ -151,7 +159,7 @@ class Session:
             merge_command_path = claude_commands_dir / "merge-child.md"
             merge_command_path.write_text(MERGE_CHILD_COMMAND)
 
-            # Add designer instructions to CLAUDE.md
+            # Add agent-specific instructions to CLAUDE.md
             self.add_instructions()
 
         except subprocess.CalledProcessError as e:
@@ -177,18 +185,22 @@ class Session:
         claude_dir.mkdir(parents=True, exist_ok=True)
 
         settings_path = claude_dir / "settings.json"
+        # PROJECT_CONF is already a JSON string, just replace the placeholder
+        settings_json = PROJECT_CONF.replace("{session_id}", session_id)
+        settings_path.write_text(settings_json)
 
-        settings_path.write_text(json.dumps(PROJECT_CONF.format(session_id), indent=2))
+        instructions_path = Path(new_session.work_path) / "instructions.md"
+        instructions_path.write_text(instructions)
 
         # Add to children
         self.children.append(new_session)
 
-        # Start the session
         if not new_session.start():
             raise RuntimeError(f"Failed to start child session {session_id}")
 
-        # Send instructions to the session
-        self.protocol.send_message(session_id, instructions)
+        initial_message = "Please review your task instructions in @instructions.md"
+        subprocess.run(["tmux", "send-keys", "-t", session_id, initial_message, "Enter"],
+                      capture_output=True, text=True)
 
         return new_session
 

@@ -33,25 +33,22 @@ def spawn_subagent(
     Returns:
         Success message with child session ID, or error message
     """
-    try:
-        # Load existing sessions with the protocol
-        sessions = load_sessions(protocol=protocol)
+    # Load existing sessions with the protocol
+    sessions = load_sessions(protocol=protocol)
 
-        # Find parent session
-        parent = find_session(sessions, parent_session_id)
-        if not parent:
-            return f"Error: Parent session '{parent_session_id}' not found"
+    # Find parent session
+    parent = find_session(sessions, parent_session_id)
 
-        # Spawn the executor
-        child = parent.spawn_executor(child_session_id, instructions)
+    if not parent:
+        return f"Error: Parent session '{parent_session_id}' not found"
 
-        # Save updated sessions (with children)
-        save_sessions(sessions)
+    # Spawn the executor
+    child = parent.spawn_executor(child_session_id, instructions)
 
-        return f"Successfully spawned child session '{child_session_id}' under parent '{parent_session_id}'"
+    # Save updated sessions (with children)
+    save_sessions(sessions)
 
-    except Exception as e:
-        return f"Error spawning subagent: {str(e)}"
+    return f"Successfully spawned child session '{child_session_id}' under parent '{parent_session_id}'"
 
 
 def main():

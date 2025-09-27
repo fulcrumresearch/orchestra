@@ -1,6 +1,6 @@
 [project]
 name = "cerb-code"
-version = "0.1.3"
+version = "0.1.4"
 description = "Terminal UI for managing multiple Claude sessions with tmux"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,9 +15,7 @@ dependencies = [
 
 [project.scripts]
 cerb = "cerb_code.runners.cerb_launcher:main"
-cerb-ui = "cerb_code.runners.unified_ui:main"
-cerb-sidebar = "cerb_code.runners.kerberos:main"
-cerb-monitor = "cerb_code.runners.monitor_ui:main"
+cerb-ui = "cerb_code.runners.kerberos:main"
 cerb-monitor-server = "cerb_code.runners.monitor:main"
 cerb-mcp = "cerb_code.runners.mcp_server:main"
 cerb-hook = "cerb_code.runners.hook_monitor:main"

@@ -1,5 +1,6 @@
 import os
 import subprocess
+import time
 from typing import Dict, Any, TYPE_CHECKING
 
 from .agent_protocol import AgentProtocol
@@ -79,6 +80,12 @@ class TmuxProtocol(AgentProtocol):
         ])
 
         logger.info(f"tmux new-session result: returncode={result.returncode}, stderr={result.stderr}")
+
+        if result.returncode == 0:
+            # Send Enter to accept the trust prompt
+            time.sleep(0.5)  # Give Claude a moment to start
+            tmux(["send-keys", "-t", session.session_id, "Enter"])
+            logger.info(f"Sent Enter to session {session.session_id} to accept trust prompt")
 
         return result.returncode == 0
 

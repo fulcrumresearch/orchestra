@@ -1,21 +1,24 @@
+#!/usr/bin/env python3
+"""Unified UI - Session picker and monitor combined"""
 from __future__ import annotations
-import os, shutil, subprocess
+import argparse
+import subprocess
+import os
+import shutil
 from pathlib import Path
 import asyncio
 
 from textual.app import App, ComposeResult
+from textual.widgets import Static, Label, TabbedContent, TabPane, RichLog, ListView, ListItem, Input, Tabs
+from textual.containers import Container, VerticalScroll, Horizontal, Vertical
 from textual.binding import Binding
-from textual.containers import Container
-from textual.widgets import Static, ListView, ListItem, Label, Input
+from textual.reactive import reactive
 
 from cerb_code.lib.sessions import Session, AgentType, load_sessions, save_sessions, SESSIONS_FILE
 from cerb_code.lib.tmux_agent import TmuxProtocol
 from cerb_code.lib.logger import get_logger
 
 logger = get_logger(__name__)
-
-SIDEBAR_WIDTH = 15  # columns
-
 
 class HUD(Static):
     can_focus = False
@@ -30,74 +33,116 @@ class HUD(Static):
         self.current_session = session_name
         self.update(f"[{session_name}] • {self.default_text}")
 
+class UnifiedApp(App):
+    """Unified app combining session picker and monitor"""
 
-class KerberosApp(App):
-    CSS = f"""
-    Screen {{
+    CSS = """
+    Screen {
         background: #0a0a0a;
-    }}
+    }
 
-    #container {{
-        layout: vertical;
-        height: 100%;
-        padding: 1 1;
-    }}
+    #header {
+        height: 5;
+        background: #111111;
+        border-bottom: solid #333333;
+        dock: top;
+    }
 
-    #sidebar-title {{
-        color: #00ff9f;
-        text-style: bold;
-        margin-bottom: 1;
-        height: 1;
-    }}
-
-    ListView {{
-        background: transparent;
-        height: 1fr;
-    }}
-
-    ListItem {{
-        color: #cccccc;
-        background: transparent;
+    #hud {
+        height: 2;
         padding: 0 1;
-    }}
+        color: #C0FFFD;
+        text-align: center;
+    }
 
-    ListItem:hover {{
-        background: #222222;
-        color: #ffffff;
-    }}
-
-    ListView > ListItem.--highlight {{
-        background: #1a1a1a;
-        color: #00ff9f;
-        text-style: bold;
-        border-left: thick #00ff9f;
-    }}
-
-    #session-input {{
-        margin-top: 1;
+    #session-input {
+        margin: 0 1;
         background: #1a1a1a;
         border: solid #333333;
         color: #ffffff;
         height: 3;
-    }}
+    }
 
-    #session-input:focus {{
+    #session-input:focus {
         border: solid #00ff9f;
-    }}
+    }
 
-    #session-input.--placeholder {{
+    #session-input.--placeholder {
         color: #666666;
-    }}
+    }
 
-    #hud {{
-        height: 2;
+    #main-content {
+        height: 1fr;
+    }
+
+    #left-pane {
+        width: 30%;
+        background: #0a0a0a;
+        border-right: solid #333333;
+    }
+
+    #right-pane {
+        width: 70%;
+        background: #000000;
+    }
+
+    TabbedContent {
+        height: 1fr;
+    }
+
+    Tabs {
+        background: #1a1a1a;
+    }
+
+    Tab {
         padding: 0 1;
-        background: #111111;
-        color: #999999;
-        text-align: center;
-        border-bottom: solid #333333;
+    }
+
+    Tab.-active {
+        text-style: bold;
+    }
+
+    TabPane {
+        padding: 1;
+        background: #000000;
+    }
+
+    #sidebar-title {
+        color: #00ff9f;
+        text-style: bold;
         margin-bottom: 1;
-    }}
+        height: 1;
+    }
+
+    ListView {
+        height: 1fr;
+    }
+
+    ListItem {
+        color: #cccccc;
+        padding: 0 1;
+    }
+
+    ListItem:hover {
+        background: #222222;
+        color: #ffffff;
+    }
+
+    ListView > ListItem.--highlight {
+        background: #1a1a1a;
+        color: #00ff9f;
+        text-style: bold;
+        border-left: thick #00ff9f;
+    }
+
+    RichLog {
+        background: #000000;
+        color: #ffffff;
+    }
+
+    VerticalScroll {
+        width: 100%;
+    }
 """
 
     BINDINGS = [
@@ -109,7 +154,10 @@ class KerberosApp(App):
         Binding("down", "cursor_down", show=False),
         Binding("k", "cursor_up", show=False),
         Binding("j", "cursor_down", show=False),
-        # Removed global enter binding - let ListView and Input handle their own
+        Binding("left", "prev_tab", show=False),
+        Binding("right", "next_tab", show=False),
+        Binding("h", "prev_tab", show=False),
+        Binding("l", "next_tab", show=False),
     ]
 
     def __init__(self):
@@ -129,17 +177,31 @@ class KerberosApp(App):
             yield Static("tmux not found. Install tmux first (apt/brew).", id="error")
             return
 
-        with Container(id="container"):
+        # Global header with HUD and input
+        with Container(id="header"):
             self.hud = HUD("⌃N new • ⌃D delete • ⌃R refresh • ⌃Q quit", id="hud")
             yield self.hud
-            yield Static("● SESSIONS", id="sidebar-title")
-            self.session_list = ListView(id="session-list")
-            yield self.session_list
             self.session_input = Input(
                 placeholder="New session name...",
                 id="session-input"
             )
             yield self.session_input
+
+        # Main content area - split horizontally
+        with Horizontal(id="main-content"):
+            # Left pane - session list
+            with Container(id="left-pane"):
+                yield Static("● SESSIONS", id="sidebar-title")
+                self.session_list = ListView(id="session-list")
+                yield self.session_list
+
+            # Right pane - tabbed monitor view
+            with Container(id="right-pane"):
+                with TabbedContent(initial="diff-tab"):
+                    with TabPane("Diff", id="diff-tab"):
+                        yield DiffTab()
+                    with TabPane("Monitor", id="monitor-tab"):
+                        yield ModelMonitorTab()
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
@@ -203,8 +265,7 @@ class KerberosApp(App):
                     self.session_list.index = i
                     break
 
-        # Save updated session states
-        save_sessions(self.sessions)
+        # Don't save here - this causes an infinite loop with the file watcher!
 
     def action_new_session(self) -> None:
         """Focus the session input for creating a new session"""
@@ -298,6 +359,16 @@ class KerberosApp(App):
         """Move cursor down in the list"""
         self.session_list.action_down()
 
+    def action_prev_tab(self) -> None:
+        """Switch to previous tab"""
+        tabs = self.query_one(Tabs)
+        tabs.action_previous_tab()
+
+    def action_next_tab(self) -> None:
+        """Switch to next tab"""
+        tabs = self.query_one(Tabs)
+        tabs.action_next_tab()
+
     def action_select_session(self) -> None:
         """Select the highlighted session"""
         index = self.session_list.index
@@ -353,7 +424,7 @@ class KerberosApp(App):
         self.call_later(self.action_refresh)
 
     def _attach_to_session(self, session: Session) -> None:
-        """Display session in the right pane using tmux commands"""
+        """Select a session and update monitors to show it"""
         # Mark all sessions as inactive, then mark this one as active
         for s in self.sessions:
             s.active = False
@@ -364,7 +435,6 @@ class KerberosApp(App):
 
         if not status.get("exists", False):
             # Session doesn't exist, try to start it
-            # Note: For existing sessions being reattached, we need to prepare first
             logger.info(f"Session {session.session_id} doesn't exist, creating it")
             if not session.work_path:
                 # Only prepare if work_path not set (i.e., not already prepared)
@@ -373,31 +443,16 @@ class KerberosApp(App):
                 logger.error(f"Failed to start session {session.session_id}")
                 return
 
-        # Use tmux's respawn-pane to replace the right pane content with our session
-        # This avoids the nested tmux issue
-        # The layout is: 0=sidebar, 1=claude session (top-right), 2=monitor (bottom-right)
-
-        # Kill whatever's in pane 1 and respawn it with a new shell attached to our session
-        # We use TMUX= to override the TMUX env var, allowing the attach
+        # Use tmux's respawn-pane to attach to the session in pane 1
         cmd = f"TMUX= tmux attach-session -t {session.session_id}"
         subprocess.run(["tmux", "respawn-pane", "-t", "1", "-k", cmd],
                       capture_output=True, text=True)
 
-        # Update monitor pane (bottom pane - pane 2 in our L-shaped layout)
-        monitor_cmd = f"cerb-monitor --session {session.session_id} --path {session.work_path}"
-        subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", monitor_cmd],
-                      capture_output=True, text=True)
-
-        # Auto-focus pane 1 (the Claude session) so user can start typing immediately
-        subprocess.run(["tmux", "select-pane", "-t", "1"],
-                      capture_output=True, text=True)
+        # Don't auto-focus pane 1 - let user stay in the UI
 
         # Update HUD with session name
         self.hud.set_session(session.session_id)
         self.current_session = session
-
-        # Save updated session states
-        save_sessions(self.sessions)
 
 
 
@@ -429,14 +484,130 @@ class KerberosApp(App):
             session = self.flat_sessions[event.index]
             self._attach_to_session(session)
 
+class DiffTab(VerticalScroll):
+    """Scrollable container for diff display"""
+
+    def compose(self) -> ComposeResult:
+        self.diff_log = RichLog(highlight=True, markup=True)
+        yield self.diff_log
+
+    def on_mount(self) -> None:
+        """Start refreshing when mounted"""
+        self.set_interval(2.0, self.refresh_diff)
+        self.refresh_diff()
+
+    def refresh_diff(self) -> None:
+        """Fetch and display the latest diff"""
+        app = self.app
+        if not hasattr(app, 'current_session') or not app.current_session:
+            self.diff_log.clear()
+            self.diff_log.write("[dim]No session selected[/dim]")
+            return
+
+        work_path = app.current_session.work_path
+        session_id = app.current_session.session_id
+
+        if not work_path:
+            self.diff_log.write("[dim]Session has no work path[/dim]")
+            return
+
+        try:
+            # Get git diff
+            result = subprocess.run(
+                ["git", "diff", "HEAD"],
+                cwd=work_path,
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode == 0:
+                # Clear previous content
+                self.diff_log.clear()
+
+                if result.stdout:
+                    # Write diff line by line for better scrolling
+                    for line in result.stdout.split('\n'):
+                        if line.startswith('+'):
+                            self.diff_log.write(f"[green]{line}[/green]")
+                        elif line.startswith('-'):
+                            self.diff_log.write(f"[red]{line}[/red]")
+                        elif line.startswith('@@'):
+                            self.diff_log.write(f"[cyan]{line}[/cyan]")
+                        elif line.startswith('diff --git'):
+                            self.diff_log.write(f"[yellow bold]{line}[/yellow bold]")
+                        else:
+                            self.diff_log.write(line)
+                else:
+                    self.diff_log.write(f"[dim]No changes in: {work_path}[/dim]")
+                    self.diff_log.write(f"[dim]Session: {session_id}[/dim]")
+            else:
+                self.diff_log.write(f"[red]Git error: {result.stderr}[/red]")
+
+        except Exception as e:
+            self.diff_log.write(f"[red]Error: {str(e)}[/red]")
+
+class ModelMonitorTab(VerticalScroll):
+    """Tab for monitoring model activity"""
+
+    def compose(self) -> ComposeResult:
+        self.monitor_log = RichLog(highlight=True, markup=True)
+        yield self.monitor_log
+
+    def on_mount(self) -> None:
+        """Start refreshing when mounted"""
+        self.set_interval(2.0, self.refresh_monitor)
+        self.refresh_monitor()
+
+    def refresh_monitor(self) -> None:
+        """Read and display monitor.md file"""
+        app = self.app
+        if not hasattr(app, 'current_session') or not app.current_session:
+            self.monitor_log.clear()
+            self.monitor_log.write("[dim]No session selected[/dim]")
+            return
+
+        work_path = app.current_session.work_path
+        if not work_path:
+            self.monitor_log.write("[dim]Session has no work path[/dim]")
+            return
+
+        monitor_file = Path(work_path) / "monitor.md"
+
+        try:
+            if monitor_file.exists():
+                # Clear and display the monitor file content
+                self.monitor_log.clear()
+                content = monitor_file.read_text()
+
+                # Display with markdown-like formatting
+                for line in content.split('\n'):
+                    if line.startswith('# '):
+                        self.monitor_log.write(f"[bold cyan]{line}[/bold cyan]")
+                    elif line.startswith('## '):
+                        self.monitor_log.write(f"[bold green]{line}[/bold green]")
+                    elif line.startswith('- '):
+                        self.monitor_log.write(f"[yellow]{line}[/yellow]")
+                    elif 'ERROR' in line or 'WARNING' in line:
+                        self.monitor_log.write(f"[red]{line}[/red]")
+                    elif 'SUCCESS' in line or 'OK' in line:
+                        self.monitor_log.write(f"[green]{line}[/green]")
+                    else:
+                        self.monitor_log.write(line)
+            else:
+                self.monitor_log.clear()
+                self.monitor_log.write("[dim]No monitor.md file found in worktree[/dim]")
+                self.monitor_log.write(f"[dim]Looking in: {monitor_file}[/dim]")
+        except Exception as e:
+            self.monitor_log.write(f"[red]Error reading monitor file: {str(e)}[/red]")
 
 
 def main():
-    """Entry point for running the kerberos app"""
+    """Entry point for the unified UI"""
     # Set terminal environment for better performance
     os.environ.setdefault("TERM", "xterm-256color")
     os.environ.setdefault("TMUX_TMPDIR", "/tmp")  # Use local tmp for better performance
-    KerberosApp().run()
+    UnifiedApp().run()
+
 
 if __name__ == "__main__":
     main()
