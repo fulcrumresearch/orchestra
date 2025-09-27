@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 import json
 import subprocess
-from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF
+from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT
 
 SESSIONS_FILE = Path.home() / ".kerberos" / "sessions.json"
 
@@ -36,6 +36,38 @@ class Session:
         if not self.protocol:
             return False
         return self.protocol.start(self)
+
+    def add_instructions(self) -> None:
+        """Add agent-specific instructions to CLAUDE.md if not already present"""
+        if not self.work_path:
+            return
+
+        # Only add instructions for designer agents
+        if self.agent_type != AgentType.DESIGNER:
+            return
+
+        claude_dir = Path(self.work_path) / ".claude"
+        claude_md_path = claude_dir / "CLAUDE.md"
+
+        # Read existing content if file exists
+        existing_content = ""
+        if claude_md_path.exists():
+            existing_content = claude_md_path.read_text()
+
+        # Check if designer prompt is already present
+        if "Designer Agent Instructions" in existing_content:
+            return
+
+        # Create directory if needed
+        claude_dir.mkdir(parents=True, exist_ok=True)
+
+        # Append designer prompt (with separator if file had content)
+        if existing_content:
+            new_content = existing_content.rstrip() + "\n\n" + DESIGNER_PROMPT
+        else:
+            new_content = DESIGNER_PROMPT
+
+        claude_md_path.write_text(new_content)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize session to dictionary for JSON storage"""
@@ -119,6 +151,9 @@ class Session:
             merge_command_path = claude_commands_dir / "merge-child.md"
             merge_command_path.write_text(MERGE_CHILD_COMMAND)
 
+            # Add designer instructions to CLAUDE.md
+            self.add_instructions()
+
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed to create worktree: {e.stderr}")
 
@@ -189,6 +224,9 @@ def ensure_default_session(sessions: List[Session], protocol=None) -> List[Sessi
         # For the main session, use the source directory directly instead of a worktree
         # This avoids the issue of multiple worktrees for the same branch
         main_session.work_path = main_session.source_path
+
+    # Ensure main session has designer instructions in CLAUDE.md
+    main_session.add_instructions()
 
     # Always put main first
     return [main_session] + other_sessions
