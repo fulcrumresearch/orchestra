@@ -6,6 +6,7 @@ from claude_code_sdk import ClaudeCodeOptions, ClaudeSDKClient
 from textwrap import dedent
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
+from pathlib import Path
 import asyncio
 import json
 import time
@@ -115,3 +116,51 @@ class SessionMonitor:
                     logger.info("[%s] agent> %s", self.session.session_id, chunk)
             finally:
                 self.queue.task_done()
+
+
+@dataclass
+class SessionMonitorWatcher:
+    """Watches monitor.md files for a session and its children"""
+    session: Session
+
+    def get_monitor_files(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get monitor.md files for this session and all its children.
+        Returns dict: {session_id: {"path": path, "content": content, "mtime": mtime}}
+        """
+        monitors = {}
+        self._collect_from_session(self.session, monitors)
+        return monitors
+
+    def _collect_from_session(self, sess: Session, monitors: Dict[str, Dict[str, Any]]) -> None:
+        """Recursively collect monitor files from a session and its children"""
+        if not sess.work_path:
+            return
+
+        monitor_file = Path(sess.work_path) / "monitor.md"
+
+        if monitor_file.exists():
+            try:
+                content = monitor_file.read_text()
+                mtime = monitor_file.stat().st_mtime
+
+                monitors[sess.session_id] = {
+                    "path": str(monitor_file),
+                    "content": content,
+                    "mtime": mtime,
+                    "last_updated": datetime.fromtimestamp(mtime).isoformat(),
+                    "agent_type": sess.agent_type.value
+                }
+            except Exception as e:
+                logger.error(f"Error reading {monitor_file}: {e}")
+                monitors[sess.session_id] = {
+                    "path": str(monitor_file),
+                    "content": f"Error reading file: {e}",
+                    "mtime": 0,
+                    "last_updated": "Error",
+                    "agent_type": sess.agent_type.value
+                }
+
+        # Process children
+        for child in sess.children:
+            self._collect_from_session(child, monitors)

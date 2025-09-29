@@ -16,6 +16,7 @@ from textual.reactive import reactive
 
 from cerb_code.lib.sessions import Session, AgentType, load_sessions, save_sessions, SESSIONS_FILE
 from cerb_code.lib.tmux_agent import TmuxProtocol
+from cerb_code.lib.monitor import SessionMonitorWatcher
 from cerb_code.lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -547,7 +548,7 @@ class DiffTab(VerticalScroll):
             self.diff_log.write(f"[red]Error: {str(e)}[/red]")
 
 class ModelMonitorTab(VerticalScroll):
-    """Tab for monitoring model activity"""
+    """Tab for monitoring session and children monitor.md files"""
 
     def compose(self) -> ComposeResult:
         self.monitor_log = RichLog(highlight=True, markup=True)
@@ -555,50 +556,80 @@ class ModelMonitorTab(VerticalScroll):
 
     def on_mount(self) -> None:
         """Start refreshing when mounted"""
+        self.watcher = None
+        self._last_monitors = {}
         self.set_interval(2.0, self.refresh_monitor)
         self.refresh_monitor()
 
     def refresh_monitor(self) -> None:
-        """Read and display monitor.md file"""
+        """Read and display monitor.md files for current session and children"""
         app = self.app
+
+        # Check if we have a current session
         if not hasattr(app, 'current_session') or not app.current_session:
             self.monitor_log.clear()
             self.monitor_log.write("[dim]No session selected[/dim]")
+            self.watcher = None
+            self._last_monitors = {}
             return
 
-        work_path = app.current_session.work_path
-        if not work_path:
-            self.monitor_log.write("[dim]Session has no work path[/dim]")
+        # Create or update watcher with current session
+        if self.watcher is None or self.watcher.session != app.current_session:
+            self.watcher = SessionMonitorWatcher(session=app.current_session)
+            self._last_monitors = {}
+
+        monitors = self.watcher.get_monitor_files()
+
+        # Only update display if monitors have changed
+        if monitors != self._last_monitors:
+            self._update_display(monitors)
+            self._last_monitors = monitors
+
+    def _update_display(self, monitors: Dict[str, Dict[str, Any]]) -> None:
+        """Update the display with new monitor data"""
+        self.monitor_log.clear()
+
+        if not monitors:
+            self.monitor_log.write(f"[dim]No monitor.md files found[/dim]")
             return
 
-        monitor_file = Path(work_path) / "monitor.md"
+        # Sort by last modified time (most recent first)
+        sorted_monitors = sorted(monitors.items(), key=lambda x: x[1]['mtime'], reverse=True)
 
-        try:
-            if monitor_file.exists():
-                # Clear and display the monitor file content
-                self.monitor_log.clear()
-                content = monitor_file.read_text()
+        for session_id, monitor_data in sorted_monitors:
+            # Header for each session
+            agent_icon = "👷" if monitor_data.get('agent_type') == 'executor' else "🎨"
+            self.monitor_log.write("")
+            self.monitor_log.write(f"[bold cyan]══════════════════════════════════════════════════[/bold cyan]")
+            self.monitor_log.write(f"[bold yellow]{agent_icon} {session_id}[/bold yellow] [dim]({monitor_data.get('agent_type', 'unknown')})[/dim]")
+            self.monitor_log.write(f"[dim]Last updated: {monitor_data['last_updated']}[/dim]")
+            self.monitor_log.write(f"[dim]{monitor_data['path']}[/dim]")
+            self.monitor_log.write(f"[bold cyan]──────────────────────────────────────────────────[/bold cyan]")
 
-                # Display with markdown-like formatting
+            content = monitor_data['content']
+            if not content or content.strip() == "":
+                self.monitor_log.write("[dim italic]Empty monitor file[/dim italic]")
+            else:
+                # Display content with markdown-like formatting
                 for line in content.split('\n'):
                     if line.startswith('# '):
                         self.monitor_log.write(f"[bold cyan]{line}[/bold cyan]")
                     elif line.startswith('## '):
                         self.monitor_log.write(f"[bold green]{line}[/bold green]")
+                    elif line.startswith('### '):
+                        self.monitor_log.write(f"[green]{line}[/green]")
                     elif line.startswith('- '):
                         self.monitor_log.write(f"[yellow]{line}[/yellow]")
                     elif 'ERROR' in line or 'WARNING' in line:
                         self.monitor_log.write(f"[red]{line}[/red]")
-                    elif 'SUCCESS' in line or 'OK' in line:
+                    elif 'SUCCESS' in line or 'OK' in line or '✓' in line:
                         self.monitor_log.write(f"[green]{line}[/green]")
+                    elif line.startswith('HOOK EVENT:'):
+                        self.monitor_log.write(f"[magenta]{line}[/magenta]")
+                    elif line.startswith('time:') or line.startswith('session_id:') or line.startswith('tool:'):
+                        self.monitor_log.write(f"[blue]{line}[/blue]")
                     else:
                         self.monitor_log.write(line)
-            else:
-                self.monitor_log.clear()
-                self.monitor_log.write("[dim]No monitor.md file found in worktree[/dim]")
-                self.monitor_log.write(f"[dim]Looking in: {monitor_file}[/dim]")
-        except Exception as e:
-            self.monitor_log.write(f"[red]Error reading monitor file: {str(e)}[/red]")
 
 
 def main():
