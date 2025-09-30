@@ -666,7 +666,34 @@ def main():
     # Set terminal environment for better performance
     os.environ.setdefault("TERM", "xterm-256color")
     os.environ.setdefault("TMUX_TMPDIR", "/tmp")  # Use local tmp for better performance
-    UnifiedApp().run()
+
+    # Start the monitoring server in the background
+    monitor_port = 8081
+    monitor_log = Path.home() / ".kerberos" / "monitor-server.log"
+    monitor_log.parent.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"Starting monitor server on port {monitor_port}")
+    logger.info(f"Monitor server logs: {monitor_log}")
+
+    with open(monitor_log, "w") as log_file:
+        monitor_proc = subprocess.Popen(
+            ["cerb-monitor-server", str(monitor_port)],
+            stdout=log_file,
+            stderr=log_file,
+            start_new_session=True
+        )
+    logger.info(f"Monitor server started with PID {monitor_proc.pid}")
+
+    try:
+        UnifiedApp().run()
+    finally:
+        # Clean up monitor server on exit
+        logger.info("Shutting down monitor server")
+        monitor_proc.terminate()
+        try:
+            monitor_proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            monitor_proc.kill()
 
 
 if __name__ == "__main__":
