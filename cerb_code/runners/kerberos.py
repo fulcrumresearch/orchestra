@@ -17,6 +17,7 @@ from textual.reactive import reactive
 from cerb_code.lib.sessions import Session, AgentType, load_sessions, save_sessions, SESSIONS_FILE
 from cerb_code.lib.tmux_agent import TmuxProtocol
 from cerb_code.lib.monitor import SessionMonitorWatcher
+from cerb_code.lib.file_watcher import FileWatcher, watch_designer_file
 from cerb_code.lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -172,6 +173,8 @@ class UnifiedApp(App):
         self.agent = TmuxProtocol(default_command="claude")
         self._last_session_mtime = None
         self._watch_task = None
+        # Create a shared FileWatcher for monitoring files
+        self.file_watcher = FileWatcher()
         logger.info("KerberosApp initialized")
 
     def compose(self) -> ComposeResult:
@@ -222,6 +225,9 @@ class UnifiedApp(App):
 
         # Start watching sessions file for changes
         self._watch_task = asyncio.create_task(self._watch_sessions_file())
+
+        # Start the file watcher
+        await self.file_watcher.start()
 
     async def action_refresh(self) -> None:
         """Refresh the session list"""
@@ -438,6 +444,14 @@ class UnifiedApp(App):
         if not designer_md.exists():
             designer_md.touch()
             logger.info(f"Created {designer_md}")
+
+        # Register file watcher for designer.md to notify session on changes
+        watch_designer_file(
+            self.file_watcher,
+            self.agent,
+            designer_md,
+            self.current_session.session_id
+        )
 
         # Open vim in a split tmux pane at the bottom
         # Split from pane 0 (the UI pane) with 15 lines height (fixed size, not percentage)

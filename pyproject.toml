@@ -11,6 +11,7 @@ dependencies = [
     "uvicorn>=0.37.0",
     "requests==2.30.0",
     "claude-code-sdk>=0.0.23",
+    "watchfiles>=0.24.0",
 ]
 
 [project.scripts]
