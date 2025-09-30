@@ -465,9 +465,9 @@ class UnifiedApp(App):
             logger.info(f"Created {designer_md}")
 
         # Open vim in a split tmux pane at the bottom
-        # Split from pane 0 (the UI pane) with 40% height
+        # Split from pane 0 (the UI pane) with 15 lines height (fixed size, not percentage)
         result = subprocess.run(
-            ["tmux", "split-window", "-t", "0", "-v", "-p", "40", f"vim {designer_md}"],
+            ["tmux", "split-window", "-t", "0", "-v", "-l", "15", f"vim {designer_md}"],
             capture_output=True,
             text=True
         )
