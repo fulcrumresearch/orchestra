@@ -2,7 +2,7 @@ from .sessions import Session
 from .logger import get_logger
 
 from dataclasses import dataclass, field
-from claude_code_sdk import ClaudeCodeOptions, ClaudeSDKClient
+from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 from textwrap import dedent
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
@@ -16,6 +16,11 @@ logger = get_logger(__name__)
 ALLOWED_TOOLS = ["Read", "Write"]
 PERMISSION_MODE = "acceptEdits"
 
+# Batch processing configuration
+BATCH_WAIT_TIME = 10  # Wait 2 seconds after first event before processing
+MAX_BATCH_SIZE = 10    # Process immediately if 10 events accumulate
+MAX_BATCH_WAIT = 20   # Never wait more than 5 seconds total
+
 SYSTEM_PROMPT = dedent(
     """
     You are a monitoring subagent receiving structured HOOK events from Claude Code instances.
@@ -25,11 +30,13 @@ SYSTEM_PROMPT = dedent(
     - Output information in realtime about the agent's progress, given the various hooks and codebase access.
     - Do not execute commands. Do not run Bash or WebFetch unless explicitly asked. Only write to the monitor.md file.
 
-    Kinds of information in your report:
+    Structure of report:
 
-    - Deviations from given spec
-    - Additional choices made by the agent in its implementation that were not defined in the spec
-    - Summary of changes
+    - **Current Status**: Describe what the agent is currently trying to do.
+    - **Summary of changes**: For each file, what did the agent do, what choices were made, how did they do it, how does the whole thing get structured.
+    - **Deviations from spec**: Detail potential choices the agent made that were not defined or were deviations from the spec given by the designer in the instructions file.
+
+    Don't make it too verbose, it should be definitely less than a page.
     """
 ).strip()
 
@@ -72,7 +79,7 @@ class SessionMonitor:
         if self.client is not None:
             return
 
-        options = ClaudeCodeOptions(
+        options = ClaudeAgentOptions(
             cwd=self.session.work_path,
             system_prompt=self.system_prompt,
             allowed_tools=self.allowed_tools,
@@ -102,20 +109,50 @@ class SessionMonitor:
 
     async def _run(self) -> None:
 
-        await self.client.query(f"[monitor:{self.session.session_id}] session online; awaiting hook events.")
+        await self.client.query(f"Session online. Understand and update the monitor.md in the given format. Do NOT log every event, the whole point is to make this easier for the a human to understand what is going on.")
 
         async for chunk in self.client.receive_response():
             logger.info("[%s] startup> %s", self.session.session_id, chunk)
 
         while True:
-            evt = await self.queue.get()
+            # Collect batch of events
+            batch = []
+
+            # Get first event (blocking)
+            first_event = await self.queue.get()
+            batch.append(first_event)
+            batch_start = time.time()
+
+            # Collect more events with timeout
+            while True:
+                batch_age = time.time() - batch_start
+
+                # Stop if batch is full or too old
+                if batch_age >= MAX_BATCH_WAIT:
+                    break
+
+                # Try to get more events (with timeout)
+                try:
+                    evt = await asyncio.wait_for(
+                        self.queue.get(),
+                        timeout=BATCH_WAIT_TIME
+                    )
+                    batch.append(evt)
+                except asyncio.TimeoutError:
+                    break
+
+            # Format all events and send as one message
             try:
-                prompt = format_event_for_agent(evt)
-                await self.client.query(prompt)
+                prompts = [format_event_for_agent(evt) for evt in batch]
+                combined_prompt = "\n\n---\n\n".join(prompts)
+
+                await self.client.query(combined_prompt)
                 async for chunk in self.client.receive_response():
-                    logger.info("[%s] agent> %s", self.session.session_id, chunk)
+                    logger.info("[%s] batch[%d]> %s", self.session.session_id, len(batch), chunk)
             finally:
-                self.queue.task_done()
+                # Mark all events as done
+                for _ in batch:
+                    self.queue.task_done()
 
 
 @dataclass
@@ -149,17 +186,9 @@ class SessionMonitorWatcher:
                     "content": content,
                     "mtime": mtime,
                     "last_updated": datetime.fromtimestamp(mtime).isoformat(),
-                    "agent_type": sess.agent_type.value
                 }
             except Exception as e:
                 logger.error(f"Error reading {monitor_file}: {e}")
-                monitors[sess.session_id] = {
-                    "path": str(monitor_file),
-                    "content": f"Error reading file: {e}",
-                    "mtime": 0,
-                    "last_updated": "Error",
-                    "agent_type": sess.agent_type.value
-                }
 
         # Process children
         for child in sess.children:

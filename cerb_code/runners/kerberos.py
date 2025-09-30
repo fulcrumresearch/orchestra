@@ -139,6 +139,8 @@ class UnifiedApp(App):
     RichLog {
         background: #000000;
         color: #ffffff;
+        overflow-x: hidden;
+        overflow-y: auto;
     }
 
     VerticalScroll {
@@ -153,8 +155,8 @@ class UnifiedApp(App):
         Binding("ctrl+d", "delete_session", "Delete", priority=True),
         Binding("up", "cursor_up", show=False),
         Binding("down", "cursor_down", show=False),
-        Binding("k", "cursor_up", show=False),
-        Binding("j", "cursor_down", show=False),
+        Binding("k", "scroll_tab_up", "Scroll Tab Up", show=False),
+        Binding("j", "scroll_tab_down", "Scroll Tab Down", show=False),
         Binding("left", "prev_tab", show=False),
         Binding("right", "next_tab", show=False),
         Binding("h", "prev_tab", show=False),
@@ -269,10 +271,15 @@ class UnifiedApp(App):
         # Don't save here - this causes an infinite loop with the file watcher!
 
     def action_new_session(self) -> None:
-        """Focus the session input for creating a new session"""
-        logger.info("action_new_session called - focusing input")
-        self.session_input.focus()
-        self.session_input.clear()
+        """Toggle focus on the session input"""
+        logger.info("action_new_session called - toggling input focus")
+        if self.focused == self.session_input:
+            # If already focused, return focus to session list
+            self.session_list.focus()
+        else:
+            # Focus and clear the input
+            self.session_input.focus()
+            self.session_input.clear()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle when user presses Enter in the input field"""
@@ -359,6 +366,24 @@ class UnifiedApp(App):
     def action_cursor_down(self) -> None:
         """Move cursor down in the list"""
         self.session_list.action_down()
+
+    def action_scroll_tab_up(self) -> None:
+        """Scroll up in the active monitor/diff tab"""
+        tabs = self.query_one(TabbedContent)
+        active_pane = tabs.get_pane(tabs.active)
+        if active_pane:
+            # Find and scroll the RichLog widget directly
+            for widget in active_pane.query(RichLog):
+                widget.scroll_relative(y=-1)
+
+    def action_scroll_tab_down(self) -> None:
+        """Scroll down in the active monitor/diff tab"""
+        tabs = self.query_one(TabbedContent)
+        active_pane = tabs.get_pane(tabs.active)
+        if active_pane:
+            # Find and scroll the RichLog widget directly
+            for widget in active_pane.query(RichLog):
+                widget.scroll_relative(y=1)
 
     def action_prev_tab(self) -> None:
         """Switch to previous tab"""
@@ -455,6 +480,10 @@ class UnifiedApp(App):
         self.hud.set_session(session.session_id)
         self.current_session = session
 
+        # Immediately refresh monitor tab to show new session's monitor
+        monitor_tab = self.query_one(ModelMonitorTab)
+        monitor_tab.refresh_monitor()
+
 
 
     async def _watch_sessions_file(self) -> None:
@@ -489,7 +518,7 @@ class DiffTab(VerticalScroll):
     """Scrollable container for diff display"""
 
     def compose(self) -> ComposeResult:
-        self.diff_log = RichLog(highlight=True, markup=True)
+        self.diff_log = RichLog(highlight=True, markup=True, auto_scroll=False, wrap=True)
         yield self.diff_log
 
     def on_mount(self) -> None:
@@ -551,7 +580,7 @@ class ModelMonitorTab(VerticalScroll):
     """Tab for monitoring session and children monitor.md files"""
 
     def compose(self) -> ComposeResult:
-        self.monitor_log = RichLog(highlight=True, markup=True)
+        self.monitor_log = RichLog(highlight=True, markup=True, auto_scroll=False, wrap=True)
         yield self.monitor_log
 
     def on_mount(self) -> None:
@@ -566,7 +595,7 @@ class ModelMonitorTab(VerticalScroll):
         app = self.app
 
         # Check if we have a current session
-        if not hasattr(app, 'current_session') or not app.current_session:
+        if not app.current_session:
             self.monitor_log.clear()
             self.monitor_log.write("[dim]No session selected[/dim]")
             self.watcher = None
