@@ -9,7 +9,7 @@ from pathlib import Path
 import asyncio
 
 from textual.app import App, ComposeResult
-from textual.widgets import Static, Label, TabbedContent, TabPane, RichLog, ListView, ListItem, Input, Tabs
+from textual.widgets import Static, Label, TabbedContent, TabPane, RichLog, ListView, ListItem, Input, Tabs, Button
 from textual.containers import Container, VerticalScroll, Horizontal, Vertical
 from textual.binding import Binding
 from textual.reactive import reactive
@@ -203,6 +203,8 @@ class UnifiedApp(App):
                         yield DiffTab()
                     with TabPane("Monitor", id="monitor-tab"):
                         yield ModelMonitorTab()
+                    with TabPane("Spec", id="spec-tab"):
+                        yield SpecTab()
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
@@ -630,6 +632,54 @@ class ModelMonitorTab(VerticalScroll):
                         self.monitor_log.write(f"[blue]{line}[/blue]")
                     else:
                         self.monitor_log.write(line)
+
+
+class SpecTab(VerticalScroll):
+    """Tab for opening designer.md in vim within a tmux pane"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.spec_open = False
+
+    def compose(self) -> ComposeResult:
+        self.open_button = Button("Open Spec", id="open-spec-button", variant="primary")
+        yield self.open_button
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle Open Spec button click"""
+        if event.button.id == "open-spec-button":
+            self.toggle_spec_editor()
+
+    def toggle_spec_editor(self) -> None:
+        """Toggle the spec editor (open or close)"""
+        app = self.app
+
+        # Check if we have a current session
+        if not hasattr(app, 'current_session') or not app.current_session:
+            self.open_button.label = "No Session"
+            return
+
+        work_path = Path(app.current_session.work_path)
+        designer_md = work_path / "designer.md"
+
+        if not self.spec_open:
+            # Create designer.md if it doesn't exist
+            if not designer_md.exists():
+                designer_md.touch()
+
+            # Open vim in a split tmux pane
+            cmd = f'tmux split-window -t 0 -v -p 40 "vim {designer_md} || tmux kill-pane"'
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+            if result.returncode == 0:
+                self.spec_open = True
+                self.open_button.label = "Spec Open"
+            else:
+                self.open_button.label = "Failed to Open"
+        else:
+            # Update label - tmux will auto-close the pane when vim exits
+            self.spec_open = False
+            self.open_button.label = "Open Spec"
 
 
 def main():
