@@ -497,9 +497,10 @@ class UnifiedApp(App):
                 logger.error(f"Failed to start session {session.session_id}")
                 return
 
-        # Use tmux's respawn-pane to attach to the session in pane 1
+        # Use tmux's respawn-pane to attach to the session in the rightmost pane
+        # Use {right} selector instead of hardcoded "1" to handle spec pane existence
         cmd = f"TMUX= tmux attach-session -t {session.session_id}"
-        subprocess.run(["tmux", "respawn-pane", "-t", "1", "-k", cmd],
+        subprocess.run(["tmux", "respawn-pane", "-t", "{right}", "-k", cmd],
                       capture_output=True, text=True)
 
         # Don't auto-focus pane 1 - let user stay in the UI
