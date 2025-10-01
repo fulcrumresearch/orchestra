@@ -486,7 +486,8 @@ class UnifiedApp(App):
 
         # Use tmux's respawn-pane to attach to the session in pane 2 (claude pane)
         # If attach fails, create a new tmux session with that name and run claude
-        cmd = f"TMUX= tmux attach-session -t {session.session_id} || tmux new-session -s {session.session_id} claude"
+        # Wrap in bash to execute the || operator
+        cmd = f"bash -c 'TMUX= tmux attach-session -t {session.session_id} || tmux new-session -s {session.session_id} claude'"
         subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", cmd],
                       capture_output=True, text=True)
 
