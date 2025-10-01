@@ -31,9 +31,18 @@ create_layout() {
     # Split vertically - left pane for UI, right for terminal (50/50)
     tmux split-window -h -b -l "$LEFT_SIZE" $target_flag
 
+    # Name the panes so we can target them reliably
+    if [[ -n "$target_prefix" ]]; then
+        tmux select-pane -t "${target_prefix}.0" -T "sidebar"
+        tmux select-pane -t "${target_prefix}.1" -T "active-claude"
+    else
+        tmux select-pane -t 0 -T "sidebar"
+        tmux select-pane -t 1 -T "active-claude"
+    fi
+
     # Now we have:
-    # Pane 0: Unified UI (left)
-    # Pane 1: Terminal for Claude sessions (right)
+    # Pane 0 (sidebar): Unified UI (left)
+    # Pane 1 (active-claude): Terminal for Claude sessions (right)
 
     # Start the unified UI in the left pane
     for pane in 0 1; do
