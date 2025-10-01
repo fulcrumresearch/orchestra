@@ -475,9 +475,11 @@ class UnifiedApp(App):
             self.current_session.session_id
         )
 
-        # Respawn pane 1 (editor pane) with vim
+        # Respawn pane 1 (editor pane) with vim, wrapped in bash to keep pane alive after quit
+        # When vim exits, show placeholder and keep shell running
+        vim_cmd = f"bash -c 'vim {designer_md}; echo \"Press S to open spec editor\"; exec bash'"
         result = subprocess.run(
-            ["tmux", "respawn-pane", "-t", "1", "-k", f"vim {designer_md}"],
+            ["tmux", "respawn-pane", "-t", "1", "-k", vim_cmd],
             capture_output=True,
             text=True
         )
@@ -508,7 +510,8 @@ class UnifiedApp(App):
                 return
 
         # Use tmux's respawn-pane to attach to the session in pane 2 (claude pane)
-        cmd = f"TMUX= tmux attach-session -t {session.session_id}"
+        # If attach fails, create a new tmux session with that name and run claude
+        cmd = f"TMUX= tmux attach-session -t {session.session_id} || tmux new-session -s {session.session_id} claude"
         subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", cmd],
                       capture_output=True, text=True)
 
