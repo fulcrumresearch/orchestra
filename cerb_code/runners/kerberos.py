@@ -22,6 +22,19 @@ from cerb_code.lib.logger import get_logger
 
 logger = get_logger(__name__)
 
+
+def get_pane_by_title(title: str) -> str | None:
+    """Get tmux pane ID by its title"""
+    result = subprocess.run(
+        ["tmux", "list-panes", "-F", "#{pane_id}", "-f", f"#{{==:#{{pane_title}},{title}}}"],
+        capture_output=True,
+        text=True
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip()
+    return None
+
+
 class HUD(Static):
     can_focus = False
 
@@ -417,9 +430,11 @@ class UnifiedApp(App):
                 # No sessions left, show empty state
                 self.hud.set_session("")
                 # Clear the active-claude pane with a message
-                msg_cmd = "echo 'No active sessions. Press Ctrl+N to create a new session.'"
-                subprocess.run(["tmux", "respawn-pane", "-t", "%active-claude", "-k", msg_cmd],
-                              capture_output=True, text=True)
+                active_claude_pane = get_pane_by_title("active-claude")
+                if active_claude_pane:
+                    msg_cmd = "echo 'No active sessions. Press Ctrl+N to create a new session.'"
+                    subprocess.run(["tmux", "respawn-pane", "-t", active_claude_pane, "-k", msg_cmd],
+                                  capture_output=True, text=True)
 
         # Keep focus on the session list
         self.set_focus(self.session_list)
@@ -451,8 +466,13 @@ class UnifiedApp(App):
 
         # Open vim in a split tmux pane at the bottom
         # Split from the sidebar pane with 15 lines height (fixed size, not percentage)
+        sidebar_pane = get_pane_by_title("sidebar")
+        if not sidebar_pane:
+            logger.error("Could not find sidebar pane")
+            return
+
         result = subprocess.run(
-            ["tmux", "split-window", "-t", "%sidebar", "-v", "-l", "15", f"vim {designer_md}"],
+            ["tmux", "split-window", "-t", sidebar_pane, "-v", "-l", "15", f"vim {designer_md}"],
             capture_output=True,
             text=True
         )
@@ -491,8 +511,13 @@ class UnifiedApp(App):
                 return
 
         # Use tmux's respawn-pane to attach to the session in the active-claude pane
+        active_claude_pane = get_pane_by_title("active-claude")
+        if not active_claude_pane:
+            logger.error("Could not find active-claude pane")
+            return
+
         cmd = f"TMUX= tmux attach-session -t {session.session_id}"
-        subprocess.run(["tmux", "respawn-pane", "-t", "%active-claude", "-k", cmd],
+        subprocess.run(["tmux", "respawn-pane", "-t", active_claude_pane, "-k", cmd],
                       capture_output=True, text=True)
 
         # Don't auto-focus pane 1 - let user stay in the UI
