@@ -475,19 +475,22 @@ class UnifiedApp(App):
         status = self.agent.get_status(session.session_id)
 
         if not status.get("exists", False):
-            # Session doesn't exist, try to start it
+            # Session doesn't exist, create it
             logger.info(f"Session {session.session_id} doesn't exist, creating it")
             if not session.work_path:
                 # Only prepare if work_path not set (i.e., not already prepared)
                 session.prepare()
+
             if not session.start():
+                # Failed to create session, show error in pane
                 logger.error(f"Failed to start session {session.session_id}")
+                error_cmd = f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
+                subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", error_cmd],
+                              capture_output=True, text=True)
                 return
 
-        # Use tmux's respawn-pane to attach to the session in pane 2 (claude pane)
-        # If attach fails, create a new tmux session with that name and run claude
-        # Wrap in bash to execute the || operator
-        cmd = f"bash -c 'TMUX= tmux attach-session -t {session.session_id} || tmux new-session -s {session.session_id} claude'"
+        # At this point, session exists - attach to it in pane 2
+        cmd = f"TMUX= tmux attach-session -t {session.session_id}"
         subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", cmd],
                       capture_output=True, text=True)
 
