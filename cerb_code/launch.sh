@@ -34,11 +34,11 @@ create_layout() {
     tmux split-window -h -b -l "$LEFT_SIZE" $target_flag
     # Now we have: Pane 0 (left), Pane 1 (right)
 
-    # Split the left pane horizontally: sidebar on top, editor below (15 lines for editor)
+    # Split the left pane horizontally: sidebar on top (80%), editor below (20%)
     if [[ -n "$target_prefix" ]]; then
-        tmux split-window -t "${target_prefix}.0" -v -l 15 $target_flag
+        tmux split-window -t "${target_prefix}.0" -v -p 20 $target_flag
     else
-        tmux split-window -t 0 -v -l 15
+        tmux split-window -t 0 -v -p 20
     fi
     # Now we have: Pane 0 (sidebar top-left), Pane 1 (editor bottom-left), Pane 2 (claude right)
 
