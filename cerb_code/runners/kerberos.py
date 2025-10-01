@@ -45,7 +45,7 @@ class HUD(Static):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.default_text = "⌃N new • ⌃D delete • ⌃R refresh • S spec • ⌃Q quit"
+        self.default_text = "⌃N new • ⌃D delete • ⌃R refresh • S spec • T terminal • ⌃Q quit"
         self.current_session = ""
 
     def set_session(self, session_name: str):
@@ -174,6 +174,7 @@ class UnifiedApp(App):
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
         Binding("ctrl+d", "delete_session", "Delete", priority=True),
         Binding("s", "open_spec", "Open Spec", priority=True),
+        Binding("t", "open_terminal", "Open Terminal", priority=True),
         Binding("up", "cursor_up", show=False),
         Binding("down", "cursor_down", show=False),
         Binding("k", "scroll_tab_up", "Scroll Tab Up", show=False),
@@ -515,6 +516,28 @@ class UnifiedApp(App):
             logger.error(f"Failed to open spec: {result.stderr}")
         else:
             logger.info(f"Opened spec editor for {designer_md}")
+
+    def action_open_terminal(self) -> None:
+        """Open bash terminal in the current session's worktree in pane 1"""
+        if not self.current_session:
+            logger.warning("No current session to open terminal for")
+            return
+
+        work_path = Path(self.current_session.work_path)
+
+        # Respawn pane 1 with bash in the session's work directory
+        # Keep the shell running and show current directory
+        bash_cmd = f"bash -c 'cd {work_path} && exec bash'"
+        result = subprocess.run(
+            ["tmux", "respawn-pane", "-t", "1", "-k", bash_cmd],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            logger.error(f"Failed to open terminal: {result.stderr}")
+        else:
+            logger.info(f"Opened terminal for {work_path}")
 
     def _attach_to_session(self, session: Session) -> None:
         """Select a session and update monitors to show it"""
