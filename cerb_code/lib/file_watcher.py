@@ -1,4 +1,5 @@
 """Async file watcher utility using watchfiles"""
+
 import asyncio
 from pathlib import Path
 from typing import Callable, Awaitable, Dict, Set, TYPE_CHECKING
@@ -26,6 +27,7 @@ class FileWatcher:
         self._watchers: Dict[Path, Set[FileChangeHandler]] = {}
         self._task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
+        self._should_stop = False  # Flag to distinguish stop vs restart
 
     def register(self, file_path: Path, handler: FileChangeHandler) -> None:
         """
@@ -43,7 +45,7 @@ class FileWatcher:
         self._watchers[file_path].add(handler)
         logger.info(f"Registered watcher for {file_path}")
 
-    def unregister(self, file_path: Path, handler: FileChangeHandler | None = None) -> None:
+    def unregister(self, file_path: Path) -> None:
         """
         Unregister a file or specific handler.
 
@@ -56,16 +58,7 @@ class FileWatcher:
         if file_path not in self._watchers:
             return
 
-        if handler is None:
-            # Remove all handlers for this file
-            del self._watchers[file_path]
-            logger.info(f"Unregistered all watchers for {file_path}")
-        else:
-            # Remove specific handler
-            self._watchers[file_path].discard(handler)
-            if not self._watchers[file_path]:
-                del self._watchers[file_path]
-            logger.info(f"Unregistered handler for {file_path}")
+        del self._watchers[file_path]
 
     async def start(self) -> None:
         """Start the file watching task"""
@@ -82,6 +75,7 @@ class FileWatcher:
         if self._task is None:
             return
 
+        self._should_stop = True
         self._stop_event.set()
 
         try:
@@ -98,7 +92,7 @@ class FileWatcher:
 
     async def _run(self) -> None:
         """Main watching loop"""
-        while not self._stop_event.is_set():
+        while not self._should_stop:
             if not self._watchers:
                 # No files to watch, sleep briefly
                 await asyncio.sleep(0.5)
@@ -106,6 +100,9 @@ class FileWatcher:
 
             # Get all paths to watch
             watch_paths = list(self._watchers.keys())
+
+            # Clear stop event for this iteration
+            self._stop_event.clear()
 
             try:
                 # Watch all registered files
@@ -122,18 +119,29 @@ class FileWatcher:
                                 try:
                                     await handler(path, change_type)
                                 except Exception as e:
-                                    logger.error(f"Error in file watcher handler for {path}: {e}")
+                                    logger.error(
+                                        f"Error in file watcher handler for {path}: {e}"
+                                    )
+                logger.info("File watcher stopped")
 
             except Exception as e:
                 logger.error(f"Error in file watcher: {e}")
                 await asyncio.sleep(1)  # Brief pause before retrying
+
+            # awatch exited - check if we're restarting or stopping
+            if self._should_stop:
+                logger.info("File watcher stopped")
+                break
+
+            # Otherwise, loop continues and restarts awatch with updated file list
+            logger.info(f"Restarting file watcher with {len(self._watchers)} files")
 
 
 def watch_designer_file(
     file_watcher: FileWatcher,
     protocol: "TmuxProtocol",
     designer_md: Path,
-    session_id: str
+    session_id: str,
 ) -> None:
     """
     Register a watcher for designer.md that notifies the session when it changes.
@@ -144,14 +152,16 @@ def watch_designer_file(
         designer_md: Path to the designer.md file
         session_id: ID of the session to notify
     """
+
     async def on_designer_change(path: Path, change_type: Change) -> None:
         """Handler for designer.md changes"""
-        logger.info(f"designer.md changed ({change_type.name}) for session {session_id}")
+        logger.info(
+            f"designer.md changed ({change_type.name}) for session {session_id}"
+        )
 
         # Send notification to the session
         success = protocol.send_message(
-            session_id,
-            "designer.md has been updated. Please review the changes."
+            session_id, "designer.md has been updated. Please review the changes"
         )
 
         if success:
@@ -160,4 +170,6 @@ def watch_designer_file(
             logger.error(f"Failed to notify session {session_id}")
 
     file_watcher.register(designer_md, on_designer_change)
-    logger.info(f"Registered designer.md watcher for session {session_id}: {designer_md}")
+    logger.info(
+        f"Registered designer.md watcher for session {session_id}: {designer_md}"
+    )

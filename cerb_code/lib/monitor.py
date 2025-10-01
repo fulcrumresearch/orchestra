@@ -18,8 +18,8 @@ PERMISSION_MODE = "acceptEdits"
 
 # Batch processing configuration
 BATCH_WAIT_TIME = 10  # Wait 2 seconds after first event before processing
-MAX_BATCH_SIZE = 10    # Process immediately if 10 events accumulate
-MAX_BATCH_WAIT = 20   # Never wait more than 5 seconds total
+MAX_BATCH_SIZE = 10  # Process immediately if 10 events accumulate
+MAX_BATCH_WAIT = 20  # Never wait more than 5 seconds total
 
 SYSTEM_PROMPT = dedent(
     """
@@ -36,9 +36,10 @@ SYSTEM_PROMPT = dedent(
     - **Summary of changes**: For each file, what did the agent do, what choices were made, how did they do it, how does the whole thing get structured.
     - **Deviations from spec**: Detail potential choices the agent made that were not defined or were deviations from the spec given by the designer in the instructions file.
 
-    Don't make it too verbose, it should be definitely less than a page.
+    Don't make it too verbose, it should be definitely less than a page. Think of this as a realtime dashboard, not a log. We do not want to be constantly adding new info, keep it lean, useful and inforamtive.
     """
 ).strip()
+
 
 def format_event_for_agent(evt: Dict[str, Any]) -> str:
     event_type = evt.get("event") or evt.get("hook_event_name") or "UnknownEvent"
@@ -47,7 +48,11 @@ def format_event_for_agent(evt: Dict[str, Any]) -> str:
     tool_name = payload.get("tool_name") or payload.get("tool") or "-"
     cwd = payload.get("cwd") or payload.get("working_dir") or "-"
     transcript_path = payload.get("transcript_path", "-")
-    ts = evt.get("receivedAt") or evt.get("received_at") or datetime.now(timezone.utc).isoformat()
+    ts = (
+        evt.get("receivedAt")
+        or evt.get("received_at")
+        or datetime.now(timezone.utc).isoformat()
+    )
     pretty_json = json.dumps(payload, indent=2, ensure_ascii=False)
     return (
         f"HOOK EVENT: {event_type}\n"
@@ -62,6 +67,7 @@ def format_event_for_agent(evt: Dict[str, Any]) -> str:
         "- Flag risk & sensitive args.\n"
         "- Append a one-line audit record to monitor.md (if Write is allowed).\n"
     )
+
 
 @dataclass
 class SessionMonitor:
@@ -84,7 +90,7 @@ class SessionMonitor:
             system_prompt=self.system_prompt,
             allowed_tools=self.allowed_tools,
             permission_mode=self.permission_mode,
-            hooks={}
+            hooks={},
         )
 
         self.client = ClaudeSDKClient(options=options)
@@ -108,8 +114,9 @@ class SessionMonitor:
         self.queue.put_nowait(evt)
 
     async def _run(self) -> None:
-
-        await self.client.query(f"Session online. Understand and update the monitor.md in the given format. Do NOT log every event, the whole point is to make this easier for the a human to understand what is going on.")
+        await self.client.query(
+            f"Session online. Understand and update the monitor.md in the given format. Do NOT log every event, the whole point is to make this easier for the a human to understand what is going on."
+        )
 
         async for chunk in self.client.receive_response():
             logger.info("[%s] startup> %s", self.session.session_id, chunk)
@@ -134,8 +141,7 @@ class SessionMonitor:
                 # Try to get more events (with timeout)
                 try:
                     evt = await asyncio.wait_for(
-                        self.queue.get(),
-                        timeout=BATCH_WAIT_TIME
+                        self.queue.get(), timeout=BATCH_WAIT_TIME
                     )
                     batch.append(evt)
                 except asyncio.TimeoutError:
@@ -148,7 +154,9 @@ class SessionMonitor:
 
                 await self.client.query(combined_prompt)
                 async for chunk in self.client.receive_response():
-                    logger.info("[%s] batch[%d]> %s", self.session.session_id, len(batch), chunk)
+                    logger.info(
+                        "[%s] batch[%d]> %s", self.session.session_id, len(batch), chunk
+                    )
             finally:
                 # Mark all events as done
                 for _ in batch:
@@ -158,6 +166,7 @@ class SessionMonitor:
 @dataclass
 class SessionMonitorWatcher:
     """Watches monitor.md files for a session and its children"""
+
     session: Session
 
     def get_monitor_files(self) -> Dict[str, Dict[str, Any]]:
@@ -169,7 +178,9 @@ class SessionMonitorWatcher:
         self._collect_from_session(self.session, monitors)
         return monitors
 
-    def _collect_from_session(self, sess: Session, monitors: Dict[str, Dict[str, Any]]) -> None:
+    def _collect_from_session(
+        self, sess: Session, monitors: Dict[str, Dict[str, Any]]
+    ) -> None:
         """Recursively collect monitor files from a session and its children"""
         if not sess.work_path:
             return
