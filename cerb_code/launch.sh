@@ -28,24 +28,22 @@ create_layout() {
     fi
     LEFT_SIZE=$(( WIN_WIDTH * 50 / 100 ))
 
-    # Split vertically - left pane for UI, right for terminal (50/50)
+    # Create 3-pane layout: sidebar (top-left), editor (bottom-left), claude (right)
+
+    # First split: left pane and right pane (50/50)
     tmux split-window -h -b -l "$LEFT_SIZE" $target_flag
+    # Now we have: Pane 0 (left), Pane 1 (right)
 
-    # Name the panes and mark the active-claude pane so we can target it reliably
+    # Split the left pane horizontally: sidebar on top, editor below (15 lines for editor)
     if [[ -n "$target_prefix" ]]; then
-        tmux select-pane -t "${target_prefix}.0" -T "sidebar"
-        tmux select-pane -t "${target_prefix}.1" -T "active-claude" -m
+        tmux split-window -t "${target_prefix}.0" -v -l 15 $target_flag
     else
-        tmux select-pane -t 0 -T "sidebar"
-        tmux select-pane -t 1 -T "active-claude" -m
+        tmux split-window -t 0 -v -l 15
     fi
+    # Now we have: Pane 0 (sidebar top-left), Pane 1 (editor bottom-left), Pane 2 (claude right)
 
-    # Now we have:
-    # Pane 0 (sidebar): Unified UI (left)
-    # Pane 1 (active-claude): Terminal for Claude sessions (right) - MARKED
-
-    # Start the unified UI in the left pane
-    for pane in 0 1; do
+    # Start content in each pane
+    for pane in 0 1 2; do
         if [[ -n "$target_prefix" ]]; then
             pane_target="${target_prefix}.${pane}"
         else
@@ -53,16 +51,19 @@ create_layout() {
         fi
 
         case $pane in
-            0) # Unified UI
+            0) # Sidebar - Unified UI
                 tmux send-keys -t "$pane_target" "cerb-ui" C-m
                 ;;
-            1) # Terminal area
+            1) # Editor placeholder
+                tmux send-keys -t "$pane_target" "echo 'Press S to open spec editor'; echo ''" C-m
+                ;;
+            2) # Claude sessions
                 tmux send-keys -t "$pane_target" "echo 'Claude sessions will appear here'; echo 'Use the left panel to create or select a session'" C-m
                 ;;
         esac
     done
 
-    # Focus on the UI (left pane)
+    # Focus on the sidebar (pane 0)
     if [[ -n "$target_prefix" ]]; then
         tmux select-pane -t "${target_prefix}.0"
     else
