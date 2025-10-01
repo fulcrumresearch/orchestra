@@ -441,13 +441,9 @@ class UnifiedApp(App):
             else:
                 # No sessions left, show empty state
                 self.hud.set_session("")
-                # Clear the right pane with a message
-                right_pane = "{right}"
+                # Clear the active-claude pane with a message
                 msg_cmd = "echo 'No active sessions. Press Ctrl+N to create a new session.'"
-                subprocess.run(["tmux", "respawn-pane", "-t", right_pane, "-k", msg_cmd],
-                              capture_output=True, text=True)
-                # Also clear the monitor pane
-                subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", "echo 'No session to monitor'"],
+                subprocess.run(["tmux", "respawn-pane", "-t", "%active-claude", "-k", msg_cmd],
                               capture_output=True, text=True)
 
         # Keep focus on the session list
@@ -479,12 +475,20 @@ class UnifiedApp(App):
         )
 
         # Open vim in a split tmux pane at the bottom
-        # Split from pane 0 (the UI pane) with 15 lines height (fixed size, not percentage)
+        # Split from the sidebar pane with 15 lines height (fixed size, not percentage)
         result = subprocess.run(
-            ["tmux", "split-window", "-t", "0", "-v", "-l", "15", f"vim {designer_md}"],
+            ["tmux", "split-window", "-t", "%sidebar", "-v", "-l", "15", f"vim {designer_md}"],
             capture_output=True,
             text=True
         )
+
+        # Name the new pane so we can find it later
+        if result.returncode == 0:
+            subprocess.run(
+                ["tmux", "select-pane", "-t", "{last}", "-T", "active-editor"],
+                capture_output=True,
+                text=True
+            )
 
         if result.returncode != 0:
             logger.error(f"Failed to open spec: {result.stderr}")
@@ -511,10 +515,9 @@ class UnifiedApp(App):
                 logger.error(f"Failed to start session {session.session_id}")
                 return
 
-        # Use tmux's respawn-pane to attach to the session in the rightmost pane
-        # Use {right} selector instead of hardcoded "1" to handle spec pane existence
+        # Use tmux's respawn-pane to attach to the session in the active-claude pane
         cmd = f"TMUX= tmux attach-session -t {session.session_id}"
-        subprocess.run(["tmux", "respawn-pane", "-t", "{right}", "-k", cmd],
+        subprocess.run(["tmux", "respawn-pane", "-t", "%active-claude", "-k", cmd],
                       capture_output=True, text=True)
 
         # Don't auto-focus pane 1 - let user stay in the UI
