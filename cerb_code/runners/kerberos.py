@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Unified UI - Session picker and monitor combined"""
+
 from __future__ import annotations
 import argparse
 import subprocess
@@ -9,12 +10,28 @@ from pathlib import Path
 import asyncio
 
 from textual.app import App, ComposeResult
-from textual.widgets import Static, Label, TabbedContent, TabPane, RichLog, ListView, ListItem, Input, Tabs
+from textual.widgets import (
+    Static,
+    Label,
+    TabbedContent,
+    TabPane,
+    RichLog,
+    ListView,
+    ListItem,
+    Input,
+    Tabs,
+)
 from textual.containers import Container, VerticalScroll, Horizontal, Vertical
 from textual.binding import Binding
 from textual.reactive import reactive
 
-from cerb_code.lib.sessions import Session, AgentType, load_sessions, save_sessions, SESSIONS_FILE
+from cerb_code.lib.sessions import (
+    Session,
+    AgentType,
+    load_sessions,
+    save_sessions,
+    SESSIONS_FILE,
+)
 from cerb_code.lib.tmux_agent import TmuxProtocol
 from cerb_code.lib.monitor import SessionMonitorWatcher
 from cerb_code.lib.file_watcher import FileWatcher, watch_designer_file
@@ -35,6 +52,7 @@ class HUD(Static):
         """Update the current session display"""
         self.current_session = session_name
         self.update(f"[{session_name}] • {self.default_text}")
+
 
 class UnifiedApp(App):
     """Unified app combining session picker and monitor"""
@@ -190,8 +208,7 @@ class UnifiedApp(App):
             self.hud = HUD("⌃N new • ⌃D delete • ⌃R refresh • ⌃Q quit", id="hud")
             yield self.hud
             self.session_input = Input(
-                placeholder="New session name...",
-                id="session-input"
+                placeholder="New session name...", id="session-input"
             )
             yield self.session_input
 
@@ -334,7 +351,7 @@ class UnifiedApp(App):
                 agent_type=AgentType.DESIGNER,
                 protocol=self.agent,
                 source_path=str(Path.cwd()),
-                active=False
+                active=False,
             )
 
             # Prepare the worktree for this session
@@ -420,15 +437,23 @@ class UnifiedApp(App):
         session_to_delete = self.flat_sessions[index]
 
         # Kill the tmux session
-        subprocess.run(["tmux", "kill-session", "-t", session_to_delete.session_id],
-                      capture_output=True, text=True)
+        subprocess.run(
+            ["tmux", "kill-session", "-t", session_to_delete.session_id],
+            capture_output=True,
+            text=True,
+        )
 
         # Remove from sessions list
-        self.sessions = [s for s in self.sessions if s.session_id != session_to_delete.session_id]
+        self.sessions = [
+            s for s in self.sessions if s.session_id != session_to_delete.session_id
+        ]
         save_sessions(self.sessions)
 
         # If we deleted the current session, handle the right pane
-        if self.current_session and self.current_session.session_id == session_to_delete.session_id:
+        if (
+            self.current_session
+            and self.current_session.session_id == session_to_delete.session_id
+        ):
             self.current_session = None
 
             if self.sessions:
@@ -443,9 +468,14 @@ class UnifiedApp(App):
                 # No sessions left, show empty state
                 self.hud.set_session("")
                 # Clear pane 2 (claude pane) with a message
-                msg_cmd = "echo 'No active sessions. Press Ctrl+N to create a new session.'"
-                subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", msg_cmd],
-                              capture_output=True, text=True)
+                msg_cmd = (
+                    "echo 'No active sessions. Press Ctrl+N to create a new session.'"
+                )
+                subprocess.run(
+                    ["tmux", "respawn-pane", "-t", "2", "-k", msg_cmd],
+                    capture_output=True,
+                    text=True,
+                )
 
         # Keep focus on the session list
         self.set_focus(self.session_list)
@@ -469,10 +499,7 @@ class UnifiedApp(App):
 
         # Register file watcher for designer.md to notify session on changes
         watch_designer_file(
-            self.file_watcher,
-            self.agent,
-            designer_md,
-            self.current_session.session_id
+            self.file_watcher, self.agent, designer_md, self.current_session.session_id
         )
 
         # Respawn pane 1 (editor pane) with vim, wrapped in bash to keep pane alive after quit
@@ -481,7 +508,7 @@ class UnifiedApp(App):
         result = subprocess.run(
             ["tmux", "respawn-pane", "-t", "1", "-k", vim_cmd],
             capture_output=True,
-            text=True
+            text=True,
         )
 
         if result.returncode != 0:
@@ -510,14 +537,20 @@ class UnifiedApp(App):
                 # Failed to create session, show error in pane
                 logger.error(f"Failed to start session {session.session_id}")
                 error_cmd = f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
-                subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", error_cmd],
-                              capture_output=True, text=True)
+                subprocess.run(
+                    ["tmux", "respawn-pane", "-t", "2", "-k", error_cmd],
+                    capture_output=True,
+                    text=True,
+                )
                 return
 
         # At this point, session exists - attach to it in pane 2
         cmd = f"TMUX= tmux attach-session -t {session.session_id}"
-        subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", cmd],
-                      capture_output=True, text=True)
+        subprocess.run(
+            ["tmux", "respawn-pane", "-t", "2", "-k", cmd],
+            capture_output=True,
+            text=True,
+        )
 
         # Don't auto-focus pane 2 - let user stay in the UI
 
@@ -529,15 +562,16 @@ class UnifiedApp(App):
         monitor_tab = self.query_one(ModelMonitorTab)
         monitor_tab.refresh_monitor()
 
-
-
     async def _watch_sessions_file(self) -> None:
         """Watch sessions.json for changes and refresh when modified"""
         while True:
             try:
                 if SESSIONS_FILE.exists():
                     current_mtime = SESSIONS_FILE.stat().st_mtime
-                    if self._last_session_mtime is not None and current_mtime != self._last_session_mtime:
+                    if (
+                        self._last_session_mtime is not None
+                        and current_mtime != self._last_session_mtime
+                    ):
                         logger.info("Sessions file changed, refreshing...")
                         # Reload sessions from disk
                         self.sessions = load_sessions(protocol=self.agent)
@@ -559,11 +593,14 @@ class UnifiedApp(App):
             session = self.flat_sessions[event.index]
             self._attach_to_session(session)
 
+
 class DiffTab(VerticalScroll):
     """Scrollable container for diff display"""
 
     def compose(self) -> ComposeResult:
-        self.diff_log = RichLog(highlight=True, markup=True, auto_scroll=False, wrap=True)
+        self.diff_log = RichLog(
+            highlight=True, markup=True, auto_scroll=False, wrap=True
+        )
         yield self.diff_log
 
     def on_mount(self) -> None:
@@ -574,7 +611,7 @@ class DiffTab(VerticalScroll):
     def refresh_diff(self) -> None:
         """Fetch and display the latest diff"""
         app = self.app
-        if not hasattr(app, 'current_session') or not app.current_session:
+        if not hasattr(app, "current_session") or not app.current_session:
             self.diff_log.clear()
             self.diff_log.write("[dim]No session selected[/dim]")
             return
@@ -589,10 +626,7 @@ class DiffTab(VerticalScroll):
         try:
             # Get git diff
             result = subprocess.run(
-                ["git", "diff", "HEAD"],
-                cwd=work_path,
-                capture_output=True,
-                text=True
+                ["git", "diff", "HEAD"], cwd=work_path, capture_output=True, text=True
             )
 
             if result.returncode == 0:
@@ -601,14 +635,14 @@ class DiffTab(VerticalScroll):
 
                 if result.stdout:
                     # Write diff line by line for better scrolling
-                    for line in result.stdout.split('\n'):
-                        if line.startswith('+'):
+                    for line in result.stdout.split("\n"):
+                        if line.startswith("+"):
                             self.diff_log.write(f"[green]{line}[/green]")
-                        elif line.startswith('-'):
+                        elif line.startswith("-"):
                             self.diff_log.write(f"[red]{line}[/red]")
-                        elif line.startswith('@@'):
+                        elif line.startswith("@@"):
                             self.diff_log.write(f"[cyan]{line}[/cyan]")
-                        elif line.startswith('diff --git'):
+                        elif line.startswith("diff --git"):
                             self.diff_log.write(f"[yellow bold]{line}[/yellow bold]")
                         else:
                             self.diff_log.write(line)
@@ -621,11 +655,14 @@ class DiffTab(VerticalScroll):
         except Exception as e:
             self.diff_log.write(f"[red]Error: {str(e)}[/red]")
 
+
 class ModelMonitorTab(VerticalScroll):
     """Tab for monitoring session and children monitor.md files"""
 
     def compose(self) -> ComposeResult:
-        self.monitor_log = RichLog(highlight=True, markup=True, auto_scroll=False, wrap=True)
+        self.monitor_log = RichLog(
+            highlight=True, markup=True, auto_scroll=False, wrap=True
+        )
         yield self.monitor_log
 
     def on_mount(self) -> None:
@@ -668,39 +705,53 @@ class ModelMonitorTab(VerticalScroll):
             return
 
         # Sort by last modified time (most recent first)
-        sorted_monitors = sorted(monitors.items(), key=lambda x: x[1]['mtime'], reverse=True)
+        sorted_monitors = sorted(
+            monitors.items(), key=lambda x: x[1]["mtime"], reverse=True
+        )
 
         for session_id, monitor_data in sorted_monitors:
             # Header for each session
-            agent_icon = "👷" if monitor_data.get('agent_type') == 'executor' else "🎨"
+            agent_icon = "👷" if monitor_data.get("agent_type") == "executor" else "🎨"
             self.monitor_log.write("")
-            self.monitor_log.write(f"[bold cyan]══════════════════════════════════════════════════[/bold cyan]")
-            self.monitor_log.write(f"[bold yellow]{agent_icon} {session_id}[/bold yellow] [dim]({monitor_data.get('agent_type', 'unknown')})[/dim]")
-            self.monitor_log.write(f"[dim]Last updated: {monitor_data['last_updated']}[/dim]")
+            self.monitor_log.write(
+                f"[bold cyan]══════════════════════════════════════════════════[/bold cyan]"
+            )
+            self.monitor_log.write(
+                f"[bold yellow]{agent_icon} {session_id}[/bold yellow] [dim]({monitor_data.get('agent_type', 'unknown')})[/dim]"
+            )
+            self.monitor_log.write(
+                f"[dim]Last updated: {monitor_data['last_updated']}[/dim]"
+            )
             self.monitor_log.write(f"[dim]{monitor_data['path']}[/dim]")
-            self.monitor_log.write(f"[bold cyan]──────────────────────────────────────────────────[/bold cyan]")
+            self.monitor_log.write(
+                f"[bold cyan]──────────────────────────────────────────────────[/bold cyan]"
+            )
 
-            content = monitor_data['content']
+            content = monitor_data["content"]
             if not content or content.strip() == "":
                 self.monitor_log.write("[dim italic]Empty monitor file[/dim italic]")
             else:
                 # Display content with markdown-like formatting
-                for line in content.split('\n'):
-                    if line.startswith('# '):
+                for line in content.split("\n"):
+                    if line.startswith("# "):
                         self.monitor_log.write(f"[bold cyan]{line}[/bold cyan]")
-                    elif line.startswith('## '):
+                    elif line.startswith("## "):
                         self.monitor_log.write(f"[bold green]{line}[/bold green]")
-                    elif line.startswith('### '):
+                    elif line.startswith("### "):
                         self.monitor_log.write(f"[green]{line}[/green]")
-                    elif line.startswith('- '):
+                    elif line.startswith("- "):
                         self.monitor_log.write(f"[yellow]{line}[/yellow]")
-                    elif 'ERROR' in line or 'WARNING' in line:
+                    elif "ERROR" in line or "WARNING" in line:
                         self.monitor_log.write(f"[red]{line}[/red]")
-                    elif 'SUCCESS' in line or 'OK' in line or '✓' in line:
+                    elif "SUCCESS" in line or "OK" in line or "✓" in line:
                         self.monitor_log.write(f"[green]{line}[/green]")
-                    elif line.startswith('HOOK EVENT:'):
+                    elif line.startswith("HOOK EVENT:"):
                         self.monitor_log.write(f"[magenta]{line}[/magenta]")
-                    elif line.startswith('time:') or line.startswith('session_id:') or line.startswith('tool:'):
+                    elif (
+                        line.startswith("time:")
+                        or line.startswith("session_id:")
+                        or line.startswith("tool:")
+                    ):
                         self.monitor_log.write(f"[blue]{line}[/blue]")
                     else:
                         self.monitor_log.write(line)
@@ -720,6 +771,7 @@ def main():
     logger.info(f"Starting monitor server on port {monitor_port}")
     logger.info(f"Monitor server logs: {monitor_log}")
 
+    """
     with open(monitor_log, "w") as log_file:
         monitor_proc = subprocess.Popen(
             ["cerb-monitor-server", str(monitor_port)],
@@ -728,6 +780,7 @@ def main():
             start_new_session=True
         )
     logger.info(f"Monitor server started with PID {monitor_proc.pid}")
+    """
 
     try:
         UnifiedApp().run()

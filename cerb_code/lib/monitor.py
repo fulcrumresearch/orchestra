@@ -118,8 +118,8 @@ class SessionMonitor:
             f"Session online. Understand and update the monitor.md in the given format. Do NOT log every event, the whole point is to make this easier for the a human to understand what is going on."
         )
 
-        async for chunk in self.client.receive_response():
-            logger.info("[%s] startup> %s", self.session.session_id, chunk)
+        # async for chunk in self.client.receive_response():
+        # logger.info("[%s] startup> %s", self.session.session_id, chunk)
 
         while True:
             # Collect batch of events
@@ -153,10 +153,10 @@ class SessionMonitor:
                 combined_prompt = "\n\n---\n\n".join(prompts)
 
                 await self.client.query(combined_prompt)
-                async for chunk in self.client.receive_response():
-                    logger.info(
-                        "[%s] batch[%d]> %s", self.session.session_id, len(batch), chunk
-                    )
+                # async for chunk in self.client.receive_response():
+                # logger.info(
+                #   "[%s] batch[%d]> %s", self.session.session_id, len(batch), chunk
+                # )
             finally:
                 # Mark all events as done
                 for _ in batch:

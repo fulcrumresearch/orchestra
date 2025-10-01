@@ -19,7 +19,6 @@ def main() -> int:
         return 1
 
     session_id = sys.argv[1]
-    event_name = sys.argv[2] if len(sys.argv) > 2 else "tool_use"
 
     base = os.getenv("CLAUDE_MONITOR_BASE", "http://127.0.0.1:8081")
 
@@ -37,7 +36,7 @@ def main() -> int:
     url = f"{base.rstrip('/')}/hook/{session_id_enc}"
 
     envelope = {
-        "event": event_name,
+        "event": payload["hook_event_name"],
         "receivedAt": payload.get("timestamp") or payload.get("time"),
         "payload": payload,
     }
@@ -51,5 +50,7 @@ def main() -> int:
 
     return 0
 
+
 if __name__ == "__main__":
     raise SystemExit(main())
+# TODO: clean this up

@@ -3,6 +3,8 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 import json
 import subprocess
+
+from cerb_code.lib.tmux_agent import TmuxProtocol
 from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
 
 SESSIONS_FILE = Path.home() / ".kerberos" / "sessions.json"
@@ -54,8 +56,7 @@ class Session:
         # Create/update kerberos.md with session-specific information
         kerberos_md_path = claude_dir / "kerberos.md"
         formatted_prompt = prompt_template.format(
-            session_id=self.session_id,
-            work_path=self.work_path
+            session_id=self.session_id, work_path=self.work_path
         )
         kerberos_md_path.write_text(formatted_prompt)
 
@@ -100,7 +101,8 @@ class Session:
         )
         # Recursively load children (they inherit the same protocol)
         session.children = [
-            cls.from_dict(child_data, protocol) for child_data in data.get("children", [])
+            cls.from_dict(child_data, protocol)
+            for child_data in data.get("children", [])
         ]
         return session
 
@@ -130,7 +132,7 @@ class Session:
                 ["git", "rev-parse", "--verify", f"refs/heads/{self.session_id}"],
                 cwd=self.source_path,
                 capture_output=True,
-                text=True
+                text=True,
             )
 
             if result.returncode == 0:
@@ -140,7 +142,7 @@ class Session:
                     cwd=self.source_path,
                     check=True,
                     capture_output=True,
-                    text=True
+                    text=True,
                 )
             else:
                 # Create new branch
@@ -149,7 +151,7 @@ class Session:
                     cwd=self.source_path,
                     check=True,
                     capture_output=True,
-                    text=True
+                    text=True,
                 )
 
             # Create .claude/commands directory and add merge-child command
@@ -199,8 +201,11 @@ class Session:
             raise RuntimeError(f"Failed to start child session {session_id}")
 
         initial_message = "Please review your task instructions in @instructions.md"
-        subprocess.run(["tmux", "send-keys", "-t", session_id, initial_message, "Enter"],
-                      capture_output=True, text=True)
+        subprocess.run(
+            ["tmux", "send-keys", "-t", session_id, initial_message, "Enter"],
+            capture_output=True,
+            text=True,
+        )
 
         return new_session
 
@@ -209,6 +214,10 @@ class Session:
         """Get display name for UI"""
         status = "●" if self.active else "○"
         return f"{status} {self.session_id}"
+
+    def send_message(self, message: str) -> None:
+        """Send a message to the session"""
+        self.protocol.send_message(self.session_id, message)
 
 
 def ensure_default_session(sessions: List[Session], protocol=None) -> List[Session]:
@@ -230,7 +239,7 @@ def ensure_default_session(sessions: List[Session], protocol=None) -> List[Sessi
             agent_type=AgentType.DESIGNER,
             protocol=protocol,
             source_path=str(Path.cwd()),
-            active=False
+            active=False,
         )
 
         # For the main session, use the source directory directly instead of a worktree
@@ -244,7 +253,7 @@ def ensure_default_session(sessions: List[Session], protocol=None) -> List[Sessi
     return [main_session] + other_sessions
 
 
-def load_sessions(protocol=None, flat=False) -> List[Session]:
+def load_sessions(protocol=TmuxProtocol(), flat=False) -> List[Session]:
     """Load all sessions from JSON file"""
     sessions = []
 
@@ -252,24 +261,27 @@ def load_sessions(protocol=None, flat=False) -> List[Session]:
         try:
             with open(SESSIONS_FILE, "r") as f:
                 data = json.load(f)
-                sessions = [Session.from_dict(session_data, protocol) for session_data in data]
+                sessions = [
+                    Session.from_dict(session_data, protocol) for session_data in data
+                ]
         except (json.JSONDecodeError, KeyError):
             pass
 
     sessions = ensure_default_session(sessions, protocol)
 
     if flat:
+
         def _flatten_tree(nodes: List[Session]) -> List[Session]:
-                flat_list: List[Session] = []
-                stack = list(nodes)[::-1]
-                while stack:
-                    node = stack.pop()
-                    flat_list.append(node)
-                    children = getattr(node, "children", None) or []
-                    # push children in reverse so first child is processed next
-                    for child in reversed(children):
-                        stack.append(child)
-                return flat_list
+            flat_list: List[Session] = []
+            stack = list(nodes)[::-1]
+            while stack:
+                node = stack.pop()
+                flat_list.append(node)
+                children = getattr(node, "children", None) or []
+                # push children in reverse so first child is processed next
+                for child in reversed(children):
+                    stack.append(child)
+            return flat_list
 
         return _flatten_tree(sessions)
     else:

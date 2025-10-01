@@ -46,12 +46,15 @@ os.environ["CLAUDE_MONITOR_SKIP_FORWARD"] = "1"
 app = FastAPI(title="Claude Code Multi-Monitor", version="1.0")
 
 logger = logging.getLogger("multi_monitor")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(message)s"
+)
 
 # session_id -> SessionWorker
 _workers: Dict[str, SessionMonitor] = {}
 
 _sessions = {sess.session_id: sess for sess in load_sessions(flat=True)}
+
 
 def get_session(session_id: str) -> Session:
     global _sessions
@@ -65,7 +68,10 @@ def get_session(session_id: str) -> Session:
 
     return session
 
-async def get_or_create_worker(session_id: str, payload: Dict[str, Any]) -> SessionMonitor:
+
+async def get_or_create_worker(
+    session_id: str, payload: Dict[str, Any]
+) -> SessionMonitor:
     worker = _workers.get(session_id)
 
     session = get_session(session_id)
@@ -78,13 +84,14 @@ async def get_or_create_worker(session_id: str, payload: Dict[str, Any]) -> Sess
         logger.info("started worker for session_id=%s", session_id)
     return worker
 
+
 @app.on_event("startup")
 async def _startup() -> None:
     logger.info("multi-monitor starting")
 
+
 @app.on_event("shutdown")
 async def _shutdown() -> None:
-
     for sid, w in list(_workers.items()):
         await w.stop()
         _workers.pop(sid, None)
@@ -107,6 +114,16 @@ async def hook(request: Request, session_id: str) -> Dict[str, str]:
         "received_at": datetime.now(timezone.utc).isoformat(),
         **data,
     }
+    logger.info(f"Received event {evt['event']} for session {session_id}")
+
+    if evt["event"] == "Stop":
+        logger.info(f"Received stop event for session {session_id}")
+        session = get_session(session_id)
+        for _, parent in _sessions.items():
+            print(parent)
+            if session.session_id in [s.session_id for s in parent.children]:
+                print(">????")
+                parent.send_message(f"Child session {session.session_id} stopped.")
 
     worker = await get_or_create_worker(session_id, payload)
 
@@ -125,12 +142,7 @@ def main():
     print(f"Starting Cerb Monitor Server on port {port}")
     print(f"Hook endpoint: http://127.0.0.1:{port}/hook/{{session_id}}")
 
-    uvicorn.run(
-        app,
-        host="127.0.0.1",
-        port=port,
-        log_level="info"
-    )
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
 
 
 if __name__ == "__main__":

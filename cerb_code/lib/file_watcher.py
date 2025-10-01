@@ -115,21 +115,25 @@ class FileWatcher:
                 async for changes in awatch(
                     *watch_paths, stop_event=self._stop_event, recursive=False
                 ):
+                    # Group changes by path to avoid calling handlers multiple times
+                    # awatch already debounces (1600ms), so changes is a batch
+                    changed_paths = {}
                     for change_type, path_str in changes:
                         path = Path(path_str)
-
-                        # Find handlers for this file
                         if path in self._watchers:
-                            handlers = list(self._watchers[path])
+                            # Store the last change type for this path
+                            changed_paths[path] = change_type
 
-                            # Call all handlers for this file
-                            for handler in handlers:
-                                try:
-                                    await handler(path, change_type)
-                                except Exception as e:
-                                    logger.error(
-                                        f"Error in file watcher handler for {path}: {e}"
-                                    )
+                    # Call handlers once per path
+                    for path, change_type in changed_paths.items():
+                        handlers = list(self._watchers[path])
+                        for handler in handlers:
+                            try:
+                                await handler(path, change_type)
+                            except Exception as e:
+                                logger.error(
+                                    f"Error in file watcher handler for {path}: {e}"
+                                )
                 logger.info("File watcher stopped")
 
             except Exception as e:
@@ -167,12 +171,6 @@ def watch_designer_file(
         logger.info(
             f"designer.md changed ({change_type.name}) for session {session_id}"
         )
-
-        # Skip delete events - vim does atomic saves (delete old, rename temp)
-        # We'll catch the added/modified event from the rename
-        if change_type == Change.deleted:
-            logger.debug(f"Skipping notification for delete event (atomic save)")
-            return
 
         # Send notification to the session
         success = protocol.send_message(
