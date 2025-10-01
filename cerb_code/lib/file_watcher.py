@@ -98,15 +98,23 @@ class FileWatcher:
                 await asyncio.sleep(0.5)
                 continue
 
-            # Get all paths to watch
-            watch_paths = list(self._watchers.keys())
+            # Get all paths to watch - convert files to their parent directories
+            watch_paths = set()
+            for path in self._watchers.keys():
+                # If it's a file (or doesn't exist yet), watch the parent directory
+                if path.is_file() or not path.exists():
+                    watch_paths.add(path.parent)
+                else:
+                    watch_paths.add(path)
 
             # Clear stop event for this iteration
             self._stop_event.clear()
 
             try:
-                # Watch all registered files
-                async for changes in awatch(*watch_paths, stop_event=self._stop_event):
+                # Watch all registered paths (non-recursive)
+                async for changes in awatch(
+                    *watch_paths, stop_event=self._stop_event, recursive=False
+                ):
                     for change_type, path_str in changes:
                         path = Path(path_str)
 
@@ -152,12 +160,19 @@ def watch_designer_file(
         designer_md: Path to the designer.md file
         session_id: ID of the session to notify
     """
+    designer_md = Path(designer_md).resolve()
 
     async def on_designer_change(path: Path, change_type: Change) -> None:
         """Handler for designer.md changes"""
         logger.info(
             f"designer.md changed ({change_type.name}) for session {session_id}"
         )
+
+        # Skip delete events - vim does atomic saves (delete old, rename temp)
+        # We'll catch the added/modified event from the rename
+        if change_type == Change.deleted:
+            logger.debug(f"Skipping notification for delete event (atomic save)")
+            return
 
         # Send notification to the session
         success = protocol.send_message(
@@ -169,6 +184,7 @@ def watch_designer_file(
         else:
             logger.error(f"Failed to notify session {session_id}")
 
+    # Register with file path - FileWatcher will watch parent directory internally
     file_watcher.register(designer_md, on_designer_change)
     logger.info(
         f"Registered designer.md watcher for session {session_id}: {designer_md}"
