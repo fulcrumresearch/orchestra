@@ -71,15 +71,12 @@ class TmuxProtocol(AgentProtocol):
             return False
 
         # Create tmux session with the session_id in the work directory
-        # Wrap claude in bash to keep session alive if it exits
-        wrapped_cmd = f"bash -c '{self.default_command}; echo \"Claude exited. Press Enter to restart.\"; exec bash'"
-
         result = tmux([
             "new-session",
             "-d",  # detached
             "-s", session.session_id,
             "-c", session.work_path,  # start in work directory
-            wrapped_cmd
+            self.default_command
         ])
 
         logger.info(f"tmux new-session result: returncode={result.returncode}, stderr={result.stderr}")
