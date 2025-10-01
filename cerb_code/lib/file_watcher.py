@@ -116,8 +116,8 @@ class FileWatcher:
             self._stop_event.clear()
 
             try:
-                # Watch all registered files
-                async for changes in awatch(*watch_paths, stop_event=self._stop_event):
+                # Watch all registered files (non-recursive)
+                async for changes in awatch(*watch_paths, stop_event=self._stop_event, recursive=False):
                     for change_type, path_str in changes:
                         path = Path(path_str)
 
@@ -153,15 +153,31 @@ def watch_designer_file(
     """
     Register a watcher for designer.md that notifies the session when it changes.
 
+    Watches the parent directory to handle vim's atomic saves (delete + rename).
+
     Args:
         file_watcher: The FileWatcher instance to register with
         protocol: The TmuxProtocol instance to send messages with
         designer_md: Path to the designer.md file
         session_id: ID of the session to notify
     """
-    async def on_designer_change(path: Path, change_type: Change) -> None:
-        """Handler for designer.md changes"""
+    designer_md = Path(designer_md).resolve()
+    designer_filename = designer_md.name
+    work_dir = designer_md.parent
+
+    async def on_dir_change(path: Path, change_type: Change) -> None:
+        """Handler for directory changes - filter for designer.md"""
+        # Only process changes to designer.md
+        if path.name != designer_filename:
+            return
+
         logger.info(f"designer.md changed ({change_type.name}) for session {session_id}")
+
+        # Skip delete events - vim does atomic saves (delete old, rename temp)
+        # We'll catch the added/modified event from the rename
+        if change_type == Change.deleted:
+            logger.debug(f"Skipping notification for delete event (atomic save)")
+            return
 
         # Send notification to the session
         success = protocol.send_message(
@@ -174,5 +190,6 @@ def watch_designer_file(
         else:
             logger.error(f"Failed to notify session {session_id}")
 
-    file_watcher.register(designer_md, on_designer_change)
+    # Watch the parent directory (non-recursively) to handle atomic saves
+    file_watcher.register(work_dir, on_dir_change)
     logger.info(f"Registered designer.md watcher for session {session_id}: {designer_md}")
