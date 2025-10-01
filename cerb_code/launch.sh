@@ -36,7 +36,7 @@ create_layout() {
 
     # Split the left pane horizontally: sidebar on top (80%), editor below (20%)
     if [[ -n "$target_prefix" ]]; then
-        tmux split-window -t "${target_prefix}.0" -v -p 20 $target_flag
+        tmux split-window -t "${target_prefix}.0" -v -p 20
     else
         tmux split-window -t 0 -v -p 20
     fi
