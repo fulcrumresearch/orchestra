@@ -23,18 +23,6 @@ from cerb_code.lib.logger import get_logger
 logger = get_logger(__name__)
 
 
-def get_pane_by_title(title: str) -> str | None:
-    """Get tmux pane ID by its title"""
-    result = subprocess.run(
-        ["tmux", "list-panes", "-F", "#{pane_id}", "-f", f"#{{==:#{{pane_title}},{title}}}"],
-        capture_output=True,
-        text=True
-    )
-    if result.returncode == 0 and result.stdout.strip():
-        return result.stdout.strip()
-    return None
-
-
 class HUD(Static):
     can_focus = False
 
@@ -429,12 +417,10 @@ class UnifiedApp(App):
             else:
                 # No sessions left, show empty state
                 self.hud.set_session("")
-                # Clear the active-claude pane with a message
-                active_claude_pane = get_pane_by_title("active-claude")
-                if active_claude_pane:
-                    msg_cmd = "echo 'No active sessions. Press Ctrl+N to create a new session.'"
-                    subprocess.run(["tmux", "respawn-pane", "-t", active_claude_pane, "-k", msg_cmd],
-                                  capture_output=True, text=True)
+                # Clear pane 2 (claude pane) with a message
+                msg_cmd = "echo 'No active sessions. Press Ctrl+N to create a new session.'"
+                subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", msg_cmd],
+                              capture_output=True, text=True)
 
         # Keep focus on the session list
         self.set_focus(self.session_list)
@@ -464,26 +450,12 @@ class UnifiedApp(App):
             self.current_session.session_id
         )
 
-        # Open vim in a split tmux pane at the bottom
-        # Split from the sidebar pane with 15 lines height (fixed size, not percentage)
-        sidebar_pane = get_pane_by_title("sidebar")
-        if not sidebar_pane:
-            logger.error("Could not find sidebar pane")
-            return
-
+        # Respawn pane 1 (editor pane) with vim
         result = subprocess.run(
-            ["tmux", "split-window", "-t", sidebar_pane, "-v", "-l", "15", f"vim {designer_md}"],
+            ["tmux", "respawn-pane", "-t", "1", "-k", f"vim {designer_md}"],
             capture_output=True,
             text=True
         )
-
-        # Name the new pane so we can find it later
-        if result.returncode == 0:
-            subprocess.run(
-                ["tmux", "select-pane", "-t", "{last}", "-T", "active-editor"],
-                capture_output=True,
-                text=True
-            )
 
         if result.returncode != 0:
             logger.error(f"Failed to open spec: {result.stderr}")
@@ -510,17 +482,12 @@ class UnifiedApp(App):
                 logger.error(f"Failed to start session {session.session_id}")
                 return
 
-        # Use tmux's respawn-pane to attach to the session in the active-claude pane
-        active_claude_pane = get_pane_by_title("active-claude")
-        if not active_claude_pane:
-            logger.error("Could not find active-claude pane")
-            return
-
+        # Use tmux's respawn-pane to attach to the session in pane 2 (claude pane)
         cmd = f"TMUX= tmux attach-session -t {session.session_id}"
-        subprocess.run(["tmux", "respawn-pane", "-t", active_claude_pane, "-k", cmd],
+        subprocess.run(["tmux", "respawn-pane", "-t", "2", "-k", cmd],
                       capture_output=True, text=True)
 
-        # Don't auto-focus pane 1 - let user stay in the UI
+        # Don't auto-focus pane 2 - let user stay in the UI
 
         # Update HUD with session name
         self.hud.set_session(session.session_id)
