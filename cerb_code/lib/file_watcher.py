@@ -109,14 +109,20 @@ class FileWatcher:
                 await asyncio.sleep(0.5)
                 continue
 
-            # Get all paths to watch
-            watch_paths = list(self._watchers.keys())
+            # Get all paths to watch - convert files to their parent directories
+            watch_paths = set()
+            for path in self._watchers.keys():
+                # If it's a file (or doesn't exist yet), watch the parent directory
+                if path.is_file() or not path.exists():
+                    watch_paths.add(path.parent)
+                else:
+                    watch_paths.add(path)
 
             # Clear stop event for this iteration
             self._stop_event.clear()
 
             try:
-                # Watch all registered files (non-recursive)
+                # Watch all registered paths (non-recursive)
                 async for changes in awatch(*watch_paths, stop_event=self._stop_event, recursive=False):
                     for change_type, path_str in changes:
                         path = Path(path_str)
@@ -153,8 +159,6 @@ def watch_designer_file(
     """
     Register a watcher for designer.md that notifies the session when it changes.
 
-    Watches the parent directory to handle vim's atomic saves (delete + rename).
-
     Args:
         file_watcher: The FileWatcher instance to register with
         protocol: The TmuxProtocol instance to send messages with
@@ -162,15 +166,9 @@ def watch_designer_file(
         session_id: ID of the session to notify
     """
     designer_md = Path(designer_md).resolve()
-    designer_filename = designer_md.name
-    work_dir = designer_md.parent
 
-    async def on_dir_change(path: Path, change_type: Change) -> None:
-        """Handler for directory changes - filter for designer.md"""
-        # Only process changes to designer.md
-        if path.name != designer_filename:
-            return
-
+    async def on_designer_change(path: Path, change_type: Change) -> None:
+        """Handler for designer.md changes"""
         logger.info(f"designer.md changed ({change_type.name}) for session {session_id}")
 
         # Skip delete events - vim does atomic saves (delete old, rename temp)
@@ -190,6 +188,6 @@ def watch_designer_file(
         else:
             logger.error(f"Failed to notify session {session_id}")
 
-    # Watch the parent directory (non-recursively) to handle atomic saves
-    file_watcher.register(work_dir, on_dir_change)
+    # Register with file path - FileWatcher will watch parent directory internally
+    file_watcher.register(designer_md, on_designer_change)
     logger.info(f"Registered designer.md watcher for session {session_id}: {designer_md}")
