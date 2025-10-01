@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 import json
 import subprocess
+import time
 
 from cerb_code.lib.tmux_agent import TmuxProtocol
 from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
@@ -62,7 +63,7 @@ class Session:
 
         # Add import to CLAUDE.md if not already present
         claude_md_path = claude_dir / "CLAUDE.md"
-        import_line = "@.claude/kerberos.md"
+        import_line = "@kerberos.md"
 
         existing_content = ""
         if claude_md_path.exists():
@@ -200,11 +201,11 @@ class Session:
         if not new_session.start():
             raise RuntimeError(f"Failed to start child session {session_id}")
 
-        initial_message = "Please review your task instructions in @instructions.md"
-        subprocess.run(
-            ["tmux", "send-keys", "-t", session_id, initial_message, "Enter"],
-            capture_output=True,
-            text=True,
+        # Wait for Claude to be ready before sending instructions
+        time.sleep(1)
+
+        new_session.send_message(
+            f"Please review your task instructions in @instructions.md, and then start implementing the task. When you're done, or need support use the send message tool to your parent with session ID {self.session_id}"
         )
 
         return new_session

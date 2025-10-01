@@ -86,8 +86,12 @@ class TmuxProtocol(AgentProtocol):
 
         if result.returncode == 0:
             # Send Enter to accept the trust prompt
-            time.sleep(0.5)  # Give Claude a moment to start
-            tmux(["send-keys", "-t", session.session_id, "Enter"])
+            logger.info(
+                f"Starting 10 second wait before sending Enter to {session.session_id}"
+            )
+            time.sleep(2)  # Give Claude a moment to start
+            logger.info(f"Wait complete, now sending Enter to {session.session_id}")
+            session.send_message("")
             logger.info(
                 f"Sent Enter to session {session.session_id} to accept trust prompt"
             )
@@ -127,8 +131,10 @@ class TmuxProtocol(AgentProtocol):
             return {"exists": True, "error": "Failed to parse tmux output"}
 
     def send_message(self, session_id: str, message: str) -> bool:
+        # Target pane 0 specifically (where Claude runs), not the active pane
+        target = f"{session_id}:0.0"
         # send the literal bytes of the message
-        r1 = tmux(["send-keys", "-t", session_id, "-l", "--", message])
+        r1 = tmux(["send-keys", "-t", target, "-l", "--", message])
         # then send a carriage return (equivalent to pressing Enter)
-        r2 = tmux(["send-keys", "-t", session_id, "C-m"])
+        r2 = tmux(["send-keys", "-t", target, "C-m"])
         return r1.returncode == 0 and r2.returncode == 0

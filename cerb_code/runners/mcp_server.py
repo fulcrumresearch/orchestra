@@ -18,9 +18,7 @@ protocol = TmuxProtocol(default_command="claude")
 
 @mcp.tool()
 def spawn_subagent(
-    parent_session_id: str,
-    child_session_id: str,
-    instructions: str
+    parent_session_id: str, child_session_id: str, instructions: str
 ) -> str:
     """
     Spawn a child Claude session with specific instructions.
@@ -49,6 +47,31 @@ def spawn_subagent(
     save_sessions(sessions)
 
     return f"Successfully spawned child session '{child_session_id}' under parent '{parent_session_id}'"
+
+
+@mcp.tool()
+def send_message_to_session(session_id: str, message: str) -> str:
+    """
+    Send a message to a specific Claude session.
+
+    Args:
+        session_id: ID of the session to send the message to
+        message: Message to send to the session
+
+    Returns:
+        Success or error message
+    """
+    # Load existing sessions with the protocol
+    sessions = load_sessions(protocol=protocol)
+
+    # Find target session
+    target = find_session(sessions, session_id)
+
+    if not target:
+        return f"Error: Session '{session_id}' not found"
+
+    target.send_message(message)
+    return f"Successfully sent message to session '{session_id}'"
 
 
 def main():

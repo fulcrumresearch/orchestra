@@ -45,7 +45,9 @@ class HUD(Static):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.default_text = "⌃N new • ⌃D delete • ⌃R refresh • S spec • T terminal • ⌃Q quit"
+        self.default_text = (
+            "⌃N new • ⌃D delete • ⌃R refresh • S spec • T terminal • ⌃Q quit"
+        )
         self.current_session = ""
 
     def set_session(self, session_name: str):
@@ -486,11 +488,14 @@ class UnifiedApp(App):
 
     def action_open_spec(self) -> None:
         """Open designer.md in vim in a split tmux pane"""
-        if not self.current_session:
-            logger.warning("No current session to open spec for")
+        # Get the highlighted session from the list
+        index = self.session_list.index
+        if index is None or index >= len(self.flat_sessions):
+            logger.warning("No session highlighted to open spec for")
             return
 
-        work_path = Path(self.current_session.work_path)
+        session = self.flat_sessions[index]
+        work_path = Path(session.work_path)
         designer_md = work_path / "designer.md"
 
         # Create designer.md if it doesn't exist
@@ -500,12 +505,12 @@ class UnifiedApp(App):
 
         # Register file watcher for designer.md to notify session on changes
         watch_designer_file(
-            self.file_watcher, self.agent, designer_md, self.current_session.session_id
+            self.file_watcher, self.agent, designer_md, session.session_id
         )
 
         # Respawn pane 1 (editor pane) with vim, wrapped in bash to keep pane alive after quit
         # When vim exits, show placeholder and keep shell running
-        vim_cmd = f"bash -c 'vim {designer_md}; echo \"Press S to open spec editor\"; exec bash'"
+        vim_cmd = f"bash -c '$EDITOR {designer_md}; echo \"Press S to open spec editor\"; exec bash'"
         result = subprocess.run(
             ["tmux", "respawn-pane", "-t", "1", "-k", vim_cmd],
             capture_output=True,
@@ -518,12 +523,15 @@ class UnifiedApp(App):
             logger.info(f"Opened spec editor for {designer_md}")
 
     def action_open_terminal(self) -> None:
-        """Open bash terminal in the current session's worktree in pane 1"""
-        if not self.current_session:
-            logger.warning("No current session to open terminal for")
+        """Open bash terminal in the highlighted session's worktree in pane 1"""
+        # Get the highlighted session from the list
+        index = self.session_list.index
+        if index is None or index >= len(self.flat_sessions):
+            logger.warning("No session highlighted to open terminal for")
             return
 
-        work_path = Path(self.current_session.work_path)
+        session = self.flat_sessions[index]
+        work_path = Path(session.work_path)
 
         # Respawn pane 1 with bash in the session's work directory
         # Keep the shell running and show current directory
