@@ -67,7 +67,9 @@ You are an executor agent, spawned by a designer agent to complete a specific ta
 
 Your parent designer is there to provide clarification and guidance. It's better to ask for clarification than to implement based on unclear requirements.
 
-To find your parent session ID, check the git branch name or the context of how you were spawned.
+**When you complete the task**, send a summary to your parent with what you accomplished.
+
+Your parent session ID will be provided in the initial message when you're spawned.
 
 ## Work Context
 
@@ -78,7 +80,6 @@ Remember: You are working in a child worktree branch. Your changes will be revie
 - **Session ID**: {session_id}
 - **Session Type**: Executor
 - **Work Directory**: {work_path}
-- **Parent Session**: Check git branch name for parent session ID
 """
 
 PROJECT_CONF = """

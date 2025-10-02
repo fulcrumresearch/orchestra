@@ -10,20 +10,22 @@ from pathlib import Path
 import asyncio
 
 from textual.app import App, ComposeResult
+from textual.widget import Widget
 from textual.widgets import (
     Static,
     Label,
     TabbedContent,
     TabPane,
-    RichLog,
     ListView,
     ListItem,
     Input,
     Tabs,
+    RichLog,
 )
-from textual.containers import Container, VerticalScroll, Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical
 from textual.binding import Binding
 from textual.reactive import reactive
+from rich.markup import escape
 
 from cerb_code.lib.sessions import (
     Session,
@@ -36,6 +38,7 @@ from cerb_code.lib.tmux_agent import TmuxProtocol
 from cerb_code.lib.monitor import SessionMonitorWatcher
 from cerb_code.lib.file_watcher import FileWatcher, watch_designer_file
 from cerb_code.lib.logger import get_logger
+import re
 
 logger = get_logger(__name__)
 
@@ -128,6 +131,7 @@ class UnifiedApp(App):
     TabPane {
         padding: 1;
         background: #000000;
+        layout: vertical;
     }
 
     #sidebar-title {
@@ -163,10 +167,9 @@ class UnifiedApp(App):
         color: #ffffff;
         overflow-x: hidden;
         overflow-y: auto;
-    }
-
-    VerticalScroll {
         width: 100%;
+        height: 1fr;
+        text-wrap: wrap;
     }
 """
 
@@ -620,17 +623,24 @@ class UnifiedApp(App):
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle session selection from list when clicked"""
-        if event.index is not None and 0 <= event.index < len(self.flat_sessions):
-            session = self.flat_sessions[event.index]
+        lv: ListView = event.control
+        idx = lv.index
+
+        if idx is not None and 0 <= idx < len(self.flat_sessions):
+            session = self.flat_sessions[idx]
             self._attach_to_session(session)
 
 
-class DiffTab(VerticalScroll):
-    """Scrollable container for diff display"""
+class DiffTab(Container):
+    """Container for diff display"""
 
     def compose(self) -> ComposeResult:
         self.diff_log = RichLog(
-            highlight=True, markup=True, auto_scroll=False, wrap=True
+            highlight=True,
+            markup=True,
+            auto_scroll=False,
+            wrap=True,
+            min_width=0,  # Don't enforce minimum width
         )
         yield self.diff_log
 
@@ -644,14 +654,18 @@ class DiffTab(VerticalScroll):
         app = self.app
         if not hasattr(app, "current_session") or not app.current_session:
             self.diff_log.clear()
-            self.diff_log.write("[dim]No session selected[/dim]")
+            self.diff_log.write(
+                "[dim]No session selected[/dim]", expand=True
+            )
             return
 
         work_path = app.current_session.work_path
         session_id = app.current_session.session_id
 
         if not work_path:
-            self.diff_log.write("[dim]Session has no work path[/dim]")
+            self.diff_log.write(
+                "[dim]Session has no work path[/dim]", expand=True
+            )
             return
 
         try:
@@ -667,32 +681,57 @@ class DiffTab(VerticalScroll):
                 if result.stdout:
                     # Write diff line by line for better scrolling
                     for line in result.stdout.split("\n"):
+                        escaped_line = escape(line)
                         if line.startswith("+"):
-                            self.diff_log.write(f"[green]{line}[/green]")
+                            self.diff_log.write(
+                                f"[green]{escaped_line}[/green]",
+                                expand=True,
+                            )
                         elif line.startswith("-"):
-                            self.diff_log.write(f"[red]{line}[/red]")
+                            self.diff_log.write(
+                                f"[red]{escaped_line}[/red]", expand=True
+                            )
                         elif line.startswith("@@"):
-                            self.diff_log.write(f"[cyan]{line}[/cyan]")
+                            self.diff_log.write(
+                                f"[cyan]{escaped_line}[/cyan]",
+                                expand=True,
+                            )
                         elif line.startswith("diff --git"):
-                            self.diff_log.write(f"[yellow bold]{line}[/yellow bold]")
+                            self.diff_log.write(
+                                f"[yellow bold]{escaped_line}[/yellow bold]",
+                                expand=True,
+                            )
                         else:
-                            self.diff_log.write(line)
+                            self.diff_log.write(escaped_line, expand=True)
                 else:
-                    self.diff_log.write(f"[dim]No changes in: {work_path}[/dim]")
-                    self.diff_log.write(f"[dim]Session: {session_id}[/dim]")
+                    self.diff_log.write(
+                        f"[dim]No changes in: {work_path}[/dim]",
+                        expand=True,
+                    )
+                    self.diff_log.write(
+                        f"[dim]Session: {session_id}[/dim]", expand=True
+                    )
             else:
-                self.diff_log.write(f"[red]Git error: {result.stderr}[/red]")
+                self.diff_log.write(
+                    f"[red]Git error: {escape(result.stderr)}[/red]", expand=True
+                )
 
         except Exception as e:
-            self.diff_log.write(f"[red]Error: {str(e)}[/red]")
+            self.diff_log.write(
+                f"[red]Error: {escape(str(e))}[/red]", expand=True
+            )
 
 
-class ModelMonitorTab(VerticalScroll):
+class ModelMonitorTab(Container):
     """Tab for monitoring session and children monitor.md files"""
 
     def compose(self) -> ComposeResult:
         self.monitor_log = RichLog(
-            highlight=True, markup=True, auto_scroll=False, wrap=True
+            highlight=True,
+            markup=True,
+            auto_scroll=False,
+            wrap=True,
+            min_width=0,  # Don't enforce minimum width
         )
         yield self.monitor_log
 
@@ -710,7 +749,9 @@ class ModelMonitorTab(VerticalScroll):
         # Check if we have a current session
         if not app.current_session:
             self.monitor_log.clear()
-            self.monitor_log.write("[dim]No session selected[/dim]")
+            self.monitor_log.write(
+                "[dim]No session selected[/dim]", expand=True
+            )
             self.watcher = None
             self._last_monitors = {}
             return
@@ -732,7 +773,9 @@ class ModelMonitorTab(VerticalScroll):
         self.monitor_log.clear()
 
         if not monitors:
-            self.monitor_log.write(f"[dim]No monitor.md files found[/dim]")
+            self.monitor_log.write(
+                f"[dim]No monitor.md files found[/dim]", expand=True
+            )
             return
 
         # Sort by last modified time (most recent first)
@@ -743,49 +786,79 @@ class ModelMonitorTab(VerticalScroll):
         for session_id, monitor_data in sorted_monitors:
             # Header for each session
             agent_icon = "👷" if monitor_data.get("agent_type") == "executor" else "🎨"
-            self.monitor_log.write("")
+            self.monitor_log.write("", expand=True)
             self.monitor_log.write(
-                f"[bold cyan]══════════════════════════════════════════════════[/bold cyan]"
+                f"[bold cyan]══════════════════════════════════════════════════[/bold cyan]",
+                expand=True,
             )
             self.monitor_log.write(
-                f"[bold yellow]{agent_icon} {session_id}[/bold yellow] [dim]({monitor_data.get('agent_type', 'unknown')})[/dim]"
+                f"[bold yellow]{agent_icon} {session_id}[/bold yellow] [dim]({monitor_data.get('agent_type', 'unknown')})[/dim]",
+                expand=True,
             )
             self.monitor_log.write(
-                f"[dim]Last updated: {monitor_data['last_updated']}[/dim]"
+                f"[dim]Last updated: {monitor_data['last_updated']}[/dim]",
+                expand=True,
             )
-            self.monitor_log.write(f"[dim]{monitor_data['path']}[/dim]")
             self.monitor_log.write(
-                f"[bold cyan]──────────────────────────────────────────────────[/bold cyan]"
+                f"[dim]{monitor_data['path']}[/dim]", expand=True
+            )
+            self.monitor_log.write(
+                f"[bold cyan]──────────────────────────────────────────────────[/bold cyan]",
+                expand=True,
             )
 
             content = monitor_data["content"]
             if not content or content.strip() == "":
-                self.monitor_log.write("[dim italic]Empty monitor file[/dim italic]")
+                self.monitor_log.write(
+                    "[dim italic]Empty monitor file[/dim italic]",
+                    expand=True,
+                )
             else:
                 # Display content with markdown-like formatting
                 for line in content.split("\n"):
+                    escaped_line = escape(line)
                     if line.startswith("# "):
-                        self.monitor_log.write(f"[bold cyan]{line}[/bold cyan]")
+                        self.monitor_log.write(
+                            f"[bold cyan]{escaped_line}[/bold cyan]",
+                            expand=True,
+                        )
                     elif line.startswith("## "):
-                        self.monitor_log.write(f"[bold green]{line}[/bold green]")
+                        self.monitor_log.write(
+                            f"[bold green]{escaped_line}[/bold green]",
+                            expand=True,
+                        )
                     elif line.startswith("### "):
-                        self.monitor_log.write(f"[green]{line}[/green]")
+                        self.monitor_log.write(
+                            f"[green]{escaped_line}[/green]", expand=True
+                        )
                     elif line.startswith("- "):
-                        self.monitor_log.write(f"[yellow]{line}[/yellow]")
+                        self.monitor_log.write(
+                            f"[yellow]{escaped_line}[/yellow]",
+                            expand=True,
+                        )
                     elif "ERROR" in line or "WARNING" in line:
-                        self.monitor_log.write(f"[red]{line}[/red]")
+                        self.monitor_log.write(
+                            f"[red]{escaped_line}[/red]", expand=True
+                        )
                     elif "SUCCESS" in line or "OK" in line or "✓" in line:
-                        self.monitor_log.write(f"[green]{line}[/green]")
+                        self.monitor_log.write(
+                            f"[green]{escaped_line}[/green]", expand=True
+                        )
                     elif line.startswith("HOOK EVENT:"):
-                        self.monitor_log.write(f"[magenta]{line}[/magenta]")
+                        self.monitor_log.write(
+                            f"[magenta]{escaped_line}[/magenta]",
+                            expand=True,
+                        )
                     elif (
                         line.startswith("time:")
                         or line.startswith("session_id:")
                         or line.startswith("tool:")
                     ):
-                        self.monitor_log.write(f"[blue]{line}[/blue]")
+                        self.monitor_log.write(
+                            f"[blue]{escaped_line}[/blue]", expand=True
+                        )
                     else:
-                        self.monitor_log.write(line)
+                        self.monitor_log.write(escaped_line, expand=True)
 
 
 def main():
@@ -802,16 +875,14 @@ def main():
     logger.info(f"Starting monitor server on port {monitor_port}")
     logger.info(f"Monitor server logs: {monitor_log}")
 
-    """
     with open(monitor_log, "w") as log_file:
         monitor_proc = subprocess.Popen(
             ["cerb-monitor-server", str(monitor_port)],
             stdout=log_file,
             stderr=log_file,
-            start_new_session=True
+            start_new_session=True,
         )
     logger.info(f"Monitor server started with PID {monitor_proc.pid}")
-    """
 
     try:
         UnifiedApp().run()

@@ -205,7 +205,9 @@ class Session:
         time.sleep(1)
 
         new_session.send_message(
-            f"Please review your task instructions in @instructions.md, and then start implementing the task. When you're done, or need support use the send message tool to your parent with session ID {self.session_id}"
+            f"Please review your task instructions in @instructions.md, and then start implementing the task. "
+            f"Your parent session ID is: {self.session_id}. "
+            f"When you're done or need help, use: send_message_to_session(session_id=\"{self.session_id}\", message=\"your summary/question here\")"
         )
 
         return new_session

@@ -13,7 +13,7 @@ import time
 
 logger = get_logger(__name__)
 
-ALLOWED_TOOLS = ["Read", "Write"]
+ALLOWED_TOOLS = ["Read", "Write", "mcp__cerb-subagent__send_message_to_session"]
 PERMISSION_MODE = "acceptEdits"
 
 # Batch processing configuration
@@ -21,22 +21,38 @@ BATCH_WAIT_TIME = 10  # Wait 2 seconds after first event before processing
 MAX_BATCH_SIZE = 10  # Process immediately if 10 events accumulate
 MAX_BATCH_WAIT = 20  # Never wait more than 5 seconds total
 
-SYSTEM_PROMPT = dedent(
+SYSTEM_PROMPT_TEMPLATE = dedent(
     """
     You are a monitoring subagent receiving structured HOOK events from Claude Code instances.
+
+    **Session Being Monitored**: {session_id}
+    **Agent Type**: {agent_type}
+
     Your job:
 
     - Understand the instructions given to the agent in instructions.md and how they interact with the codebase.
     - Output information in realtime about the agent's progress, given the various hooks and codebase access.
     - Do not execute commands. Do not run Bash or WebFetch unless explicitly asked. Only write to the monitor.md file.
+    - **IMPORTANT**: You can communicate with the session you're monitoring using the MCP tool `send_message_to_session`
 
-    Structure of report:
+    ## When to Send Messages
+
+    Use `send_message_to_session(session_id="{session_id}", message="...")` when you observe:
+
+    - **Spec violations**: Agent is deviating significantly from instructions.md
+    - **Confusion or incorrect approach**: Agent appears to be implementing something incorrectly
+    - **Critical issues**: Agent is about to or has made changes that could be problematic
+    - **Stuck or spinning**: Agent seems to be going in circles or not making progress
+
+    Be direct but helpful in your messages. Don't send messages for minor issues or normal progress.
+
+    ## Structure of monitor.md Report
 
     - **Current Status**: Describe what the agent is currently trying to do.
     - **Summary of changes**: For each file, what did the agent do, what choices were made, how did they do it, how does the whole thing get structured.
     - **Deviations from spec**: Detail potential choices the agent made that were not defined or were deviations from the spec given by the designer in the instructions file.
 
-    Don't make it too verbose, it should be definitely less than a page. Think of this as a realtime dashboard, not a log. We do not want to be constantly adding new info, keep it lean, useful and inforamtive.
+    Don't make it too verbose, it should be definitely less than a page. Think of this as a realtime dashboard, not a log. We do not want to be constantly adding new info, keep it lean, useful and informative.
     """
 ).strip()
 
@@ -74,7 +90,7 @@ class SessionMonitor:
     session: Session
     allowed_tools: List[str] = field(default_factory=lambda: ALLOWED_TOOLS)
     permission_mode: str = PERMISSION_MODE
-    system_prompt: str = SYSTEM_PROMPT
+    system_prompt_template: str = SYSTEM_PROMPT_TEMPLATE
 
     client: Optional[ClaudeSDKClient] = None
     queue: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=1000))
@@ -85,12 +101,33 @@ class SessionMonitor:
         if self.client is not None:
             return
 
+        # Format system prompt with session info
+        system_prompt = self.system_prompt_template.format(
+            session_id=self.session.session_id,
+            agent_type=self.session.agent_type.value if self.session.agent_type else "unknown"
+        )
+
+        # MCP config to give monitor access to send_message_to_session
+        mcp_config = {
+            "mcpServers": {
+                "cerb-subagent": {
+                    "command": "cerb-mcp",
+                    "args": [],
+                    "env": {}
+                }
+            }
+        }
+
+        import json
+        mcp_config_str = json.dumps(mcp_config)
+
         options = ClaudeAgentOptions(
             cwd=self.session.work_path,
-            system_prompt=self.system_prompt,
+            system_prompt=system_prompt,
             allowed_tools=self.allowed_tools,
             permission_mode=self.permission_mode,
             hooks={},
+            mcp_config=mcp_config_str,
         )
 
         self.client = ClaudeSDKClient(options=options)

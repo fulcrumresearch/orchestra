@@ -1,10 +1,6 @@
 # Cerberus
 
-**An orchestrated coding interface where you design, and agents implement.**
-
-Cerberus is a multi-agent development environment that lets you focus on the creative work of software design while coordinating swarms of AI agents to handle implementation. You provide the vision, Cerberus manages the execution.
-
-## Philosophy
+Cerberus is an AI coding that allows you to quickly design good software. It allows you to iterate on specs for what you want to build, and then delegate work in parallel to agents building your software in an overseeable way..
 
 The best coding experiences understand the tango of deference between human and AI thinking.
 
@@ -17,6 +13,9 @@ AI agents excel at:
 - Implementing well-specified tasks
 - Exploring codebases
 - Handling repetitive transformations
+
+Cerberus is a multi-agent development environment that lets you focus on the creative work of software design while coordinating swarms of AI agents to handle implementation. You provide the vision, Cerberus manages the execution.
+
 
 ## How It Works
 
