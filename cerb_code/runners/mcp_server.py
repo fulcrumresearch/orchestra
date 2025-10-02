@@ -31,7 +31,7 @@ def spawn_subagent(
     Returns:
         Success message with child session ID, or error message
     """
-    # Load existing sessions with the protocol
+    # Load sessions from current working directory
     sessions = load_sessions(protocol=protocol)
 
     # Find parent session
@@ -40,10 +40,10 @@ def spawn_subagent(
     if not parent:
         return f"Error: Parent session '{parent_session_id}' not found"
 
-    # Spawn the executor
+    # Spawn the executor (this adds child to parent.children in memory)
     child = parent.spawn_executor(child_session_id, instructions)
 
-    # Save updated sessions (with children)
+    # Save updated sessions (cwd is automatically used)
     save_sessions(sessions)
 
     return f"Successfully spawned child session '{child_session_id}' under parent '{parent_session_id}'"
@@ -61,7 +61,7 @@ def send_message_to_session(session_id: str, message: str) -> str:
     Returns:
         Success or error message
     """
-    # Load existing sessions with the protocol
+    # Load sessions from current working directory
     sessions = load_sessions(protocol=protocol)
 
     # Find target session

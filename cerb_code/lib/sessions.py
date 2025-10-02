@@ -188,8 +188,8 @@ class Session:
         claude_dir.mkdir(parents=True, exist_ok=True)
 
         settings_path = claude_dir / "settings.json"
-        # PROJECT_CONF is already a JSON string, just replace the placeholder
-        settings_json = PROJECT_CONF.replace("{session_id}", session_id)
+        # PROJECT_CONF is already a JSON string, just replace the placeholders
+        settings_json = PROJECT_CONF.replace("{session_id}", session_id).replace("{source_path}", self.source_path)
         settings_path.write_text(settings_json)
 
         instructions_path = Path(new_session.work_path) / "instructions.md"
@@ -257,13 +257,17 @@ def ensure_default_session(sessions: List[Session], protocol=None) -> List[Sessi
 
 
 def load_sessions(protocol=TmuxProtocol(), flat=False, project_dir: Optional[Path] = None) -> List[Session]:
-    """Load sessions for a specific project directory from JSON file"""
+    """Load sessions from JSON file for a specific project directory
+
+    Args:
+        protocol: Protocol to use for sessions
+        flat: If True, return flattened list of sessions (including children)
+        project_dir: Specific project directory to load sessions for. If None, uses cwd.
+    """
     if project_dir is None:
         project_dir = Path.cwd()
 
-    # Normalize project_dir to absolute string
     project_dir_str = str(project_dir.resolve())
-
     sessions = []
 
     if SESSIONS_FILE.exists():
