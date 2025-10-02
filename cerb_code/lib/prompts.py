@@ -132,7 +132,7 @@ PROJECT_CONF = """
         "hooks": [
           {
             "type": "command",
-            "command": "cerb-hook {session_id}"
+            "command": "cerb-hook {session_id} {source_path}"
           }
         ]
       }
@@ -142,7 +142,7 @@ PROJECT_CONF = """
         "hooks": [
           {
             "type": "command",
-            "command": "cerb-hook {session_id}"
+            "command": "cerb-hook {session_id} {source_path}"
           }
         ]
       }
