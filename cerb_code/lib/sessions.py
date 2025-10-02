@@ -254,17 +254,23 @@ def ensure_default_session(sessions: List[Session], protocol=None) -> List[Sessi
     return [main_session] + other_sessions
 
 
-def load_sessions(protocol=TmuxProtocol(), flat=False) -> List[Session]:
-    """Load all sessions from JSON file"""
+def load_sessions(protocol=TmuxProtocol(), flat=False, project_dir: Optional[Path] = None) -> List[Session]:
+    """Load sessions for a specific project directory from JSON file"""
+    if project_dir is None:
+        project_dir = Path.cwd()
+
+    # Normalize project_dir to absolute string
+    project_dir_str = str(project_dir.resolve())
+
     sessions = []
 
     if SESSIONS_FILE.exists():
         try:
             with open(SESSIONS_FILE, "r") as f:
                 data = json.load(f)
-                sessions = [
-                    Session.from_dict(session_data, protocol) for session_data in data
-                ]
+                if isinstance(data, dict):
+                    project_sessions = data.get(project_dir_str, [])
+                    sessions = [Session.from_dict(session_data, protocol) for session_data in project_sessions]
         except (json.JSONDecodeError, KeyError):
             pass
 
@@ -289,13 +295,34 @@ def load_sessions(protocol=TmuxProtocol(), flat=False) -> List[Session]:
         return sessions
 
 
-def save_sessions(sessions: List[Session]) -> None:
-    """Save all sessions to JSON file"""
+def save_sessions(sessions: List[Session], project_dir: Optional[Path] = None) -> None:
+    """Save sessions for a specific project directory to JSON file"""
+    if project_dir is None:
+        project_dir = Path.cwd()
+
+    # Normalize project_dir to absolute string
+    project_dir_str = str(project_dir.resolve())
+
     # Ensure directory exists
     SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
+    # Load existing sessions dict (or start with empty dict)
+    sessions_dict = {}
+    if SESSIONS_FILE.exists():
+        try:
+            with open(SESSIONS_FILE, "r") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    sessions_dict = data
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # Update sessions for this project directory
+    sessions_dict[project_dir_str] = [session.to_dict() for session in sessions]
+
+    # Write entire dict back
     with open(SESSIONS_FILE, "w") as f:
-        json.dump([session.to_dict() for session in sessions], f, indent=2)
+        json.dump(sessions_dict, f, indent=2)
 
 
 def find_session(sessions: List[Session], session_id: str) -> Optional[Session]:
