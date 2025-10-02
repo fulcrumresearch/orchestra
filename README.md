@@ -51,6 +51,68 @@ Cerberus provides a unified interface to manage your agent swarm:
 
 5. **Integrate:** Merge completed work back into your main branch.
 
+## Executor Communication Examples
+
+Executors are trained to proactively report issues back to the designer. Here are real-world scenarios showing when and how executors should communicate:
+
+### Example 1: Missing Dependencies
+
+**Scenario:** Executor tries to run tests but pytest is not installed.
+
+```
+Executor thinks: "I need to run tests but pytest isn't available. I should report this immediately."
+
+Executor sends: send_message_to_session(
+  session_id="main",
+  message="ERROR: Cannot run tests - 'pytest' is not installed. Should I install it with pip, or would you prefer a different testing approach?"
+)
+
+Designer responds: "Yes, go ahead and install pytest. We use it for all Python tests."
+```
+
+### Example 2: Build Failures
+
+**Scenario:** Executor makes changes but the build fails with existing TypeScript errors.
+
+```
+Executor thinks: "The build is failing, but it's due to pre-existing errors, not my changes. I need guidance."
+
+Executor sends: send_message_to_session(
+  session_id="main",
+  message="ERROR: Build failed with TypeScript errors in 3 files (user.ts, auth.ts, api.ts). These errors existed before my changes. Should I fix them first or implement my task differently?"
+)
+
+Designer responds: "Those are known issues. Focus on your task and we'll fix those separately."
+```
+
+### Example 3: Ambiguous Requirements
+
+**Scenario:** Instructions mention a component that doesn't exist in the codebase.
+
+```
+Executor thinks: "The instructions reference 'UserService' but I can't find it. Better ask than guess."
+
+Executor sends: send_message_to_session(
+  session_id="main",
+  message="QUESTION: Instructions say to extend 'UserService' but I cannot find this class in the codebase. Did you mean 'AuthService' or should I create a new UserService?"
+)
+
+Designer responds: "Sorry, my mistake - I meant AuthService. Please extend that."
+```
+
+### Example 4: Successful Completion
+
+**Scenario:** Executor completes the task successfully.
+
+```
+Executor sends: send_message_to_session(
+  session_id="main",
+  message="COMPLETE: Added rate limiting to all API endpoints. Implemented using Redis with 100 requests/minute limit. All 23 existing tests pass, added 8 new tests for rate limiting behavior. Ready for review."
+)
+```
+
+**Key Takeaway:** Executors should err on the side of over-communication. It's better to ask a question that seems obvious than to waste time or implement incorrectly.
+
 ## Architecture
 
 Cerberus uses git worktrees to isolate agent work:
