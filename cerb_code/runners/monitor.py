@@ -46,45 +46,49 @@ os.environ["CLAUDE_MONITOR_SKIP_FORWARD"] = "1"
 app = FastAPI(title="Claude Code Multi-Monitor", version="1.0")
 
 logger = logging.getLogger("multi_monitor")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(message)s"
+)
 
 # session_id -> SessionWorker
 _workers: Dict[str, SessionMonitor] = {}
 
-_sessions = {sess.session_id: sess for sess in load_sessions(flat=True)}
 
-def get_session(session_id: str) -> Session:
-    global _sessions
-    if session_id not in _sessions:
-        _sessions = {sess.session_id: sess for sess in load_sessions(flat=True)}
+def get_session(session_id: str, source_path: str) -> Session:
+    """Load and return a session by ID from the specified project"""
+    sessions = load_sessions(flat=True, project_dir=Path(source_path))
 
-    session = _sessions.get(session_id)
+    for sess in sessions:
+        if sess.session_id == session_id:
+            return sess
 
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    raise HTTPException(
+        status_code=404, detail=f"Session '{session_id}' not found in {source_path}"
+    )
 
-    return session
 
-async def get_or_create_worker(session_id: str, payload: Dict[str, Any]) -> SessionMonitor:
+async def get_or_create_worker(
+    session_id: str, source_path: str, payload: Dict[str, Any]
+) -> SessionMonitor:
     worker = _workers.get(session_id)
 
-    session = get_session(session_id)
-    print(session)
+    session = get_session(session_id, source_path)
 
     if worker is None:
         worker = SessionMonitor(session=session)
         await worker.start()
         _workers[session_id] = worker
-        logger.info("started worker for session_id=%s", session_id)
+        logger.info("started worker for session_id=%s in %s", session_id, source_path)
     return worker
+
 
 @app.on_event("startup")
 async def _startup() -> None:
     logger.info("multi-monitor starting")
 
+
 @app.on_event("shutdown")
 async def _shutdown() -> None:
-
     for sid, w in list(_workers.items()):
         await w.stop()
         _workers.pop(sid, None)
@@ -102,13 +106,32 @@ async def hook(request: Request, session_id: str) -> Dict[str, str]:
         raise HTTPException(status_code=400, detail="session_id is required")
 
     payload = data.get("payload") or {}
+    source_path = data.get("source_path")
+
+    if not source_path:
+        raise HTTPException(status_code=400, detail="source_path is required")
 
     evt = {
         "received_at": datetime.now(timezone.utc).isoformat(),
         **data,
     }
+    logger.info(
+        f"Received event {evt['event']} for session {session_id} in {source_path}"
+    )
 
-    worker = await get_or_create_worker(session_id, payload)
+    if evt["event"] == "Stop":
+        logger.info(f"Received stop event for session {session_id}")
+        session = get_session(session_id, source_path)
+        # Load sessions from this project to find parent
+        project_sessions = load_sessions(flat=False, project_dir=Path(source_path))
+        for parent in project_sessions:
+            if session.session_id in [s.session_id for s in parent.children]:
+                logger.info(
+                    f"Notifying parent {parent.session_id} about child {session.session_id} stopping"
+                )
+                parent.send_message(f"Child session {session.session_id} stopped.")
+
+    worker = await get_or_create_worker(session_id, source_path, payload)
 
     try:
         await worker.enqueue(evt)
@@ -125,12 +148,7 @@ def main():
     print(f"Starting Cerb Monitor Server on port {port}")
     print(f"Hook endpoint: http://127.0.0.1:{port}/hook/{{session_id}}")
 
-    uvicorn.run(
-        app,
-        host="127.0.0.1",
-        port=port,
-        log_level="info"
-    )
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
 
 
 if __name__ == "__main__":

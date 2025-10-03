@@ -33,3 +33,17 @@ class AgentProtocol(ABC):
             dict: Status information (backend-specific)
         """
         pass
+
+    @abstractmethod
+    def send_message(self, session_id: str, message: str) -> bool:
+        """
+        Send a message to the agent for the given session.
+
+        Args:
+            session_id: ID of the session
+            message: Message to send
+
+        Returns:
+            bool: True if message sent successfully, False otherwise
+        """
+        pass

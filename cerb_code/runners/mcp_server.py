@@ -16,11 +16,20 @@ mcp = FastMCP("cerb-subagent")
 protocol = TmuxProtocol(default_command="claude")
 
 
+def get_source_path() -> Path:
+    """Get the source path for this session by reading .claude/source_path file"""
+    source_path_file = Path.cwd() / ".claude" / "source_path"
+
+    if source_path_file.exists():
+        return Path(source_path_file.read_text().strip())
+
+    # Fallback to cwd if file doesn't exist (for backward compatibility)
+    return Path.cwd()
+
+
 @mcp.tool()
 def spawn_subagent(
-    parent_session_id: str,
-    child_session_id: str,
-    instructions: str
+    parent_session_id: str, child_session_id: str, instructions: str
 ) -> str:
     """
     Spawn a child Claude session with specific instructions.
@@ -33,25 +42,53 @@ def spawn_subagent(
     Returns:
         Success message with child session ID, or error message
     """
-    try:
-        # Load existing sessions with the protocol
-        sessions = load_sessions(protocol=protocol)
+    # Get source path for session lookups (handles worktrees correctly)
+    source_path = get_source_path()
 
-        # Find parent session
-        parent = find_session(sessions, parent_session_id)
-        if not parent:
-            return f"Error: Parent session '{parent_session_id}' not found"
+    # Load sessions from source path
+    sessions = load_sessions(protocol=protocol, project_dir=source_path)
 
-        # Spawn the executor
-        child = parent.spawn_executor(child_session_id, instructions)
+    # Find parent session
+    parent = find_session(sessions, parent_session_id)
 
-        # Save updated sessions (with children)
-        save_sessions(sessions)
+    if not parent:
+        return f"Error: Parent session '{parent_session_id}' not found"
 
-        return f"Successfully spawned child session '{child_session_id}' under parent '{parent_session_id}'"
+    # Spawn the executor (this adds child to parent.children in memory)
+    child = parent.spawn_executor(child_session_id, instructions)
 
-    except Exception as e:
-        return f"Error spawning subagent: {str(e)}"
+    # Save updated sessions
+    save_sessions(sessions, project_dir=source_path)
+
+    return f"Successfully spawned child session '{child_session_id}' under parent '{parent_session_id}'"
+
+
+@mcp.tool()
+def send_message_to_session(session_id: str, message: str) -> str:
+    """
+    Send a message to a specific Claude session.
+
+    Args:
+        session_id: ID of the session to send the message to
+        message: Message to send to the session
+
+    Returns:
+        Success or error message
+    """
+    # Get source path for session lookups (handles worktrees correctly)
+    source_path = get_source_path()
+
+    # Load sessions from source path
+    sessions = load_sessions(protocol=protocol, project_dir=source_path)
+
+    # Find target session
+    target = find_session(sessions, session_id)
+
+    if not target:
+        return f"Error: Session '{session_id}' not found"
+
+    target.send_message(message)
+    return f"Successfully sent message to session '{session_id}'"
 
 
 def main():

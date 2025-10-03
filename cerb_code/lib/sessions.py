@@ -3,7 +3,10 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 import json
 import subprocess
-from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF
+import time
+
+from cerb_code.lib.tmux_agent import TmuxProtocol
+from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
 
 SESSIONS_FILE = Path.home() / ".kerberos" / "sessions.json"
 
@@ -37,6 +40,50 @@ class Session:
             return False
         return self.protocol.start(self)
 
+    def add_instructions(self) -> None:
+        """Add agent-specific instructions to CLAUDE.md"""
+        if not self.work_path:
+            return
+
+        claude_dir = Path(self.work_path) / ".claude"
+        claude_dir.mkdir(parents=True, exist_ok=True)
+
+        # Select the appropriate prompt based on agent type
+        if self.agent_type == AgentType.DESIGNER:
+            prompt_template = DESIGNER_PROMPT
+        else:  # AgentType.EXECUTOR
+            prompt_template = EXECUTOR_PROMPT
+
+        # Create/update kerberos.md with session-specific information
+        kerberos_md_path = claude_dir / "kerberos.md"
+        formatted_prompt = prompt_template.format(
+            session_id=self.session_id, work_path=self.work_path
+        )
+        kerberos_md_path.write_text(formatted_prompt)
+
+        # add source path
+        source_path_file = claude_dir / "source_path"
+
+        source_path_file.write_text(self.source_path)
+
+        # Add import to CLAUDE.md if not already present
+        claude_md_path = claude_dir / "CLAUDE.md"
+        import_line = "@kerberos.md"
+
+        existing_content = ""
+        if claude_md_path.exists():
+            existing_content = claude_md_path.read_text()
+
+        # Check if import is already present
+        if import_line not in existing_content:
+            # Add import line at the beginning with a separator
+            if existing_content:
+                new_content = f"# Kerberos Session Configuration\n{import_line}\n\n{existing_content}"
+            else:
+                new_content = f"# Kerberos Session Configuration\n{import_line}\n"
+
+            claude_md_path.write_text(new_content)
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize session to dictionary for JSON storage"""
         return {
@@ -60,7 +107,8 @@ class Session:
         )
         # Recursively load children (they inherit the same protocol)
         session.children = [
-            cls.from_dict(child_data, protocol) for child_data in data.get("children", [])
+            cls.from_dict(child_data, protocol)
+            for child_data in data.get("children", [])
         ]
         return session
 
@@ -90,7 +138,7 @@ class Session:
                 ["git", "rev-parse", "--verify", f"refs/heads/{self.session_id}"],
                 cwd=self.source_path,
                 capture_output=True,
-                text=True
+                text=True,
             )
 
             if result.returncode == 0:
@@ -100,7 +148,7 @@ class Session:
                     cwd=self.source_path,
                     check=True,
                     capture_output=True,
-                    text=True
+                    text=True,
                 )
             else:
                 # Create new branch
@@ -109,7 +157,7 @@ class Session:
                     cwd=self.source_path,
                     check=True,
                     capture_output=True,
-                    text=True
+                    text=True,
                 )
 
             # Create .claude/commands directory and add merge-child command
@@ -118,6 +166,9 @@ class Session:
 
             merge_command_path = claude_commands_dir / "merge-child.md"
             merge_command_path.write_text(MERGE_CHILD_COMMAND)
+
+            # Add agent-specific instructions to CLAUDE.md
+            self.add_instructions()
 
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed to create worktree: {e.stderr}")
@@ -142,18 +193,29 @@ class Session:
         claude_dir.mkdir(parents=True, exist_ok=True)
 
         settings_path = claude_dir / "settings.json"
+        # PROJECT_CONF is already a JSON string, just replace the placeholders
+        settings_json = PROJECT_CONF.replace("{session_id}", session_id).replace(
+            "{source_path}", self.source_path
+        )
+        settings_path.write_text(settings_json)
 
-        settings_path.write_text(json.dumps(PROJECT_CONF.format(session_id), indent=2))
+        instructions_path = Path(new_session.work_path) / "instructions.md"
+        instructions_path.write_text(instructions)
 
         # Add to children
         self.children.append(new_session)
 
-        # Start the session
         if not new_session.start():
             raise RuntimeError(f"Failed to start child session {session_id}")
 
-        # Send instructions to the session
-        self.protocol.send_message(session_id, instructions)
+        # Wait for Claude to be ready before sending instructions
+        time.sleep(1)
+
+        new_session.send_message(
+            f"Please review your task instructions in @instructions.md, and then start implementing the task. "
+            f"Your parent session ID is: {self.session_id}. "
+            f'When you\'re done or need help, use: send_message_to_session(session_id="{self.session_id}", message="your summary/question here")'
+        )
 
         return new_session
 
@@ -162,6 +224,10 @@ class Session:
         """Get display name for UI"""
         status = "●" if self.active else "○"
         return f"{status} {self.session_id}"
+
+    def send_message(self, message: str) -> None:
+        """Send a message to the session"""
+        self.protocol.send_message(self.session_id, message)
 
 
 def ensure_default_session(sessions: List[Session], protocol=None) -> List[Session]:
@@ -183,56 +249,98 @@ def ensure_default_session(sessions: List[Session], protocol=None) -> List[Sessi
             agent_type=AgentType.DESIGNER,
             protocol=protocol,
             source_path=str(Path.cwd()),
-            active=False
+            active=False,
         )
 
         # For the main session, use the source directory directly instead of a worktree
         # This avoids the issue of multiple worktrees for the same branch
         main_session.work_path = main_session.source_path
 
+    # Ensure main session has designer instructions in CLAUDE.md
+    main_session.add_instructions()
+
     # Always put main first
     return [main_session] + other_sessions
 
 
-def load_sessions(protocol=None, flat=False) -> List[Session]:
-    """Load all sessions from JSON file"""
+def load_sessions(
+    protocol=TmuxProtocol(), flat=False, project_dir: Optional[Path] = None
+) -> List[Session]:
+    """Load sessions from JSON file for a specific project directory
+
+    Args:
+        protocol: Protocol to use for sessions
+        flat: If True, return flattened list of sessions (including children)
+        project_dir: Specific project directory to load sessions for. If None, uses cwd.
+    """
+    if project_dir is None:
+        project_dir = Path.cwd()
+
+    project_dir_str = str(project_dir.resolve())
     sessions = []
 
     if SESSIONS_FILE.exists():
         try:
             with open(SESSIONS_FILE, "r") as f:
                 data = json.load(f)
-                sessions = [Session.from_dict(session_data, protocol) for session_data in data]
+                if isinstance(data, dict):
+                    project_sessions = data.get(project_dir_str, [])
+                    sessions = [
+                        Session.from_dict(session_data, protocol)
+                        for session_data in project_sessions
+                    ]
         except (json.JSONDecodeError, KeyError):
             pass
 
     sessions = ensure_default_session(sessions, protocol)
 
     if flat:
+
         def _flatten_tree(nodes: List[Session]) -> List[Session]:
-                flat_list: List[Session] = []
-                stack = list(nodes)[::-1]
-                while stack:
-                    node = stack.pop()
-                    flat_list.append(node)
-                    children = getattr(node, "children", None) or []
-                    # push children in reverse so first child is processed next
-                    for child in reversed(children):
-                        stack.append(child)
-                return flat_list
+            flat_list: List[Session] = []
+            stack = list(nodes)[::-1]
+            while stack:
+                node = stack.pop()
+                flat_list.append(node)
+                children = getattr(node, "children", None) or []
+                # push children in reverse so first child is processed next
+                for child in reversed(children):
+                    stack.append(child)
+            return flat_list
 
         return _flatten_tree(sessions)
     else:
         return sessions
 
 
-def save_sessions(sessions: List[Session]) -> None:
-    """Save all sessions to JSON file"""
+def save_sessions(sessions: List[Session], project_dir: Optional[Path] = None) -> None:
+    """Save sessions for a specific project directory to JSON file"""
+    if project_dir is None:
+        project_dir = Path.cwd()
+
+    # Normalize project_dir to absolute string
+    project_dir_str = str(project_dir.resolve())
+
     # Ensure directory exists
     SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
+    # Load existing sessions dict (or start with empty dict)
+    sessions_dict = {}
+    if SESSIONS_FILE.exists():
+        try:
+            with open(SESSIONS_FILE, "r") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    sessions_dict = data
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # Update sessions for this project directory
+    sessions_dict[project_dir_str] = [session.to_dict() for session in sessions]
+
+    # Write entire dict back
     with open(SESSIONS_FILE, "w") as f:
-        json.dump([session.to_dict() for session in sessions], f, indent=2)
+        json.dump(sessions_dict, f, indent=2)
 
 
 def find_session(sessions: List[Session], session_id: str) -> Optional[Session]:

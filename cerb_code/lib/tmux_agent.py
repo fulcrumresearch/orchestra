@@ -1,5 +1,6 @@
 import os
 import subprocess
+import time
 from typing import Dict, Any, TYPE_CHECKING
 
 from .agent_protocol import AgentProtocol
@@ -40,15 +41,12 @@ class TmuxProtocol(AgentProtocol):
         # Add MCP config for cerb-subagent
         mcp_config = {
             "mcpServers": {
-                "cerb-subagent": {
-                    "command": "cerb-mcp",
-                    "args": [],
-                    "env": {}
-                }
+                "cerb-subagent": {"command": "cerb-mcp", "args": [], "env": {}}
             }
         }
 
         import json
+
         mcp_config_str = json.dumps(mcp_config)
         self.default_command = f"{default_command} --mcp-config '{mcp_config_str}'"
 
@@ -70,18 +68,35 @@ class TmuxProtocol(AgentProtocol):
             return False
 
         # Create tmux session with the session_id in the work directory
-        result = tmux([
-            "new-session",
-            "-d",  # detached
-            "-s", session.session_id,
-            "-c", session.work_path,  # start in work directory
-            self.default_command
-        ])
+        result = tmux(
+            [
+                "new-session",
+                "-d",  # detached
+                "-s",
+                session.session_id,
+                "-c",
+                session.work_path,  # start in work directory
+                self.default_command,
+            ]
+        )
 
-        logger.info(f"tmux new-session result: returncode={result.returncode}, stderr={result.stderr}")
+        logger.info(
+            f"tmux new-session result: returncode={result.returncode}, stderr={result.stderr}"
+        )
+
+        if result.returncode == 0:
+            # Send Enter to accept the trust prompt
+            logger.info(
+                f"Starting 10 second wait before sending Enter to {session.session_id}"
+            )
+            time.sleep(2)  # Give Claude a moment to start
+            logger.info(f"Wait complete, now sending Enter to {session.session_id}")
+            session.send_message("")
+            logger.info(
+                f"Sent Enter to session {session.session_id} to accept trust prompt"
+            )
 
         return result.returncode == 0
-
 
     def get_status(self, session_id: str) -> Dict[str, Any]:
         """
@@ -116,15 +131,10 @@ class TmuxProtocol(AgentProtocol):
             return {"exists": True, "error": "Failed to parse tmux output"}
 
     def send_message(self, session_id: str, message: str) -> bool:
-        """
-        Send a message to a tmux session.
-
-        Args:
-            session_id: ID of the session
-            message: Text to send to the session
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        result = tmux(["send-keys", "-t", session_id, message, "Enter"])
-        return result.returncode == 0
+        # Target pane 0 specifically (where Claude runs), not the active pane
+        target = f"{session_id}:0.0"
+        # send the literal bytes of the message
+        r1 = tmux(["send-keys", "-t", target, "-l", "--", message])
+        # then send a carriage return (equivalent to pressing Enter)
+        r2 = tmux(["send-keys", "-t", target, "C-m"])
+        return r1.returncode == 0 and r2.returncode == 0
