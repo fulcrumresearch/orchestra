@@ -97,6 +97,7 @@ async def _shutdown() -> None:
 @app.post("/hook/{session_id}")
 async def hook(request: Request, session_id: str) -> Dict[str, str]:
     body = await request.body()
+    logging.info("Received hook request for session_id=%s", session_id)
     try:
         data = json.loads(body.decode("utf-8"))
     except Exception as exc:
@@ -107,6 +108,8 @@ async def hook(request: Request, session_id: str) -> Dict[str, str]:
 
     payload = data.get("payload") or {}
     source_path = data.get("source_path")
+
+    logging.info("Received hook request for session_id=%s", session_id)
 
     if not source_path:
         raise HTTPException(status_code=400, detail="source_path is required")

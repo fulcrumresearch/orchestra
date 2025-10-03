@@ -654,18 +654,14 @@ class DiffTab(Container):
         app = self.app
         if not hasattr(app, "current_session") or not app.current_session:
             self.diff_log.clear()
-            self.diff_log.write(
-                "[dim]No session selected[/dim]", expand=True
-            )
+            self.diff_log.write("[dim]No session selected[/dim]", expand=True)
             return
 
         work_path = app.current_session.work_path
         session_id = app.current_session.session_id
 
         if not work_path:
-            self.diff_log.write(
-                "[dim]Session has no work path[/dim]", expand=True
-            )
+            self.diff_log.write("[dim]Session has no work path[/dim]", expand=True)
             return
 
         try:
@@ -717,9 +713,7 @@ class DiffTab(Container):
                 )
 
         except Exception as e:
-            self.diff_log.write(
-                f"[red]Error: {escape(str(e))}[/red]", expand=True
-            )
+            self.diff_log.write(f"[red]Error: {escape(str(e))}[/red]", expand=True)
 
 
 class ModelMonitorTab(Container):
@@ -748,9 +742,7 @@ class ModelMonitorTab(Container):
         # Check if we have a current session
         if not app.current_session:
             self.monitor_log.clear()
-            self.monitor_log.write(
-                "[dim]No session selected[/dim]", expand=True
-            )
+            self.monitor_log.write("[dim]No session selected[/dim]", expand=True)
             self.watcher = None
             return
 
@@ -766,9 +758,7 @@ class ModelMonitorTab(Container):
         self.monitor_log.clear()
 
         if not monitors:
-            self.monitor_log.write(
-                f"[dim]No monitor.md files found[/dim]", expand=True
-            )
+            self.monitor_log.write(f"[dim]No monitor.md files found[/dim]", expand=True)
             return
 
         # Sort by last modified time (most recent first)
@@ -792,9 +782,7 @@ class ModelMonitorTab(Container):
                 f"[dim]Last updated: {monitor_data['last_updated']}[/dim]",
                 expand=True,
             )
-            self.monitor_log.write(
-                f"[dim]{monitor_data['path']}[/dim]", expand=True
-            )
+            self.monitor_log.write(f"[dim]{monitor_data['path']}[/dim]", expand=True)
             self.monitor_log.write(
                 f"[bold cyan]──────────────────────────────────────────────────[/bold cyan]",
                 expand=True,
@@ -854,6 +842,9 @@ class ModelMonitorTab(Container):
                         self.monitor_log.write(escaped_line, expand=True)
 
 
+START_MONITOR = False
+
+
 def main():
     """Entry point for the unified UI"""
     # Set terminal environment for better performance
@@ -861,32 +852,34 @@ def main():
     os.environ.setdefault("TMUX_TMPDIR", "/tmp")  # Use local tmp for better performance
 
     # Start the monitoring server in the background
-    monitor_port = 8081
-    monitor_log = Path.home() / ".kerberos" / "monitor-server.log"
-    monitor_log.parent.mkdir(parents=True, exist_ok=True)
+    if START_MONITOR:
+        monitor_port = 8081
+        monitor_log = Path.home() / ".kerberos" / "monitor-server.log"
+        monitor_log.parent.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"Starting monitor server on port {monitor_port}")
-    logger.info(f"Monitor server logs: {monitor_log}")
+        logger.info(f"Starting monitor server on port {monitor_port}")
+        logger.info(f"Monitor server logs: {monitor_log}")
 
-    with open(monitor_log, "w") as log_file:
-        monitor_proc = subprocess.Popen(
-            ["cerb-monitor-server", str(monitor_port)],
-            stdout=log_file,
-            stderr=log_file,
-            start_new_session=True,
-        )
-    logger.info(f"Monitor server started with PID {monitor_proc.pid}")
+        with open(monitor_log, "w") as log_file:
+            monitor_proc = subprocess.Popen(
+                ["cerb-monitor-server", str(monitor_port)],
+                stdout=log_file,
+                stderr=log_file,
+                start_new_session=True,
+            )
+        logger.info(f"Monitor server started with PID {monitor_proc.pid}")
 
     try:
         UnifiedApp().run()
     finally:
         # Clean up monitor server on exit
-        logger.info("Shutting down monitor server")
-        monitor_proc.terminate()
-        try:
-            monitor_proc.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            monitor_proc.kill()
+        if START_MONITOR:
+            logger.info("Shutting down monitor server")
+            monitor_proc.terminate()
+            try:
+                monitor_proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                monitor_proc.kill()
 
 
 if __name__ == "__main__":

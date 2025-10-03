@@ -13,7 +13,7 @@ import time
 
 logger = get_logger(__name__)
 
-ALLOWED_TOOLS = ["Read", "Write", "mcp__cerb-subagent__send_message_to_session"]
+ALLOWED_TOOLS = ["Read", "Write", "Edit", "mcp__cerb-subagent__send_message_to_session"]
 PERMISSION_MODE = "acceptEdits"
 
 # Batch processing configuration
@@ -110,15 +110,7 @@ class SessionMonitor:
         )
 
         # MCP config to give monitor access to send_message_to_session
-        mcp_config = {
-            "mcpServers": {
-                "cerb-subagent": {"command": "cerb-mcp", "args": [], "env": {}}
-            }
-        }
-
-        import json
-
-        mcp_config_str = json.dumps(mcp_config)
+        mcp_config = {"cerb-subagent": {"command": "cerb-mcp", "args": [], "env": {}}}
 
         options = ClaudeAgentOptions(
             cwd=self.session.work_path,
@@ -126,7 +118,7 @@ class SessionMonitor:
             allowed_tools=self.allowed_tools,
             permission_mode=self.permission_mode,
             hooks={},
-            mcp_config=mcp_config_str,
+            mcp_servers=mcp_config,
         )
 
         self.client = ClaudeSDKClient(options=options)
