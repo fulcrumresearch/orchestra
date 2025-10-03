@@ -1,11 +1,11 @@
 [project]
 name = "cerb-code"
-version = "0.1.9"
+version = "0.1.11"
 description = "Terminal UI for managing multiple Claude sessions with tmux"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "textual>=5.3.0",
+    "textual==5.3.0",
     "mcp>=1.0.0",
     "fastapi>=0.117.1",
     "uvicorn>=0.37.0",

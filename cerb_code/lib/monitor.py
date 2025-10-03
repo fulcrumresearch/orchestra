@@ -104,21 +104,20 @@ class SessionMonitor:
         # Format system prompt with session info
         system_prompt = self.system_prompt_template.format(
             session_id=self.session.session_id,
-            agent_type=self.session.agent_type.value if self.session.agent_type else "unknown"
+            agent_type=self.session.agent_type.value
+            if self.session.agent_type
+            else "unknown",
         )
 
         # MCP config to give monitor access to send_message_to_session
         mcp_config = {
             "mcpServers": {
-                "cerb-subagent": {
-                    "command": "cerb-mcp",
-                    "args": [],
-                    "env": {}
-                }
+                "cerb-subagent": {"command": "cerb-mcp", "args": [], "env": {}}
             }
         }
 
         import json
+
         mcp_config_str = json.dumps(mcp_config)
 
         options = ClaudeAgentOptions(
@@ -155,8 +154,8 @@ class SessionMonitor:
             f"Session online. Understand and update the monitor.md in the given format. Do NOT log every event, the whole point is to make this easier for the a human to understand what is going on."
         )
 
-        # async for chunk in self.client.receive_response():
-        # logger.info("[%s] startup> %s", self.session.session_id, chunk)
+        async for chunk in self.client.receive_response():
+            logger.info("[%s] startup> %s", self.session.session_id, chunk)
 
         while True:
             # Collect batch of events
@@ -190,10 +189,10 @@ class SessionMonitor:
                 combined_prompt = "\n\n---\n\n".join(prompts)
 
                 await self.client.query(combined_prompt)
-                # async for chunk in self.client.receive_response():
-                # logger.info(
-                #   "[%s] batch[%d]> %s", self.session.session_id, len(batch), chunk
-                # )
+                async for chunk in self.client.receive_response():
+                    logger.info(
+                        "[%s] batch[%d]> %s", self.session.session_id, len(batch), chunk
+                    )
             finally:
                 # Mark all events as done
                 for _ in batch:

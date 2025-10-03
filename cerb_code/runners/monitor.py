@@ -53,6 +53,7 @@ logging.basicConfig(
 # session_id -> SessionWorker
 _workers: Dict[str, SessionMonitor] = {}
 
+
 def get_session(session_id: str, source_path: str) -> Session:
     """Load and return a session by ID from the specified project"""
     sessions = load_sessions(flat=True, project_dir=Path(source_path))
@@ -61,7 +62,9 @@ def get_session(session_id: str, source_path: str) -> Session:
         if sess.session_id == session_id:
             return sess
 
-    raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found in {source_path}")
+    raise HTTPException(
+        status_code=404, detail=f"Session '{session_id}' not found in {source_path}"
+    )
 
 
 async def get_or_create_worker(
@@ -112,7 +115,9 @@ async def hook(request: Request, session_id: str) -> Dict[str, str]:
         "received_at": datetime.now(timezone.utc).isoformat(),
         **data,
     }
-    logger.info(f"Received event {evt['event']} for session {session_id} in {source_path}")
+    logger.info(
+        f"Received event {evt['event']} for session {session_id} in {source_path}"
+    )
 
     if evt["event"] == "Stop":
         logger.info(f"Received stop event for session {session_id}")
@@ -121,7 +126,9 @@ async def hook(request: Request, session_id: str) -> Dict[str, str]:
         project_sessions = load_sessions(flat=False, project_dir=Path(source_path))
         for parent in project_sessions:
             if session.session_id in [s.session_id for s in parent.children]:
-                logger.info(f"Notifying parent {parent.session_id} about child {session.session_id} stopping")
+                logger.info(
+                    f"Notifying parent {parent.session_id} about child {session.session_id} stopping"
+                )
                 parent.send_message(f"Child session {session.session_id} stopped.")
 
     worker = await get_or_create_worker(session_id, source_path, payload)

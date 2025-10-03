@@ -738,7 +738,6 @@ class ModelMonitorTab(Container):
     def on_mount(self) -> None:
         """Start refreshing when mounted"""
         self.watcher = None
-        self._last_monitors = {}
         self.set_interval(2.0, self.refresh_monitor)
         self.refresh_monitor()
 
@@ -753,20 +752,14 @@ class ModelMonitorTab(Container):
                 "[dim]No session selected[/dim]", expand=True
             )
             self.watcher = None
-            self._last_monitors = {}
             return
 
         # Create or update watcher with current session
         if self.watcher is None or self.watcher.session != app.current_session:
             self.watcher = SessionMonitorWatcher(session=app.current_session)
-            self._last_monitors = {}
 
         monitors = self.watcher.get_monitor_files()
-
-        # Only update display if monitors have changed
-        if monitors != self._last_monitors:
-            self._update_display(monitors)
-            self._last_monitors = monitors
+        self._update_display(monitors)
 
     def _update_display(self, monitors: Dict[str, Dict[str, Any]]) -> None:
         """Update the display with new monitor data"""

@@ -61,6 +61,11 @@ class Session:
         )
         kerberos_md_path.write_text(formatted_prompt)
 
+        # add source path
+        source_path_file = claude_dir / "source_path"
+
+        source_path_file.write_text(self.source_path)
+
         # Add import to CLAUDE.md if not already present
         claude_md_path = claude_dir / "CLAUDE.md"
         import_line = "@kerberos.md"
@@ -189,12 +194,10 @@ class Session:
 
         settings_path = claude_dir / "settings.json"
         # PROJECT_CONF is already a JSON string, just replace the placeholders
-        settings_json = PROJECT_CONF.replace("{session_id}", session_id).replace("{source_path}", self.source_path)
+        settings_json = PROJECT_CONF.replace("{session_id}", session_id).replace(
+            "{source_path}", self.source_path
+        )
         settings_path.write_text(settings_json)
-
-        # Store source_path for MCP server to use for session lookups
-        source_path_file = claude_dir / "source_path"
-        source_path_file.write_text(self.source_path)
 
         instructions_path = Path(new_session.work_path) / "instructions.md"
         instructions_path.write_text(instructions)
@@ -211,7 +214,7 @@ class Session:
         new_session.send_message(
             f"Please review your task instructions in @instructions.md, and then start implementing the task. "
             f"Your parent session ID is: {self.session_id}. "
-            f"When you're done or need help, use: send_message_to_session(session_id=\"{self.session_id}\", message=\"your summary/question here\")"
+            f'When you\'re done or need help, use: send_message_to_session(session_id="{self.session_id}", message="your summary/question here")'
         )
 
         return new_session
@@ -260,7 +263,9 @@ def ensure_default_session(sessions: List[Session], protocol=None) -> List[Sessi
     return [main_session] + other_sessions
 
 
-def load_sessions(protocol=TmuxProtocol(), flat=False, project_dir: Optional[Path] = None) -> List[Session]:
+def load_sessions(
+    protocol=TmuxProtocol(), flat=False, project_dir: Optional[Path] = None
+) -> List[Session]:
     """Load sessions from JSON file for a specific project directory
 
     Args:
@@ -280,7 +285,10 @@ def load_sessions(protocol=TmuxProtocol(), flat=False, project_dir: Optional[Pat
                 data = json.load(f)
                 if isinstance(data, dict):
                     project_sessions = data.get(project_dir_str, [])
-                    sessions = [Session.from_dict(session_data, protocol) for session_data in project_sessions]
+                    sessions = [
+                        Session.from_dict(session_data, protocol)
+                        for session_data in project_sessions
+                    ]
         except (json.JSONDecodeError, KeyError):
             pass
 
