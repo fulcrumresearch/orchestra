@@ -16,6 +16,17 @@ mcp = FastMCP("cerb-subagent")
 protocol = TmuxProtocol(default_command="claude")
 
 
+def get_source_path() -> Path:
+    """Get the source path for this session by reading .claude/source_path file"""
+    source_path_file = Path.cwd() / ".claude" / "source_path"
+
+    if source_path_file.exists():
+        return Path(source_path_file.read_text().strip())
+
+    # Fallback to cwd if file doesn't exist (for backward compatibility)
+    return Path.cwd()
+
+
 @mcp.tool()
 def spawn_subagent(
     parent_session_id: str, child_session_id: str, instructions: str
@@ -31,8 +42,11 @@ def spawn_subagent(
     Returns:
         Success message with child session ID, or error message
     """
-    # Load sessions from current working directory
-    sessions = load_sessions(protocol=protocol)
+    # Get source path for session lookups (handles worktrees correctly)
+    source_path = get_source_path()
+
+    # Load sessions from source path
+    sessions = load_sessions(protocol=protocol, project_dir=source_path)
 
     # Find parent session
     parent = find_session(sessions, parent_session_id)
@@ -43,8 +57,8 @@ def spawn_subagent(
     # Spawn the executor (this adds child to parent.children in memory)
     child = parent.spawn_executor(child_session_id, instructions)
 
-    # Save updated sessions (cwd is automatically used)
-    save_sessions(sessions)
+    # Save updated sessions
+    save_sessions(sessions, project_dir=source_path)
 
     return f"Successfully spawned child session '{child_session_id}' under parent '{parent_session_id}'"
 
@@ -61,8 +75,11 @@ def send_message_to_session(session_id: str, message: str) -> str:
     Returns:
         Success or error message
     """
-    # Load sessions from current working directory
-    sessions = load_sessions(protocol=protocol)
+    # Get source path for session lookups (handles worktrees correctly)
+    source_path = get_source_path()
+
+    # Load sessions from source path
+    sessions = load_sessions(protocol=protocol, project_dir=source_path)
 
     # Find target session
     target = find_session(sessions, session_id)
