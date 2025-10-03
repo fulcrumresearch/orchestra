@@ -192,6 +192,10 @@ class Session:
         settings_json = PROJECT_CONF.replace("{session_id}", session_id).replace("{source_path}", self.source_path)
         settings_path.write_text(settings_json)
 
+        # Store source_path for MCP server to use for session lookups
+        source_path_file = claude_dir / "source_path"
+        source_path_file.write_text(self.source_path)
+
         instructions_path = Path(new_session.work_path) / "instructions.md"
         instructions_path.write_text(instructions)
 
