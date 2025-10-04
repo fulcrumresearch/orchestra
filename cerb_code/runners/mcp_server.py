@@ -10,7 +10,9 @@ from cerb_code.lib.sessions import load_sessions, save_sessions, find_session
 from cerb_code.lib.tmux_agent import TmuxProtocol
 
 # Create FastMCP server instance
-mcp = FastMCP("cerb-subagent")
+port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
+host = "0.0.0.0"
+mcp = FastMCP("cerb-subagent", port=port, host=host)
 
 # Create a shared protocol for sessions
 protocol = TmuxProtocol(default_command="claude")
@@ -93,14 +95,9 @@ def send_message_to_session(session_id: str, message: str) -> str:
 
 def main():
     """Entry point for MCP server."""
-    import sys
-
-    # Get port from command line args or use default
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
-
     # Run the HTTP/SSE server
     print(f"Starting MCP server on port {port}...")
-    mcp.run(transport="sse", port=port, host="0.0.0.0")
+    mcp.run(transport="sse")
 
 
 if __name__ == "__main__":

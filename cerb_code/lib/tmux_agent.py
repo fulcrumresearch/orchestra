@@ -32,7 +32,12 @@ def tmux(args: list[str]) -> subprocess.CompletedProcess:
 class TmuxProtocol(AgentProtocol):
     """TMux implementation of the AgentProtocol with Docker containerization"""
 
-    def __init__(self, default_command: str = "claude", use_docker: bool = True, mcp_port: int = 8765):
+    def __init__(
+        self,
+        default_command: str = "claude",
+        use_docker: bool = True,
+        mcp_port: int = 8765,
+    ):
         """
         Initialize TmuxAgent.
 
@@ -41,28 +46,6 @@ class TmuxProtocol(AgentProtocol):
             use_docker: Whether to use Docker containers (default: True)
             mcp_port: Port where MCP server is running (default: 8765)
         """
-        import json
-
-        # Configure MCP connection based on mode
-        if use_docker:
-            # Docker mode: connect to host MCP server
-            mcp_url = f"http://host.docker.internal:{mcp_port}/sse"
-        else:
-            # Local mode: connect to localhost MCP server
-            mcp_url = f"http://localhost:{mcp_port}/sse"
-
-        mcp_config = {
-            "mcpServers": {
-                "cerb-subagent": {
-                    "url": mcp_url,
-                    "transport": "sse"
-                }
-            }
-        }
-
-        mcp_config_str = json.dumps(mcp_config)
-        # TODO: Fix MCP config - currently causing session startup failures
-        # self.default_command = f"{default_command} --mcp-config '{mcp_config_str}'"
         self.default_command = default_command
         self.use_docker = use_docker
         self.mcp_port = mcp_port
@@ -88,13 +71,23 @@ class TmuxProtocol(AgentProtocol):
 
             logger.info(f"Building Docker image cerb-image...")
             build_result = subprocess.run(
-                ["docker", "build", "-t", "cerb-image", "-f", str(dockerfile_path), str(dockerfile_path.parent)],
+                [
+                    "docker",
+                    "build",
+                    "-t",
+                    "cerb-image",
+                    "-f",
+                    str(dockerfile_path),
+                    str(dockerfile_path.parent),
+                ],
                 capture_output=True,
                 text=True,
             )
 
             if build_result.returncode != 0:
-                raise RuntimeError(f"Failed to build Docker image: {build_result.stderr}")
+                raise RuntimeError(
+                    f"Failed to build Docker image: {build_result.stderr}"
+                )
             logger.info("Docker image built successfully")
 
     def _start_container(self, session: "Session") -> None:
@@ -131,7 +124,8 @@ class TmuxProtocol(AgentProtocol):
 
         # Prepare volume mounts
         mounts = [
-            "-v", f"{session.work_path}:/workspace",
+            "-v",
+            f"{session.work_path}:/workspace",
         ]
 
         # Add project mount if paired
@@ -150,14 +144,21 @@ class TmuxProtocol(AgentProtocol):
 
         # Start container (keep alive with tail -f)
         cmd = [
-            "docker", "run", "-d",
-            "--name", container_name,
-            "--add-host", "host.docker.internal:host-gateway",  # Allow access to host
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            container_name,
+            "--add-host",
+            "host.docker.internal:host-gateway",  # Allow access to host
             *env_vars,
             *mounts,
-            "-w", "/workspace",
+            "-w",
+            "/workspace",
             "cerb-image",
-            "tail", "-f", "/dev/null",
+            "tail",
+            "-f",
+            "/dev/null",
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -178,20 +179,63 @@ class TmuxProtocol(AgentProtocol):
             if copy_result.returncode == 0:
                 logger.info(f"Copied .claude directory into container")
             else:
-                logger.warning(f"Failed to copy .claude directory: {copy_result.stderr}")
+                logger.warning(
+                    f"Failed to copy .claude directory: {copy_result.stderr}"
+                )
 
-        # Copy user's .claude.json config file into container (if it exists)
-        claude_json = Path.home() / ".claude.json"
-        if claude_json.exists():
+        # Copy user's .claude.json config file into container and inject MCP config
+        self._configure_mcp_in_container(container_name)
+
+    def _configure_mcp_in_container(self, container_name: str) -> None:
+        """Copy .claude.json and inject MCP configuration into container"""
+        import json
+        import tempfile
+
+        # Determine MCP URL based on mode
+        if self.use_docker:
+            mcp_url = f"http://host.docker.internal:{self.mcp_port}/sse"
+        else:
+            mcp_url = f"http://localhost:{self.mcp_port}/sse"
+
+        # Load user's .claude.json if it exists
+        claude_json_path = Path.home() / ".claude.json"
+        config = {}
+        if claude_json_path.exists():
+            try:
+                with open(claude_json_path, "r") as f:
+                    config = json.load(f)
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse .claude.json, using empty config")
+
+        # Inject MCP server configuration
+        if "mcpServers" not in config:
+            config["mcpServers"] = {}
+
+        config["mcpServers"]["cerb-mcp"] = {"url": mcp_url, "type": "sse"}
+
+        # Write modified config to temp file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
+            json.dump(config, tmp, indent=2)
+            tmp_path = tmp.name
+
+        try:
+            # Copy modified config into container
             copy_result = subprocess.run(
-                ["docker", "cp", f"{claude_json}", f"{container_name}:/root/.claude.json"],
+                ["docker", "cp", tmp_path, f"{container_name}:/root/.claude.json"],
                 capture_output=True,
                 text=True,
             )
             if copy_result.returncode == 0:
-                logger.info(f"Copied .claude.json into container")
+                logger.info(
+                    f"Configured MCP in container .claude.json (URL: {mcp_url})"
+                )
             else:
-                logger.warning(f"Failed to copy .claude.json: {copy_result.stderr}")
+                logger.warning(
+                    f"Failed to copy .claude.json to container: {copy_result.stderr}"
+                )
+        finally:
+            # Clean up temp file
+            Path(tmp_path).unlink(missing_ok=True)
 
     def _stop_container(self, session_id: str) -> None:
         """Stop and remove Docker container for a session"""
@@ -206,7 +250,15 @@ class TmuxProtocol(AgentProtocol):
             container_name = self._get_container_name(session_id)
             # Pass TERM environment variable to Docker container
             return subprocess.run(
-                ["docker", "exec", "-i", "-e", "TERM=xterm-256color", container_name, *cmd],
+                [
+                    "docker",
+                    "exec",
+                    "-i",
+                    "-e",
+                    "TERM=xterm-256color",
+                    container_name,
+                    *cmd,
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -260,7 +312,7 @@ class TmuxProtocol(AgentProtocol):
                 "-c",
                 work_dir,
                 self.default_command,
-            ]
+            ],
         )
 
         logger.info(
@@ -309,7 +361,9 @@ class TmuxProtocol(AgentProtocol):
 
         # Get session info (same for both modes via _exec)
         fmt = "#{session_windows}\t#{session_attached}"
-        result = self._exec(session_id, ["tmux", "display-message", "-t", session_id, "-p", fmt])
+        result = self._exec(
+            session_id, ["tmux", "display-message", "-t", session_id, "-p", fmt]
+        )
 
         if result.returncode != 0:
             return {"exists": True, "error": result.stderr}
@@ -329,7 +383,9 @@ class TmuxProtocol(AgentProtocol):
         # Target pane 0 specifically (where Claude runs), not the active pane
         target = f"{session_id}:0.0"
         # Send the literal bytes of the message (same for both modes via _exec)
-        r1 = self._exec(session_id, ["tmux", "send-keys", "-t", target, "-l", "--", message])
+        r1 = self._exec(
+            session_id, ["tmux", "send-keys", "-t", target, "-l", "--", message]
+        )
         # Then send a carriage return (equivalent to pressing Enter)
         r2 = self._exec(session_id, ["tmux", "send-keys", "-t", target, "C-m"])
         return r1.returncode == 0 and r2.returncode == 0
@@ -340,16 +396,37 @@ class TmuxProtocol(AgentProtocol):
             # Docker mode: spawn docker exec command in the pane
             container_name = self._get_container_name(session_id)
             result = subprocess.run(
-                ["tmux", "respawn-pane", "-t", target_pane, "-k",
-                 "docker", "exec", "-it", container_name, "tmux", "attach-session", "-t", session_id],
+                [
+                    "tmux",
+                    "respawn-pane",
+                    "-t",
+                    target_pane,
+                    "-k",
+                    "docker",
+                    "exec",
+                    "-it",
+                    container_name,
+                    "tmux",
+                    "attach-session",
+                    "-t",
+                    session_id,
+                ],
                 capture_output=True,
                 text=True,
             )
         else:
             # Local mode: attach to tmux on host
             result = subprocess.run(
-                ["tmux", "respawn-pane", "-t", target_pane, "-k",
-                 "sh", "-c", f"TMUX= tmux attach-session -t {session_id}"],
+                [
+                    "tmux",
+                    "respawn-pane",
+                    "-t",
+                    target_pane,
+                    "-k",
+                    "sh",
+                    "-c",
+                    f"TMUX= tmux attach-session -t {session_id}",
+                ],
                 capture_output=True,
                 text=True,
             )
