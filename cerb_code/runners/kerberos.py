@@ -511,7 +511,7 @@ class UnifiedApp(App):
 
         # Respawn pane 1 (editor pane) with vim, wrapped in bash to keep pane alive after quit
         # When vim exits, show placeholder and keep shell running
-        vim_cmd = f"bash -c '$EDITOR {designer_md}; echo \"Press S to open spec editor\"; exec bash'"
+        vim_cmd = f"bash -c '$EDITOR {designer_md}; clear; echo \"Press S to open spec editor\"; exec bash'"
         result = subprocess.run(
             ["tmux", "respawn-pane", "-t", "1", "-k", vim_cmd],
             capture_output=True,
