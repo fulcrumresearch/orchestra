@@ -176,9 +176,9 @@ class TmuxProtocol(AgentProtocol):
         """Execute command (Docker or local mode)"""
         if self.use_docker:
             container_name = self._get_container_name(session_id)
+            # Pass TERM environment variable to Docker container
             return subprocess.run(
-                ["docker", "exec", "-i", container_name, *cmd],
-                env=tmux_env(),
+                ["docker", "exec", "-i", "-e", "TERM=xterm-256color", container_name, *cmd],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,

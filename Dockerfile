@@ -13,8 +13,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Claude CLI globally
-RUN npm install -g @anthropic-ai/claude-cli
+# Install Claude Code globally
+RUN npm install -g @anthropic-ai/claude-code
 
 # Set working directory
 WORKDIR /workspace

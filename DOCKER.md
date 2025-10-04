@@ -90,8 +90,8 @@ Local mode runs tmux sessions directly on the host without containerization.
 **Installed**:
 - tmux (session management)
 - git (version control)
-- Node.js + npm (for Claude CLI)
-- @anthropic-ai/claude-cli
+- Node.js + npm (for Claude Code)
+- @anthropic-ai/claude-code
 
 **Build**: Automatic on first session creation
 
