@@ -32,6 +32,7 @@ class Session:
         self.source_path = source_path
         self.work_path = work_path
         self.active = active
+        self.paired = False  # Runtime only, not persisted
         self.children: List[Session] = []
 
     def start(self) -> bool:
@@ -39,6 +40,12 @@ class Session:
         if not self.protocol:
             return False
         return self.protocol.start(self)
+
+    def delete(self) -> bool:
+        """Delete the session using the configured protocol"""
+        if not self.protocol:
+            return False
+        return self.protocol.delete(self.session_id)
 
     def add_instructions(self) -> None:
         """Add agent-specific instructions to CLAUDE.md"""

@@ -38,6 +38,7 @@ from cerb_code.lib.tmux_agent import TmuxProtocol
 from cerb_code.lib.monitor import SessionMonitorWatcher
 from cerb_code.lib.file_watcher import FileWatcher, watch_designer_file
 from cerb_code.lib.logger import get_logger
+from cerb_code.lib.config import load_config
 import re
 
 logger = get_logger(__name__)
@@ -196,13 +197,18 @@ class UnifiedApp(App):
         self.sessions: list[Session] = []
         self.flat_sessions: list[Session] = []  # Flattened list for selection
         self.current_session: Session | None = None
-        # Create a shared TmuxProtocol for all sessions
-        self.agent = TmuxProtocol(default_command="claude")
+        # Load config and create TmuxProtocol
+        config = load_config()
+        self.agent = TmuxProtocol(
+            default_command="claude",
+            use_docker=config.get("use_docker", True),
+            mcp_port=config.get("mcp_port", 8765)
+        )
         self._last_session_mtime = None
         self._watch_task = None
         # Create a shared FileWatcher for monitoring files
         self.file_watcher = FileWatcher()
-        logger.info("KerberosApp initialized")
+        logger.info(f"KerberosApp initialized (Docker: {config.get('use_docker', True)})")
 
     def compose(self) -> ComposeResult:
         if not shutil.which("tmux"):
@@ -442,12 +448,8 @@ class UnifiedApp(App):
 
         session_to_delete = self.flat_sessions[index]
 
-        # Kill the tmux session
-        subprocess.run(
-            ["tmux", "kill-session", "-t", session_to_delete.session_id],
-            capture_output=True,
-            text=True,
-        )
+        # Delete the session (handles Docker or local mode)
+        session_to_delete.delete()
 
         # Remove from sessions list
         self.sessions = [
@@ -579,12 +581,7 @@ class UnifiedApp(App):
                 return
 
         # At this point, session exists - attach to it in pane 2
-        cmd = f"TMUX= tmux attach-session -t {session.session_id}"
-        subprocess.run(
-            ["tmux", "respawn-pane", "-t", "2", "-k", cmd],
-            capture_output=True,
-            text=True,
-        )
+        self.agent.attach(session.session_id, target_pane="2")
 
         # Don't auto-focus pane 2 - let user stay in the UI
 
@@ -851,6 +848,26 @@ def main():
     os.environ.setdefault("TERM", "xterm-256color")
     os.environ.setdefault("TMUX_TMPDIR", "/tmp")  # Use local tmp for better performance
 
+    # Load config
+    config = load_config()
+    mcp_port = config.get("mcp_port", 8765)
+
+    # Start the MCP server in the background
+    mcp_log = Path.home() / ".kerberos" / "mcp-server.log"
+    mcp_log.parent.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"Starting MCP server on port {mcp_port}")
+    logger.info(f"MCP server logs: {mcp_log}")
+
+    with open(mcp_log, "w") as log_file:
+        mcp_proc = subprocess.Popen(
+            ["cerb-mcp", str(mcp_port)],
+            stdout=log_file,
+            stderr=log_file,
+            start_new_session=True,
+        )
+    logger.info(f"MCP server started with PID {mcp_proc.pid}")
+
     # Start the monitoring server in the background
     if START_MONITOR:
         monitor_port = 8081
@@ -872,7 +889,14 @@ def main():
     try:
         UnifiedApp().run()
     finally:
-        # Clean up monitor server on exit
+        # Clean up servers on exit
+        logger.info("Shutting down MCP server")
+        mcp_proc.terminate()
+        try:
+            mcp_proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            mcp_proc.kill()
+
         if START_MONITOR:
             logger.info("Shutting down monitor server")
             monitor_proc.terminate()

@@ -1,6 +1,7 @@
 import os
 import subprocess
 import time
+from pathlib import Path
 from typing import Dict, Any, TYPE_CHECKING
 
 from .agent_protocol import AgentProtocol
@@ -29,26 +30,167 @@ def tmux(args: list[str]) -> subprocess.CompletedProcess:
 
 
 class TmuxProtocol(AgentProtocol):
-    """TMux implementation of the AgentProtocol"""
+    """TMux implementation of the AgentProtocol with Docker containerization"""
 
-    def __init__(self, default_command: str = "claude"):
+    def __init__(self, default_command: str = "claude", use_docker: bool = True, mcp_port: int = 8765):
         """
         Initialize TmuxAgent.
 
         Args:
             default_command: Default command to run when starting a session
+            use_docker: Whether to use Docker containers (default: True)
+            mcp_port: Port where MCP server is running (default: 8765)
         """
-        # Add MCP config for cerb-subagent
+        import json
+
+        # Configure MCP connection based on mode
+        if use_docker:
+            # Docker mode: connect to host MCP server
+            mcp_url = f"http://host.docker.internal:{mcp_port}/sse"
+        else:
+            # Local mode: connect to localhost MCP server
+            mcp_url = f"http://localhost:{mcp_port}/sse"
+
         mcp_config = {
             "mcpServers": {
-                "cerb-subagent": {"command": "cerb-mcp", "args": [], "env": {}}
+                "cerb-subagent": {
+                    "url": mcp_url,
+                    "transport": "sse"
+                }
             }
         }
 
-        import json
-
         mcp_config_str = json.dumps(mcp_config)
         self.default_command = f"{default_command} --mcp-config '{mcp_config_str}'"
+        self.use_docker = use_docker
+        self.mcp_port = mcp_port
+
+    def _get_container_name(self, session_id: str) -> str:
+        """Get Docker container name for a session"""
+        return f"cerb-{session_id}"
+
+    def _ensure_docker_image(self) -> None:
+        """Ensure Docker image exists, build if necessary"""
+        # Check if image exists
+        result = subprocess.run(
+            ["docker", "images", "-q", "cerb-image"],
+            capture_output=True,
+            text=True,
+        )
+
+        if not result.stdout.strip():
+            # Image doesn't exist, build it
+            dockerfile_path = Path(__file__).parent.parent.parent / "Dockerfile"
+            if not dockerfile_path.exists():
+                raise RuntimeError(f"Dockerfile not found at {dockerfile_path}")
+
+            logger.info(f"Building Docker image cerb-image...")
+            build_result = subprocess.run(
+                ["docker", "build", "-t", "cerb-image", "-f", str(dockerfile_path), str(dockerfile_path.parent)],
+                capture_output=True,
+                text=True,
+            )
+
+            if build_result.returncode != 0:
+                raise RuntimeError(f"Failed to build Docker image: {build_result.stderr}")
+            logger.info("Docker image built successfully")
+
+    def _start_container(self, session: "Session") -> None:
+        """Start Docker container for a session"""
+        if not session.work_path:
+            raise ValueError("Work path not set")
+
+        # Ensure Docker image exists
+        self._ensure_docker_image()
+
+        container_name = self._get_container_name(session.session_id)
+
+        # Check if container already exists
+        check_result = subprocess.run(
+            ["docker", "ps", "-a", "-q", "-f", f"name=^{container_name}$"],
+            capture_output=True,
+            text=True,
+        )
+
+        if check_result.stdout.strip():
+            # Container exists, check if it's running
+            running_check = subprocess.run(
+                ["docker", "ps", "-q", "-f", f"name=^{container_name}$"],
+                capture_output=True,
+                text=True,
+            )
+            if running_check.stdout.strip():
+                # Already running, just return
+                logger.info(f"Container {container_name} already running")
+                return
+            else:
+                # Stopped container, remove it
+                subprocess.run(["docker", "rm", container_name], capture_output=True)
+
+        # Prepare volume mounts
+        mounts = [
+            "-v", f"{session.work_path}:/workspace",
+        ]
+
+        # Add project mount if paired
+        if session.paired and session.source_path:
+            mounts.extend(["-v", f"{session.source_path}:/project"])
+            logger.info(f"Starting container in PAIRED mode: worktree + project")
+        else:
+            logger.info(f"Starting container in UNPAIRED mode: worktree only")
+
+        # Get API key from environment
+        env_vars = []
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+
+        if api_key:
+            env_vars.extend(["-e", f"ANTHROPIC_API_KEY={api_key}"])
+
+        # Start container (keep alive with tail -f)
+        cmd = [
+            "docker", "run", "-d",
+            "--name", container_name,
+            "--add-host", "host.docker.internal:host-gateway",  # Allow access to host
+            *env_vars,
+            *mounts,
+            "-w", "/workspace",
+            "cerb-image",
+            "tail", "-f", "/dev/null",
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            raise RuntimeError(f"Failed to start container: {result.stderr}")
+
+        logger.info(f"Container {container_name} started successfully")
+
+    def _stop_container(self, session_id: str) -> None:
+        """Stop and remove Docker container for a session"""
+        container_name = self._get_container_name(session_id)
+        logger.info(f"Stopping container {container_name}")
+        subprocess.run(["docker", "stop", container_name], capture_output=True)
+        subprocess.run(["docker", "rm", container_name], capture_output=True)
+
+    def _exec(self, session_id: str, cmd: list[str]) -> subprocess.CompletedProcess:
+        """Execute command (Docker or local mode)"""
+        if self.use_docker:
+            container_name = self._get_container_name(session_id)
+            return subprocess.run(
+                ["docker", "exec", "-i", container_name, *cmd],
+                env=tmux_env(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        else:
+            return subprocess.run(
+                cmd,
+                env=tmux_env(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
 
     def start(self, session: "Session") -> bool:
         """
@@ -67,15 +209,28 @@ class TmuxProtocol(AgentProtocol):
             logger.error(f"Session {session.session_id} has no work_path set")
             return False
 
-        # Create tmux session with the session_id in the work directory
-        result = tmux(
+        # Start Docker container if needed
+        if self.use_docker:
+            try:
+                self._start_container(session)
+            except Exception as e:
+                logger.error(f"Failed to start container: {e}")
+                return False
+
+        # Determine working directory
+        work_dir = "/workspace" if self.use_docker else session.work_path
+
+        # Create tmux session (works same way for both Docker and local)
+        result = self._exec(
+            session.session_id,
             [
+                "tmux",
                 "new-session",
                 "-d",  # detached
                 "-s",
                 session.session_id,
                 "-c",
-                session.work_path,  # start in work directory
+                work_dir,
                 self.default_command,
             ]
         )
@@ -87,7 +242,7 @@ class TmuxProtocol(AgentProtocol):
         if result.returncode == 0:
             # Send Enter to accept the trust prompt
             logger.info(
-                f"Starting 10 second wait before sending Enter to {session.session_id}"
+                f"Starting 2 second wait before sending Enter to {session.session_id}"
             )
             time.sleep(2)  # Give Claude a moment to start
             logger.info(f"Wait complete, now sending Enter to {session.session_id}")
@@ -108,14 +263,25 @@ class TmuxProtocol(AgentProtocol):
         Returns:
             dict: Status information including windows count and attached state
         """
-        # Check if session exists
-        check_result = tmux(["has-session", "-t", session_id])
+        # In Docker mode, first check if container is running
+        if self.use_docker:
+            container_name = self._get_container_name(session_id)
+            container_check = subprocess.run(
+                ["docker", "ps", "-q", "-f", f"name=^{container_name}$"],
+                capture_output=True,
+                text=True,
+            )
+            if not container_check.stdout.strip():
+                return {"exists": False}
+
+        # Check if tmux session exists (same for both modes via _exec)
+        check_result = self._exec(session_id, ["tmux", "has-session", "-t", session_id])
         if check_result.returncode != 0:
             return {"exists": False}
 
-        # Get session info
+        # Get session info (same for both modes via _exec)
         fmt = "#{session_windows}\t#{session_attached}"
-        result = tmux(["display-message", "-t", session_id, "-p", fmt])
+        result = self._exec(session_id, ["tmux", "display-message", "-t", session_id, "-p", fmt])
 
         if result.returncode != 0:
             return {"exists": True, "error": result.stderr}
@@ -131,10 +297,47 @@ class TmuxProtocol(AgentProtocol):
             return {"exists": True, "error": "Failed to parse tmux output"}
 
     def send_message(self, session_id: str, message: str) -> bool:
+        """Send a message to a tmux session (Docker or local mode)"""
         # Target pane 0 specifically (where Claude runs), not the active pane
         target = f"{session_id}:0.0"
-        # send the literal bytes of the message
-        r1 = tmux(["send-keys", "-t", target, "-l", "--", message])
-        # then send a carriage return (equivalent to pressing Enter)
-        r2 = tmux(["send-keys", "-t", target, "C-m"])
+        # Send the literal bytes of the message (same for both modes via _exec)
+        r1 = self._exec(session_id, ["tmux", "send-keys", "-t", target, "-l", "--", message])
+        # Then send a carriage return (equivalent to pressing Enter)
+        r2 = self._exec(session_id, ["tmux", "send-keys", "-t", target, "C-m"])
         return r1.returncode == 0 and r2.returncode == 0
+
+    def attach(self, session_id: str, target_pane: str = "2") -> bool:
+        """Attach to a tmux session in the specified pane"""
+        if self.use_docker:
+            # Docker mode: spawn docker exec command in the pane
+            container_name = self._get_container_name(session_id)
+            result = subprocess.run(
+                ["tmux", "respawn-pane", "-t", target_pane, "-k",
+                 "docker", "exec", "-it", container_name, "tmux", "attach-session", "-t", session_id],
+                capture_output=True,
+                text=True,
+            )
+        else:
+            # Local mode: attach to tmux on host
+            result = subprocess.run(
+                ["tmux", "respawn-pane", "-t", target_pane, "-k",
+                 "sh", "-c", f"TMUX= tmux attach-session -t {session_id}"],
+                capture_output=True,
+                text=True,
+            )
+
+        return result.returncode == 0
+
+    def delete(self, session_id: str) -> bool:
+        """Delete a tmux session and cleanup (Docker container or local)"""
+        if self.use_docker:
+            # Docker mode: stop and remove container (also kills tmux inside)
+            self._stop_container(session_id)
+        else:
+            # Local mode: kill the tmux session
+            subprocess.run(
+                ["tmux", "kill-session", "-t", session_id],
+                capture_output=True,
+                text=True,
+            )
+        return True

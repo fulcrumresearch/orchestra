@@ -93,8 +93,14 @@ def send_message_to_session(session_id: str, message: str) -> str:
 
 def main():
     """Entry point for MCP server."""
-    # Run the stdio server
-    mcp.run(transport="stdio")
+    import sys
+
+    # Get port from command line args or use default
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
+
+    # Run the HTTP/SSE server
+    print(f"Starting MCP server on port {port}...")
+    mcp.run(transport="sse", port=port, host="0.0.0.0")
 
 
 if __name__ == "__main__":

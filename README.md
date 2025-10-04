@@ -115,13 +115,28 @@ Executor sends: send_message_to_session(
 
 ## Architecture
 
-Cerberus uses git worktrees to isolate agent work:
-- Each executor gets its own branch and working directory
+### Git Worktrees + Docker Isolation
+
+Cerberus combines git worktrees with Docker containerization:
+
+**Worktrees (Visible on Host)**:
+- Each executor gets its own branch and working directory at `~/.kerberos/worktrees/`
 - Changes are tracked independently
 - No conflicts between concurrent agent work
 - Easy to review, test, and merge completed tasks
+- Worktrees are visible and editable in your editor
 
-Communication between agents uses MCP (Model Context Protocol):
+**Docker Containers (Isolated Execution)**:
+- Each session runs in its own Docker container
+- Agent commands execute in isolation with mounted worktree
+- Two modes:
+  - **Unpaired** (default): Agent only accesses worktree
+  - **Paired** (opt-in): Agent also accesses source project
+- Provides command isolation while keeping files accessible
+
+See [DOCKER.md](DOCKER.md) for detailed Docker architecture.
+
+**Communication (MCP)**:
 - Designers spawn executors with detailed instructions
 - Executors can message back with questions or completion status
 - Automated monitoring tracks agent activity
