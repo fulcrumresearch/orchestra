@@ -2,15 +2,14 @@
 """Unified UI - Session picker and monitor combined"""
 
 from __future__ import annotations
-import argparse
+import asyncio
 import subprocess
 import os
 import shutil
 from pathlib import Path
-import asyncio
+from typing import Any, Dict
 
 from textual.app import App, ComposeResult
-from textual.widget import Widget
 from textual.widgets import (
     Static,
     Label,
@@ -22,9 +21,8 @@ from textual.widgets import (
     Tabs,
     RichLog,
 )
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal
 from textual.binding import Binding
-from textual.reactive import reactive
 from rich.markup import escape
 
 from cerb_code.lib.sessions import (
@@ -38,7 +36,7 @@ from cerb_code.lib.tmux_agent import TmuxProtocol
 from cerb_code.lib.monitor import SessionMonitorWatcher
 from cerb_code.lib.file_watcher import FileWatcher, watch_designer_file
 from cerb_code.lib.logger import get_logger
-import re
+
 
 logger = get_logger(__name__)
 
@@ -842,7 +840,7 @@ class ModelMonitorTab(Container):
                         self.monitor_log.write(escaped_line, expand=True)
 
 
-START_MONITOR = False
+START_MONITOR = True
 
 
 def main():
