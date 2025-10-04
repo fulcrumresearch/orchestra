@@ -61,7 +61,9 @@ class TmuxProtocol(AgentProtocol):
         }
 
         mcp_config_str = json.dumps(mcp_config)
-        self.default_command = f"{default_command} --mcp-config '{mcp_config_str}'"
+        # TODO: Fix MCP config - currently causing session startup failures
+        # self.default_command = f"{default_command} --mcp-config '{mcp_config_str}'"
+        self.default_command = default_command
         self.use_docker = use_docker
         self.mcp_port = mcp_port
 
@@ -165,6 +167,32 @@ class TmuxProtocol(AgentProtocol):
 
         logger.info(f"Container {container_name} started successfully")
 
+        # Copy user's .claude directory into container (if it exists)
+        claude_dir = Path.home() / ".claude"
+        if claude_dir.exists():
+            copy_result = subprocess.run(
+                ["docker", "cp", f"{claude_dir}/.", f"{container_name}:/root/.claude/"],
+                capture_output=True,
+                text=True,
+            )
+            if copy_result.returncode == 0:
+                logger.info(f"Copied .claude directory into container")
+            else:
+                logger.warning(f"Failed to copy .claude directory: {copy_result.stderr}")
+
+        # Copy user's .claude.json config file into container (if it exists)
+        claude_json = Path.home() / ".claude.json"
+        if claude_json.exists():
+            copy_result = subprocess.run(
+                ["docker", "cp", f"{claude_json}", f"{container_name}:/root/.claude.json"],
+                capture_output=True,
+                text=True,
+            )
+            if copy_result.returncode == 0:
+                logger.info(f"Copied .claude.json into container")
+            else:
+                logger.warning(f"Failed to copy .claude.json: {copy_result.stderr}")
+
     def _stop_container(self, session_id: str) -> None:
         """Stop and remove Docker container for a session"""
         container_name = self._get_container_name(session_id)
@@ -236,7 +264,7 @@ class TmuxProtocol(AgentProtocol):
         )
 
         logger.info(
-            f"tmux new-session result: returncode={result.returncode}, stderr={result.stderr}"
+            f"tmux new-session result: returncode={result.returncode}, stdout={result.stdout}, stderr={result.stderr}"
         )
 
         if result.returncode == 0:
@@ -244,7 +272,7 @@ class TmuxProtocol(AgentProtocol):
             logger.info(
                 f"Starting 2 second wait before sending Enter to {session.session_id}"
             )
-            time.sleep(2)  # Give Claude a moment to start
+            time.sleep(2)  # Give claude a moment to start
             logger.info(f"Wait complete, now sending Enter to {session.session_id}")
             session.send_message("")
             logger.info(
