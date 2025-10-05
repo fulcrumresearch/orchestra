@@ -58,31 +58,12 @@ SYSTEM_PROMPT_TEMPLATE = dedent(
 
 
 def format_event_for_agent(evt: Dict[str, Any]) -> str:
-    event_type = evt.get("event") or evt.get("hook_event_name") or "UnknownEvent"
-    payload = evt.get("payload", evt)
-    session_id = payload.get("session_id") or payload.get("session") or "?"
-    tool_name = payload.get("tool_name") or payload.get("tool") or "-"
-    cwd = payload.get("cwd") or payload.get("working_dir") or "-"
-    transcript_path = payload.get("transcript_path", "-")
-    ts = (
-        evt.get("receivedAt")
-        or evt.get("received_at")
-        or datetime.now(timezone.utc).isoformat()
-    )
-    pretty_json = json.dumps(payload, indent=2, ensure_ascii=False)
-    return (
-        f"HOOK EVENT: {event_type}\n"
-        f"time: {ts}\n"
-        f"session_id: {session_id}\n"
-        f"tool: {tool_name}\n"
-        f"cwd: {cwd}\n"
-        f"transcript_path: {transcript_path}\n\n"
-        f"payload (JSON):\n```json\n{pretty_json}\n```\n\n"
-        "Please:\n"
-        "- Summarize significance.\n"
-        "- Flag risk & sensitive args.\n"
-        "- Append a one-line audit record to monitor.md (if Write is allowed).\n"
-    )
+    """Format event for the monitoring agent"""
+    event_type = evt.get("event", "UnknownEvent")
+    ts = evt.get("received_at", datetime.now(timezone.utc).isoformat())
+    pretty_json = json.dumps(evt, indent=2, ensure_ascii=False)
+
+    return f"HOOK EVENT: {event_type}\ntime: {ts}\n\n```json\n{pretty_json}\n```"
 
 
 @dataclass

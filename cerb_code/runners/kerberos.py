@@ -202,13 +202,15 @@ class UnifiedApp(App):
         self.agent = TmuxProtocol(
             default_command="claude",
             use_docker=config.get("use_docker", True),
-            mcp_port=config.get("mcp_port", 8765)
+            mcp_port=config.get("mcp_port", 8765),
         )
         self._last_session_mtime = None
         self._watch_task = None
         # Create a shared FileWatcher for monitoring files
         self.file_watcher = FileWatcher()
-        logger.info(f"KerberosApp initialized (Docker: {config.get('use_docker', True)})")
+        logger.info(
+            f"KerberosApp initialized (Docker: {config.get('use_docker', True)})"
+        )
 
     def compose(self) -> ComposeResult:
         if not shutil.which("tmux"):

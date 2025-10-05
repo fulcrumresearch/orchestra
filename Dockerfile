@@ -16,6 +16,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
 # Install Claude Code globally
 RUN npm install -g @anthropic-ai/claude-code
 
+# Copy and install hook forwarder script
+COPY cerb-hook-forward.sh /usr/local/bin/cerb-hook
+RUN chmod +x /usr/local/bin/cerb-hook
+
 # Set working directory
 WORKDIR /workspace
 

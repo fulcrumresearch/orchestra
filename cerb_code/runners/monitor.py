@@ -97,7 +97,6 @@ async def _shutdown() -> None:
 @app.post("/hook/{session_id}")
 async def hook(request: Request, session_id: str) -> Dict[str, str]:
     body = await request.body()
-    logging.info("Received hook request for session_id=%s", session_id)
     try:
         data = json.loads(body.decode("utf-8"))
     except Exception as exc:
@@ -106,23 +105,22 @@ async def hook(request: Request, session_id: str) -> Dict[str, str]:
     if not session_id:
         raise HTTPException(status_code=400, detail="session_id is required")
 
-    payload = data.get("payload") or {}
     source_path = data.get("source_path")
-
-    logging.info("Received hook request for session_id=%s", session_id)
-
     if not source_path:
         raise HTTPException(status_code=400, detail="source_path is required")
 
+    # Create clean event with received timestamp
     evt = {
         "received_at": datetime.now(timezone.utc).isoformat(),
         **data,
     }
+
+    event_type = evt.get("event", "UnknownEvent")
     logger.info(
-        f"Received event {evt['event']} for session {session_id} in {source_path}"
+        f"Received event {event_type} for session {session_id} in {source_path}"
     )
 
-    if evt["event"] == "Stop":
+    if event_type == "Stop":
         logger.info(f"Received stop event for session {session_id}")
         session = get_session(session_id, source_path)
         # Load sessions from this project to find parent
@@ -134,7 +132,7 @@ async def hook(request: Request, session_id: str) -> Dict[str, str]:
                 )
                 parent.send_message(f"Child session {session.session_id} stopped.")
 
-    worker = await get_or_create_worker(session_id, source_path, payload)
+    worker = await get_or_create_worker(session_id, source_path, evt)
 
     try:
         await worker.enqueue(evt)
@@ -149,9 +147,9 @@ def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8081
 
     print(f"Starting Cerb Monitor Server on port {port}")
-    print(f"Hook endpoint: http://127.0.0.1:{port}/hook/{{session_id}}")
+    print(f"Hook endpoint: http://0.0.0.0:{port}/hook/{{session_id}}")
 
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
 
 
 if __name__ == "__main__":
