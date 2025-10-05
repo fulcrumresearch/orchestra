@@ -124,7 +124,6 @@ Remember: You are working in a child worktree branch. Your changes will be revie
 
 PROJECT_CONF = """
 {
-  "defaultMode": "acceptEdits",
   "hooks": {
     "PostToolUse": [
       {
@@ -146,6 +145,28 @@ PROJECT_CONF = """
           }
         ]
       }
+    ]
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Edit",
+      "Glob",
+      "Grep",
+      "LS",
+      "MultiEdit",
+      "Read",
+      "Write",
+      "Bash(cat:*)",
+      "Bash(cp:*)",
+      "Bash(grep:*)",
+      "Bash(head:*)",
+      "Bash(mkdir:*)",
+      "Bash(pwd:*)",
+      "Bash(rg:*)",
+      "Bash(tail:*)",
+      "Bash(tree:*)",
+      "mcp__cerb-subagent"
     ]
   }
 }

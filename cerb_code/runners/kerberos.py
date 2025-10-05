@@ -2,15 +2,14 @@
 """Unified UI - Session picker and monitor combined"""
 
 from __future__ import annotations
-import argparse
+import asyncio
 import subprocess
 import os
 import shutil
 from pathlib import Path
-import asyncio
+from typing import Any, Dict
 
 from textual.app import App, ComposeResult
-from textual.widget import Widget
 from textual.widgets import (
     Static,
     Label,
@@ -22,9 +21,8 @@ from textual.widgets import (
     Tabs,
     RichLog,
 )
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal
 from textual.binding import Binding
-from textual.reactive import reactive
 from rich.markup import escape
 
 from cerb_code.lib.sessions import (
@@ -517,7 +515,7 @@ class UnifiedApp(App):
 
         # Respawn pane 1 (editor pane) with vim, wrapped in bash to keep pane alive after quit
         # When vim exits, show placeholder and keep shell running
-        vim_cmd = f"bash -c '$EDITOR {designer_md}; echo \"Press S to open spec editor\"; exec bash'"
+        vim_cmd = f"bash -c '$EDITOR {designer_md}; clear; echo \"Press S to open spec editor\"; exec bash'"
         result = subprocess.run(
             ["tmux", "respawn-pane", "-t", "1", "-k", vim_cmd],
             capture_output=True,
@@ -841,7 +839,7 @@ class ModelMonitorTab(Container):
                         self.monitor_log.write(escaped_line, expand=True)
 
 
-START_MONITOR = False
+START_MONITOR = True
 
 
 def main():
