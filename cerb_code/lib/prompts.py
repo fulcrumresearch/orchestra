@@ -151,7 +151,21 @@ PROJECT_CONF = """
     "defaultMode": "acceptEdits",
     "allow": [
       "Edit",
+      "Glob",
+      "Grep",
+      "LS",
+      "MultiEdit",
+      "Read",
       "Write",
+      "Bash(cat:*)",
+      "Bash(cp:*)",
+      "Bash(grep:*)",
+      "Bash(head:*)",
+      "Bash(mkdir:*)",
+      "Bash(pwd:*)",
+      "Bash(rg:*)",
+      "Bash(tail:*)",
+      "Bash(tree:*)",
       "mcp__cerb-subagent"
     ]
   }
