@@ -32,7 +32,7 @@ from cerb_code.lib.sessions import (
     save_sessions,
     SESSIONS_FILE,
 )
-from cerb_code.lib.tmux_agent import TmuxProtocol
+from cerb_code.lib.tmux_agent import TmuxProtocol, tmux
 from cerb_code.lib.monitor import SessionMonitorWatcher
 from cerb_code.lib.file_watcher import FileWatcher, watch_designer_file
 from cerb_code.lib.logger import get_logger
@@ -441,11 +441,7 @@ class UnifiedApp(App):
         session_to_delete = self.flat_sessions[index]
 
         # Kill the tmux session
-        subprocess.run(
-            ["tmux", "kill-session", "-t", session_to_delete.session_id],
-            capture_output=True,
-            text=True,
-        )
+        tmux(["kill-session", "-t", session_to_delete.session_id])
 
         # Remove from sessions list
         self.sessions = [
@@ -475,11 +471,7 @@ class UnifiedApp(App):
                 msg_cmd = (
                     "echo 'No active sessions. Press Ctrl+N to create a new session.'"
                 )
-                subprocess.run(
-                    ["tmux", "respawn-pane", "-t", "2", "-k", msg_cmd],
-                    capture_output=True,
-                    text=True,
-                )
+                tmux(["respawn-pane", "-t", "2", "-k", msg_cmd])
 
         # Keep focus on the session list
         self.set_focus(self.session_list)
@@ -512,11 +504,7 @@ class UnifiedApp(App):
         # Respawn pane 1 (editor pane) with vim, wrapped in bash to keep pane alive after quit
         # When vim exits, show placeholder and keep shell running
         vim_cmd = f"bash -c '$EDITOR {designer_md}; clear; echo \"Press S to open spec editor\"; exec bash'"
-        result = subprocess.run(
-            ["tmux", "respawn-pane", "-t", "1", "-k", vim_cmd],
-            capture_output=True,
-            text=True,
-        )
+        result = tmux(["respawn-pane", "-t", "1", "-k", vim_cmd])
 
         if result.returncode != 0:
             logger.error(f"Failed to open spec: {result.stderr}")
@@ -537,11 +525,7 @@ class UnifiedApp(App):
         # Respawn pane 1 with bash in the session's work directory
         # Keep the shell running and show current directory
         bash_cmd = f"bash -c 'cd {work_path} && exec bash'"
-        result = subprocess.run(
-            ["tmux", "respawn-pane", "-t", "1", "-k", bash_cmd],
-            capture_output=True,
-            text=True,
-        )
+        result = tmux(["respawn-pane", "-t", "1", "-k", bash_cmd])
 
         if result.returncode != 0:
             logger.error(f"Failed to open terminal: {result.stderr}")
@@ -569,20 +553,12 @@ class UnifiedApp(App):
                 # Failed to create session, show error in pane
                 logger.error(f"Failed to start session {session.session_id}")
                 error_cmd = f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
-                subprocess.run(
-                    ["tmux", "respawn-pane", "-t", "2", "-k", error_cmd],
-                    capture_output=True,
-                    text=True,
-                )
+                tmux(["respawn-pane", "-t", "2", "-k", error_cmd])
                 return
 
         # At this point, session exists - attach to it in pane 2
-        cmd = f"TMUX= tmux attach-session -t {session.session_id}"
-        subprocess.run(
-            ["tmux", "respawn-pane", "-t", "2", "-k", cmd],
-            capture_output=True,
-            text=True,
-        )
+        cmd = f"TMUX= tmux -L cerb attach-session -t {session.session_id}"
+        tmux(["respawn-pane", "-t", "2", "-k", cmd])
 
         # Don't auto-focus pane 2 - let user stay in the UI
 

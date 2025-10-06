@@ -18,12 +18,11 @@ def tmux_env() -> dict:
 
 
 def tmux(args: list[str]) -> subprocess.CompletedProcess:
-    """Execute tmux command"""
+    """Execute tmux command with dedicated server"""
     return subprocess.run(
-        ["tmux", *args],
+        ["tmux", "-L", "cerb", *args],
         env=tmux_env(),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
