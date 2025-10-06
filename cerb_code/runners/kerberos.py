@@ -6,6 +6,7 @@ import asyncio
 import subprocess
 import os
 import shutil
+import json
 from pathlib import Path
 from typing import Any, Dict
 
@@ -20,9 +21,12 @@ from textual.widgets import (
     Input,
     Tabs,
     RichLog,
+    Button,
+    Checkbox,
 )
-from textual.containers import Container, Horizontal
+from textual.containers import Container, Horizontal, Vertical
 from textual.binding import Binding
+from textual.screen import Screen
 from rich.markup import escape
 
 from cerb_code.lib.sessions import (
@@ -39,6 +43,65 @@ from cerb_code.lib.logger import get_logger
 
 
 logger = get_logger(__name__)
+
+
+class QuitDialog(Screen):
+    """Dialog for quit options"""
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+        Binding("ctrl+c", "cancel", "Cancel"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Static("Quit Cerb", id="quit-title"),
+            Static("Choose cleanup options:", id="quit-subtitle"),
+            Vertical(
+                Checkbox(
+                    "Clean up sessions.json for this project",
+                    value=True,
+                    id="cleanup-sessions",
+                ),
+                Checkbox(
+                    "Shutdown tmux server (kills all sessions)",
+                    value=False,
+                    id="shutdown-tmux",
+                ),
+                Static("", id="quit-spacer"),
+                Horizontal(
+                    Button("Cancel", id="cancel-btn"),
+                    Button("Quit", id="quit-btn", variant="error"),
+                    id="quit-buttons",
+                ),
+                id="quit-options",
+            ),
+            id="quit-dialog",
+        )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel-btn":
+            self.action_cancel()
+        elif event.button.id == "quit-btn":
+            self.action_quit()
+
+    def action_cancel(self) -> None:
+        """Cancel quit"""
+        self.dismiss()
+
+    def action_quit(self) -> None:
+        """Quit with selected options"""
+        cleanup_sessions = self.query_one("#cleanup-sessions", Checkbox).value
+        shutdown_tmux = self.query_one("#shutdown-tmux", Checkbox).value
+
+        # Perform cleanup
+        app = self.app
+        app._cleanup_on_exit(
+            cleanup_sessions=cleanup_sessions, shutdown_tmux=shutdown_tmux
+        )
+
+        # Exit the app
+        app.exit()
 
 
 class HUD(Static):
@@ -169,10 +232,49 @@ class UnifiedApp(App):
         height: 1fr;
         text-wrap: wrap;
     }
+
+    #quit-dialog {
+        width: 50%;
+        height: auto;
+        background: #1a1a1a;
+        border: solid #333333;
+        padding: 2;
+    }
+
+    #quit-title {
+        color: #00ff9f;
+        text-style: bold;
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    #quit-subtitle {
+        color: #cccccc;
+        text-align: center;
+        margin-bottom: 2;
+    }
+
+    #quit-options {
+        margin-bottom: 2;
+    }
+
+    Checkbox {
+        margin-bottom: 1;
+    }
+
+    #quit-buttons {
+        height: 3;
+        align: center middle;
+    }
+
+    #quit-buttons Button {
+        margin: 0 1;
+        min-width: 8;
+    }
 """
 
     BINDINGS = [
-        Binding("ctrl+q", "quit", "Quit", priority=True),
+        Binding("ctrl+q", "quit_app", "Quit", priority=True),
         Binding("ctrl+n", "new_session", "New Session", priority=True, show=True),
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
         Binding("ctrl+d", "delete_session", "Delete", priority=True),
@@ -594,6 +696,61 @@ class UnifiedApp(App):
     def _get_repo_name(self) -> str:
         """Get the current directory name"""
         return Path.cwd().name
+
+    def action_quit_app(self) -> None:
+        """Handle quit with cleanup options"""
+        # Show quit dialog
+        self.push_screen(QuitDialog())
+
+    def _cleanup_on_exit(
+        self, cleanup_sessions: bool = False, shutdown_tmux: bool = False
+    ) -> None:
+        """Perform cleanup operations before exit"""
+        logger.info("Starting cleanup operations...")
+
+        if cleanup_sessions:
+            logger.info("Cleaning up sessions.json...")
+            try:
+                # Remove sessions for current project directory
+                project_dir_str = str(Path.cwd().resolve())
+                if SESSIONS_FILE.exists():
+                    with open(SESSIONS_FILE, "r") as f:
+                        data = json.load(f)
+                        if isinstance(data, dict) and project_dir_str in data:
+                            del data[project_dir_str]
+                            with open(SESSIONS_FILE, "w") as f:
+                                json.dump(data, f, indent=2)
+                            logger.info(f"Removed sessions for {project_dir_str}")
+            except Exception as e:
+                logger.error(f"Failed to cleanup sessions: {e}")
+
+        if shutdown_tmux:
+            logger.info("Shutting down tmux server...")
+            try:
+                # Kill all sessions on the cerb server
+                result = tmux(["list-sessions", "-F", "#{session_name}"])
+                if result.returncode == 0 and result.stdout.strip():
+                    sessions = result.stdout.strip().split("\n")
+                    for session in sessions:
+                        if session.strip():
+                            tmux(["kill-session", "-t", session.strip()])
+                            logger.info(f"Killed session: {session.strip()}")
+
+                # Kill the server itself
+                tmux(["kill-server"])
+                logger.info("Tmux server shut down")
+            except Exception as e:
+                logger.error(f"Failed to shutdown tmux: {e}")
+
+        # Stop file watcher
+        if hasattr(self, "file_watcher"):
+            try:
+                asyncio.create_task(self.file_watcher.stop())
+                logger.info("File watcher stopped")
+            except Exception as e:
+                logger.error(f"Failed to stop file watcher: {e}")
+
+        logger.info("Cleanup completed")
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle session selection from list when clicked"""
