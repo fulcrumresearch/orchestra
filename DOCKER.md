@@ -20,6 +20,7 @@ Each Cerberus session runs in its own Docker container:
 - ✅ Maximum security and isolation
 
 **Paired Mode (Optional)**
+- NOT CURRENTLY IMPLEMENTED
 - Container mounts both worktree (`/workspace`) and user project (`/project`)
 - Agent can access and modify both locations
 - Only ONE session can be paired at a time

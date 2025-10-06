@@ -37,7 +37,6 @@ from cerb_code.lib.monitor import SessionMonitorWatcher
 from cerb_code.lib.file_watcher import FileWatcher, watch_designer_file
 from cerb_code.lib.logger import get_logger
 from cerb_code.lib.config import load_config
-import re
 
 logger = get_logger(__name__)
 

@@ -95,7 +95,7 @@ def send_message_to_session(session_id: str, message: str) -> str:
 
 def main():
     """Entry point for MCP server."""
-    # Run the HTTP/SSE server
+    # Run the SSE server
     print(f"Starting MCP server on port {port}...")
     mcp.run(transport="sse")
 

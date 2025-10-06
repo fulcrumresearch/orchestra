@@ -1,5 +1,7 @@
+import json
 import os
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Dict, Any, TYPE_CHECKING
@@ -188,8 +190,6 @@ class TmuxProtocol(AgentProtocol):
 
     def _configure_mcp_in_container(self, container_name: str) -> None:
         """Copy .claude.json and inject MCP configuration into container"""
-        import json
-        import tempfile
 
         # Determine MCP URL based on mode
         if self.use_docker:
@@ -324,7 +324,7 @@ class TmuxProtocol(AgentProtocol):
             logger.info(
                 f"Starting 2 second wait before sending Enter to {session.session_id}"
             )
-            time.sleep(2)  # Give claude a moment to start
+            time.sleep(2)  # Give Claude a moment to start
             logger.info(f"Wait complete, now sending Enter to {session.session_id}")
             session.send_message("")
             logger.info(
