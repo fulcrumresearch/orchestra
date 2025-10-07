@@ -92,6 +92,35 @@ class TmuxProtocol(AgentProtocol):
                 )
             logger.info("Docker image built successfully")
 
+    def _ensure_credentials_volume(
+        self, volume_name: str = "cerb-claude-credentials"
+    ) -> str:
+        """Ensure a persistent Docker volume exists for Claude credentials.
+
+        Returns the volume name. This volume will be mounted and used to persist
+        login artifacts across containers so the user authenticates only once.
+        """
+        # Check if volume exists
+        check = subprocess.run(
+            ["docker", "volume", "ls", "-q", "--filter", f"name=^{volume_name}$"],
+            capture_output=True,
+            text=True,
+        )
+        if not check.stdout.strip():
+            create = subprocess.run(
+                ["docker", "volume", "create", volume_name],
+                capture_output=True,
+                text=True,
+            )
+            if create.returncode != 0:
+                raise RuntimeError(
+                    f"Failed to create credentials volume {volume_name}: {create.stderr}"
+                )
+            logger.info(f"Created credentials volume {volume_name}")
+        else:
+            logger.info(f"Using existing credentials volume {volume_name}")
+        return volume_name
+
     def _start_container(self, session: "Session") -> None:
         """Start Docker container for a session"""
         if not session.work_path:
@@ -137,6 +166,10 @@ class TmuxProtocol(AgentProtocol):
         else:
             logger.info(f"Starting container in UNPAIRED mode: worktree only")
 
+        # Ensure persistent credentials volume exists and mount it
+        cred_volume = self._ensure_credentials_volume()
+        mounts.extend(["-v", f"{cred_volume}:/persist/claude"])
+
         # Get API key from environment
         env_vars = []
         api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -169,6 +202,46 @@ class TmuxProtocol(AgentProtocol):
             raise RuntimeError(f"Failed to start container: {result.stderr}")
 
         logger.info(f"Container {container_name} started successfully")
+
+        # Ensure symlinks inside the container point to the persistent volume
+        # so that /root/.claude and /root/.claude.json are backed by the volume.
+        setup_cmd = [
+            "docker",
+            "exec",
+            "-i",
+            container_name,
+            "sh",
+            "-lc",
+            (
+                "set -e; "
+                # Create directories in the mounted volume
+                "mkdir -p /persist/claude/.claude; "
+                # If a real directory exists, migrate its contents then replace with symlink
+                "if [ -d /root/.claude ] && [ ! -L /root/.claude ]; then "
+                "cp -a /root/.claude/. /persist/claude/.claude/ 2>/dev/null || true; "
+                "rm -rf /root/.claude; "
+                "fi; "
+                # Point $HOME/.claude to the persistent volume
+                "ln -sfn /persist/claude/.claude /root/.claude; "
+                # Handle .claude.json file similarly
+                "touch /persist/claude/.claude.json; "
+                "if [ -f /root/.claude.json ] && [ ! -L /root/.claude.json ]; then "
+                "cp -a /root/.claude.json /persist/claude/.claude.json 2>/dev/null || true; "
+                "rm -f /root/.claude.json; "
+                "fi; "
+                # Point $HOME/.claude.json to the persistent volume
+                "ln -sfn /persist/claude/.claude.json /root/.claude.json"
+            ),
+        ]
+        setup_result = subprocess.run(setup_cmd, capture_output=True, text=True)
+        if setup_result.returncode == 0:
+            logger.info(
+                "Configured persistent Claude credentials volume and symlinks in container"
+            )
+        else:
+            logger.warning(
+                f"Failed to configure persistent credentials volume: {setup_result.stderr}"
+            )
 
         # Copy user's .claude directory into container (if it exists)
         claude_dir = Path.home() / ".claude"
@@ -219,9 +292,29 @@ class TmuxProtocol(AgentProtocol):
             tmp_path = tmp.name
 
         try:
-            # Copy modified config into container
+            # Write the config into the persistent path (if present) to survive container lifecycle
+            # Prefer writing via docker exec into /persist/claude/.claude.json if it exists
+            exec_write = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "-i",
+                    container_name,
+                    "sh",
+                    "-lc",
+                    "mkdir -p /persist/claude; touch /persist/claude/.claude.json",
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            target_path = f"{container_name}:/root/.claude.json"
+            # If persistent mount exists, prefer that as the target for durability
+            if exec_write.returncode == 0:
+                target_path = f"{container_name}:/persist/claude/.claude.json"
+
             copy_result = subprocess.run(
-                ["docker", "cp", tmp_path, f"{container_name}:/root/.claude.json"],
+                ["docker", "cp", tmp_path, target_path],
                 capture_output=True,
                 text=True,
             )
