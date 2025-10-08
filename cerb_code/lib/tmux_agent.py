@@ -572,6 +572,50 @@ class TmuxProtocol(AgentProtocol):
             if result.returncode != 0:
                 return False, "Source directory has staged changes. Commit or stash first."
 
+            # Auto-commit changes in worktree before merging
+            # Stage modified tracked files
+            subprocess.run(
+                ["git", "add", "-u"],
+                cwd=session.work_path,
+                capture_output=True
+            )
+
+            # Find untracked files in worktree that are not in source
+            result = subprocess.run(
+                ["git", "ls-files", "--others", "--exclude-standard"],
+                cwd=session.work_path,
+                capture_output=True,
+                text=True
+            )
+            untracked_files = result.stdout.strip().split("\n") if result.stdout.strip() else []
+
+            # Stage untracked files that don't exist in source
+            for file in untracked_files:
+                if file:
+                    source_file = Path(session.source_path) / file
+                    if not source_file.exists():
+                        subprocess.run(
+                            ["git", "add", file],
+                            cwd=session.work_path,
+                            capture_output=True
+                        )
+
+            # Commit if there are changes
+            result = subprocess.run(
+                ["git", "diff", "--cached", "--quiet"],
+                cwd=session.work_path,
+                capture_output=True
+            )
+            if result.returncode != 0:
+                # There are staged changes, commit them
+                subprocess.run(
+                    ["git", "commit", "-m", "Auto-commit before pairing"],
+                    cwd=session.work_path,
+                    capture_output=True,
+                    text=True
+                )
+                logger.info(f"Auto-committed changes in worktree {session.work_path}")
+
             # Git merge (no commit)
             result = subprocess.run(
                 ["git", "merge", "--no-commit", session.session_id],
