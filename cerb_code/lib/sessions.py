@@ -7,6 +7,7 @@ import time
 
 from cerb_code.lib.tmux_agent import TmuxProtocol
 from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
+from .config import load_config
 
 SESSIONS_FILE = Path.home() / ".kerberos" / "sessions.json"
 
@@ -25,6 +26,7 @@ class Session:
         source_path: str = "",
         work_path: Optional[str] = None,
         active: bool = False,
+        use_docker: Optional[bool] = None,
     ):
         self.session_id = session_id
         self.agent_type = agent_type
@@ -34,6 +36,11 @@ class Session:
         self.active = active
         self.paired = False  # Runtime only, not persisted
         self.children: List[Session] = []
+        # Default use_docker based on agent type: DESIGNER=False, EXECUTOR=True
+        if use_docker is None:
+            self.use_docker = agent_type == AgentType.EXECUTOR
+        else:
+            self.use_docker = use_docker
 
     def start(self) -> bool:
         """Start the agent using the configured protocol"""
@@ -45,7 +52,7 @@ class Session:
         """Delete the session using the configured protocol"""
         if not self.protocol:
             return False
-        return self.protocol.delete(self.session_id)
+        return self.protocol.delete(self.session_id, self.use_docker)
 
     def add_instructions(self) -> None:
         """Add agent-specific instructions to CLAUDE.md"""
@@ -98,6 +105,8 @@ class Session:
             "agent_type": self.agent_type.value,
             "source_path": self.source_path,
             "work_path": self.work_path,
+            "use_docker": self.use_docker,
+            "paired": self.paired,
             "children": [child.to_dict() for child in self.children],
         }
 
@@ -111,7 +120,9 @@ class Session:
             source_path=data.get("source_path", ""),
             work_path=data.get("work_path"),
             active=data.get("active", False),
+            use_docker=data.get("use_docker"),  # Will use default if None
         )
+        session.paired = data.get("paired", False)
         # Recursively load children (they inherit the same protocol)
         session.children = [
             cls.from_dict(child_data, protocol)
@@ -185,11 +196,16 @@ class Session:
         if not self.work_path:
             raise ValueError("Work path is not set")
 
+        # Load config to get use_docker setting for executors
+        config = load_config()
+        executor_use_docker = config.get("use_docker", True)
+
         new_session = Session(
             session_id=session_id,
             agent_type=AgentType.EXECUTOR,
             protocol=self.protocol,  # Inherit parent's protocol
             source_path=self.work_path,  # Child's source is parent's work directory
+            use_docker=executor_use_docker,  # Use config value
         )
 
         # Prepare the child session (creates its own worktree)
@@ -230,29 +246,56 @@ class Session:
     def display_name(self) -> str:
         """Get display name for UI"""
         status = "●" if self.active else "○"
-        return f"{status} {self.session_id}"
+        paired_indicator = "[P] " if self.paired else ""
+        return f"{status} {paired_indicator}{self.session_id}"
 
     def send_message(self, message: str) -> None:
         """Send a message to the session"""
-        self.protocol.send_message(self.session_id, message)
+        self.protocol.send_message(self.session_id, message, self.use_docker)
+
+    def toggle_pairing(self) -> tuple[bool, str]:
+        """
+        Toggle pairing mode for this session.
+        Returns: (success, error_message)
+        """
+        if not self.protocol:
+            return False, "No protocol configured"
+
+        # Let protocol handle all the implementation details
+        return self.protocol.toggle_pairing(self)
 
 
 def ensure_default_session(sessions: List[Session], protocol=None) -> List[Session]:
     """Ensure main session exists at the beginning of the sessions list"""
-    # Look for existing main session
+    # Determine the default session ID from current git branch
+    default_session_id = "main"  # Fallback
+    try:
+        result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=Path.cwd(),
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            default_session_id = result.stdout.strip()
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        pass  # Use fallback "main"
+
+    # Look for existing default session
     main_session = None
     other_sessions = []
 
     for session in sessions:
-        if session.session_id == "main":
+        if session.session_id == default_session_id:
             main_session = session
         else:
             other_sessions.append(session)
 
-    # If main doesn't exist, create it
+    # If default session doesn't exist, create it
     if not main_session:
         main_session = Session(
-            session_id="main",
+            session_id=default_session_id,
             agent_type=AgentType.DESIGNER,
             protocol=protocol,
             source_path=str(Path.cwd()),

@@ -176,6 +176,7 @@ class UnifiedApp(App):
         Binding("ctrl+n", "new_session", "New Session", priority=True, show=True),
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
         Binding("ctrl+d", "delete_session", "Delete", priority=True),
+        Binding("p", "toggle_pairing", "Toggle Pairing", priority=True, show=True),
         Binding("s", "open_spec", "Open Spec", priority=True),
         Binding("t", "open_terminal", "Open Terminal", priority=True),
         Binding("up", "cursor_up", show=False),
@@ -198,7 +199,6 @@ class UnifiedApp(App):
         config = load_config()
         self.agent = TmuxProtocol(
             default_command="claude",
-            use_docker=config.get("use_docker", True),
             mcp_port=config.get("mcp_port", 8765),
         )
         self._last_session_mtime = None
@@ -279,7 +279,7 @@ class UnifiedApp(App):
         # Add sessions to list with hierarchy
         def add_session_tree(session, indent=0):
             # Update status for this session
-            status = self.agent.get_status(session.session_id)
+            status = self.agent.get_status(session.session_id, session.use_docker)
             session.active = status.get("attached", False)
 
             # Keep track in flat list for selection
@@ -490,6 +490,38 @@ class UnifiedApp(App):
         # Refresh the list
         self.call_later(self.action_refresh)
 
+    def action_toggle_pairing(self) -> None:
+        """Toggle pairing mode for the currently selected session"""
+        # Get the currently highlighted session from the list
+        index = self.session_list.index
+        if index is None or index >= len(self.flat_sessions):
+            return
+
+        session = self.flat_sessions[index]
+
+        # Show status message
+        pairing_mode = "paired" if not session.paired else "unpaired"
+        self.hud.set_session(f"Switching to {pairing_mode} mode...")
+
+        # Toggle pairing
+        success, error_msg = session.toggle_pairing()
+
+        if not success:
+            # Show error message
+            self.hud.set_session(f"Error: {error_msg}")
+            logger.error(f"Failed to toggle pairing: {error_msg}")
+            return
+
+        # Save sessions to persist paired state
+        save_sessions(self.sessions)
+
+        # Update UI
+        paired_indicator = "[P] " if session.paired else ""
+        self.hud.set_session(f"{paired_indicator}{session.session_id}")
+
+        # Refresh the list to show pairing status
+        self.call_later(self.action_refresh)
+
     def action_open_spec(self) -> None:
         """Open designer.md in vim in a split tmux pane"""
         # Get the highlighted session from the list
@@ -508,9 +540,7 @@ class UnifiedApp(App):
             logger.info(f"Created {designer_md}")
 
         # Register file watcher for designer.md to notify session on changes
-        watch_designer_file(
-            self.file_watcher, self.agent, designer_md, session.session_id
-        )
+        watch_designer_file(self.file_watcher, designer_md, session)
 
         # Respawn pane 1 (editor pane) with vim, wrapped in bash to keep pane alive after quit
         # When vim exits, show placeholder and keep shell running
@@ -559,7 +589,7 @@ class UnifiedApp(App):
         session.active = True
 
         # Check session status using the protocol
-        status = self.agent.get_status(session.session_id)
+        status = self.agent.get_status(session.session_id, session.use_docker)
 
         if not status.get("exists", False):
             # Session doesn't exist, create it
@@ -580,7 +610,7 @@ class UnifiedApp(App):
                 return
 
         # At this point, session exists - attach to it in pane 2
-        self.agent.attach(session.session_id, target_pane="2")
+        self.agent.attach(session.session_id, target_pane="2", use_docker=session.use_docker)
 
         # Don't auto-focus pane 2 - let user stay in the UI
 

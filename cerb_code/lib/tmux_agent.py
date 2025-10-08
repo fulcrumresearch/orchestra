@@ -37,7 +37,6 @@ class TmuxProtocol(AgentProtocol):
     def __init__(
         self,
         default_command: str = "claude",
-        use_docker: bool = True,
         mcp_port: int = 8765,
     ):
         """
@@ -45,11 +44,9 @@ class TmuxProtocol(AgentProtocol):
 
         Args:
             default_command: Default command to run when starting a session
-            use_docker: Whether to use Docker containers (default: True)
             mcp_port: Port where MCP server is running (default: 8765)
         """
         self.default_command = default_command
-        self.use_docker = use_docker
         self.mcp_port = mcp_port
 
     def _get_container_name(self, session_id: str) -> str:
@@ -154,24 +151,31 @@ class TmuxProtocol(AgentProtocol):
                 subprocess.run(["docker", "rm", container_name], capture_output=True)
 
         # Prepare volume mounts
-        mounts = [
-            "-v",
-            f"{session.work_path}:/workspace",
-        ]
+        env_vars = []
 
-        # Add project mount if paired
-        if session.paired and session.source_path:
-            mounts.extend(["-v", f"{session.source_path}:/project"])
-            logger.info(f"Starting container in PAIRED mode: worktree + project")
+        if session.paired:
+            # Paired mode: source at /workspace, persistent .claude
+            mounts = ["-v", f"{session.source_path}:/workspace"]
+
+            # Mount persistent .claude directory
+            claude_session_dir = Path.home() / ".kerberos" / "claude-sessions" / session.session_id
+            claude_session_dir.mkdir(parents=True, exist_ok=True)
+            mounts.extend(["-v", f"{claude_session_dir}:/claude-session"])
+            env_vars.extend(["-e", "CLAUDE_CONFIG_DIR=/claude-session"])
+
+            logger.info(f"Starting container in PAIRED mode: source at /workspace")
         else:
-            logger.info(f"Starting container in UNPAIRED mode: worktree only")
+            # Unpaired mode: worktree at /workspace
+            mounts = ["-v", f"{session.work_path}:/workspace"]
+            env_vars.extend(["-e", "CLAUDE_CONFIG_DIR=/workspace/.claude"])
+
+            logger.info(f"Starting container in UNPAIRED mode: worktree at /workspace")
 
         # Ensure persistent credentials volume exists and mount it
         cred_volume = self._ensure_credentials_volume()
         mounts.extend(["-v", f"{cred_volume}:/persist/claude"])
 
         # Get API key from environment
-        env_vars = []
         api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 
         if api_key:
@@ -264,11 +268,8 @@ class TmuxProtocol(AgentProtocol):
     def _configure_mcp_in_container(self, container_name: str) -> None:
         """Copy .claude.json and inject MCP configuration into container"""
 
-        # Determine MCP URL based on mode
-        if self.use_docker:
-            mcp_url = f"http://host.docker.internal:{self.mcp_port}/sse"
-        else:
-            mcp_url = f"http://localhost:{self.mcp_port}/sse"
+        # MCP URL for Docker container (always uses host.docker.internal since this method only runs for Docker)
+        mcp_url = f"http://host.docker.internal:{self.mcp_port}/sse"
 
         # Load user's .claude.json if it exists
         claude_json_path = Path.home() / ".claude.json"
@@ -337,9 +338,9 @@ class TmuxProtocol(AgentProtocol):
         subprocess.run(["docker", "stop", container_name], capture_output=True)
         subprocess.run(["docker", "rm", container_name], capture_output=True)
 
-    def _exec(self, session_id: str, cmd: list[str]) -> subprocess.CompletedProcess:
+    def _exec(self, session_id: str, cmd: list[str], use_docker: bool) -> subprocess.CompletedProcess:
         """Execute command (Docker or local mode)"""
-        if self.use_docker:
+        if use_docker:
             container_name = self._get_container_name(session_id)
             # Pass TERM environment variable to Docker container
             return subprocess.run(
@@ -383,7 +384,7 @@ class TmuxProtocol(AgentProtocol):
             return False
 
         # Start Docker container if needed
-        if self.use_docker:
+        if session.use_docker:
             try:
                 self._start_container(session)
             except Exception as e:
@@ -391,7 +392,7 @@ class TmuxProtocol(AgentProtocol):
                 return False
 
         # Determine working directory
-        work_dir = "/workspace" if self.use_docker else session.work_path
+        work_dir = "/workspace" if session.use_docker else session.work_path
 
         # Create tmux session (works same way for both Docker and local)
         result = self._exec(
@@ -406,6 +407,7 @@ class TmuxProtocol(AgentProtocol):
                 work_dir,
                 self.default_command,
             ],
+            session.use_docker,
         )
 
         logger.info(
@@ -426,18 +428,19 @@ class TmuxProtocol(AgentProtocol):
 
         return result.returncode == 0
 
-    def get_status(self, session_id: str) -> Dict[str, Any]:
+    def get_status(self, session_id: str, use_docker: bool) -> Dict[str, Any]:
         """
         Get status information for a tmux session.
 
         Args:
             session_id: ID of the session
+            use_docker: Whether this session uses Docker
 
         Returns:
             dict: Status information including windows count and attached state
         """
         # In Docker mode, first check if container is running
-        if self.use_docker:
+        if use_docker:
             container_name = self._get_container_name(session_id)
             container_check = subprocess.run(
                 ["docker", "ps", "-q", "-f", f"name=^{container_name}$"],
@@ -448,14 +451,14 @@ class TmuxProtocol(AgentProtocol):
                 return {"exists": False}
 
         # Check if tmux session exists (same for both modes via _exec)
-        check_result = self._exec(session_id, ["tmux", "has-session", "-t", session_id])
+        check_result = self._exec(session_id, ["tmux", "has-session", "-t", session_id], use_docker)
         if check_result.returncode != 0:
             return {"exists": False}
 
         # Get session info (same for both modes via _exec)
         fmt = "#{session_windows}\t#{session_attached}"
         result = self._exec(
-            session_id, ["tmux", "display-message", "-t", session_id, "-p", fmt]
+            session_id, ["tmux", "display-message", "-t", session_id, "-p", fmt], use_docker
         )
 
         if result.returncode != 0:
@@ -471,21 +474,21 @@ class TmuxProtocol(AgentProtocol):
         except (ValueError, IndexError):
             return {"exists": True, "error": "Failed to parse tmux output"}
 
-    def send_message(self, session_id: str, message: str) -> bool:
+    def send_message(self, session_id: str, message: str, use_docker: bool) -> bool:
         """Send a message to a tmux session (Docker or local mode)"""
         # Target pane 0 specifically (where Claude runs), not the active pane
         target = f"{session_id}:0.0"
         # Send the literal bytes of the message (same for both modes via _exec)
         r1 = self._exec(
-            session_id, ["tmux", "send-keys", "-t", target, "-l", "--", message]
+            session_id, ["tmux", "send-keys", "-t", target, "-l", "--", message], use_docker
         )
         # Then send a carriage return (equivalent to pressing Enter)
-        r2 = self._exec(session_id, ["tmux", "send-keys", "-t", target, "C-m"])
+        r2 = self._exec(session_id, ["tmux", "send-keys", "-t", target, "C-m"], use_docker)
         return r1.returncode == 0 and r2.returncode == 0
 
-    def attach(self, session_id: str, target_pane: str = "2") -> bool:
+    def attach(self, session_id: str, target_pane: str = "2", use_docker: bool = False) -> bool:
         """Attach to a tmux session in the specified pane"""
-        if self.use_docker:
+        if use_docker:
             # Docker mode: spawn docker exec command in the pane
             container_name = self._get_container_name(session_id)
             result = subprocess.run(
@@ -526,9 +529,9 @@ class TmuxProtocol(AgentProtocol):
 
         return result.returncode == 0
 
-    def delete(self, session_id: str) -> bool:
+    def delete(self, session_id: str, use_docker: bool) -> bool:
         """Delete a tmux session and cleanup (Docker container or local)"""
-        if self.use_docker:
+        if use_docker:
             # Docker mode: stop and remove container (also kills tmux inside)
             self._stop_container(session_id)
         else:
@@ -539,3 +542,67 @@ class TmuxProtocol(AgentProtocol):
                 text=True,
             )
         return True
+
+    def toggle_pairing(self, session: "Session") -> tuple[bool, str]:
+        """
+        Toggle pairing mode for a session.
+        Returns: (success, error_message)
+        """
+        import shutil
+
+        if not session.work_path or not session.source_path:
+            return False, "Session not properly initialized"
+
+        # Switching to paired mode
+        if not session.paired:
+            # Safety check: source must have clean working tree
+            result = subprocess.run(
+                ["git", "diff", "--quiet"],
+                cwd=session.source_path,
+                capture_output=True
+            )
+            if result.returncode != 0:
+                return False, "Source directory has uncommitted changes. Commit or stash first."
+
+            result = subprocess.run(
+                ["git", "diff", "--cached", "--quiet"],
+                cwd=session.source_path,
+                capture_output=True
+            )
+            if result.returncode != 0:
+                return False, "Source directory has staged changes. Commit or stash first."
+
+            # Git merge (no commit)
+            result = subprocess.run(
+                ["git", "merge", "--no-commit", session.session_id],
+                cwd=session.source_path,
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                # Check if it's "already up to date"
+                if "Already up to date" not in result.stdout:
+                    return False, f"Git merge failed: {result.stderr}"
+
+            # Copy conversation from worktree to persistent location
+            worktree_claude = Path(session.work_path) / ".claude"
+            persistent_claude = Path.home() / ".kerberos" / "claude-sessions" / session.session_id
+
+            if worktree_claude.exists():
+                persistent_claude.parent.mkdir(parents=True, exist_ok=True)
+                if persistent_claude.exists():
+                    shutil.rmtree(persistent_claude)
+                shutil.copytree(worktree_claude, persistent_claude)
+                logger.info(f"Copied conversation from worktree to {persistent_claude}")
+
+        # Toggle the flag
+        session.paired = not session.paired
+
+        # Restart container with new mounts
+        logger.info(f"Restarting container for session {session.session_id} (paired={session.paired})")
+        self.delete(session.session_id, session.use_docker)
+
+        if not self.start(session):
+            return False, "Failed to restart container"
+
+        return True, ""
