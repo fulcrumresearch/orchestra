@@ -153,27 +153,14 @@ class TmuxProtocol(AgentProtocol):
         # Prepare volume mounts
         env_vars = []
 
-        if session.paired:
-            # Paired mode: source at /workspace, persistent .claude
-            mounts = ["-v", f"{session.source_path}:/workspace"]
+        # Always mount worktree at /workspace
+        # In paired mode, source_path is a symlink to work_path, so user sees changes there
+        mounts = ["-v", f"{session.work_path}:/workspace"]
 
-            # Mount persistent .claude directory
-            claude_session_dir = Path.home() / ".kerberos" / "claude-sessions" / session.session_id
-            claude_session_dir.mkdir(parents=True, exist_ok=True)
-            mounts.extend(["-v", f"{claude_session_dir}:/claude-session"])
-            env_vars.extend(["-e", "CLAUDE_CONFIG_DIR=/claude-session"])
+        # Don't set CLAUDE_CONFIG_DIR - let Claude use default $HOME/.claude in container
 
-            logger.info(f"Starting container in PAIRED mode: source at /workspace")
-        else:
-            # Unpaired mode: worktree at /workspace
-            mounts = ["-v", f"{session.work_path}:/workspace"]
-            env_vars.extend(["-e", "CLAUDE_CONFIG_DIR=/workspace/.claude"])
-
-            logger.info(f"Starting container in UNPAIRED mode: worktree at /workspace")
-
-        # Ensure persistent credentials volume exists and mount it
-        cred_volume = self._ensure_credentials_volume()
-        mounts.extend(["-v", f"{cred_volume}:/persist/claude"])
+        mode = "PAIRED (source symlinked)" if session.paired else "UNPAIRED"
+        logger.info(f"Starting container in {mode} mode: worktree at /workspace")
 
         # Get API key from environment
         api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -206,46 +193,6 @@ class TmuxProtocol(AgentProtocol):
             raise RuntimeError(f"Failed to start container: {result.stderr}")
 
         logger.info(f"Container {container_name} started successfully")
-
-        # Ensure symlinks inside the container point to the persistent volume
-        # so that /root/.claude and /root/.claude.json are backed by the volume.
-        setup_cmd = [
-            "docker",
-            "exec",
-            "-i",
-            container_name,
-            "sh",
-            "-lc",
-            (
-                "set -e; "
-                # Create directories in the mounted volume
-                "mkdir -p /persist/claude/.claude; "
-                # If a real directory exists, migrate its contents then replace with symlink
-                "if [ -d /root/.claude ] && [ ! -L /root/.claude ]; then "
-                "cp -a /root/.claude/. /persist/claude/.claude/ 2>/dev/null || true; "
-                "rm -rf /root/.claude; "
-                "fi; "
-                # Point $HOME/.claude to the persistent volume
-                "ln -sfn /persist/claude/.claude /root/.claude; "
-                # Handle .claude.json file similarly
-                "touch /persist/claude/.claude.json; "
-                "if [ -f /root/.claude.json ] && [ ! -L /root/.claude.json ]; then "
-                "cp -a /root/.claude.json /persist/claude/.claude.json 2>/dev/null || true; "
-                "rm -f /root/.claude.json; "
-                "fi; "
-                # Point $HOME/.claude.json to the persistent volume
-                "ln -sfn /persist/claude/.claude.json /root/.claude.json"
-            ),
-        ]
-        setup_result = subprocess.run(setup_cmd, capture_output=True, text=True)
-        if setup_result.returncode == 0:
-            logger.info(
-                "Configured persistent Claude credentials volume and symlinks in container"
-            )
-        else:
-            logger.warning(
-                f"Failed to configure persistent credentials volume: {setup_result.stderr}"
-            )
 
         # Copy user's .claude directory into container (if it exists)
         claude_dir = Path.home() / ".claude"
@@ -293,29 +240,9 @@ class TmuxProtocol(AgentProtocol):
             tmp_path = tmp.name
 
         try:
-            # Write the config into the persistent path (if present) to survive container lifecycle
-            # Prefer writing via docker exec into /persist/claude/.claude.json if it exists
-            exec_write = subprocess.run(
-                [
-                    "docker",
-                    "exec",
-                    "-i",
-                    container_name,
-                    "sh",
-                    "-lc",
-                    "mkdir -p /persist/claude; touch /persist/claude/.claude.json",
-                ],
-                capture_output=True,
-                text=True,
-            )
-
-            target_path = f"{container_name}:/root/.claude.json"
-            # If persistent mount exists, prefer that as the target for durability
-            if exec_write.returncode == 0:
-                target_path = f"{container_name}:/persist/claude/.claude.json"
-
+            # Copy MCP config directly to container
             copy_result = subprocess.run(
-                ["docker", "cp", tmp_path, target_path],
+                ["docker", "cp", tmp_path, f"{container_name}:/root/.claude.json"],
                 capture_output=True,
                 text=True,
             )
@@ -338,7 +265,9 @@ class TmuxProtocol(AgentProtocol):
         subprocess.run(["docker", "stop", container_name], capture_output=True)
         subprocess.run(["docker", "rm", container_name], capture_output=True)
 
-    def _exec(self, session_id: str, cmd: list[str], use_docker: bool) -> subprocess.CompletedProcess:
+    def _exec(
+        self, session_id: str, cmd: list[str], use_docker: bool
+    ) -> subprocess.CompletedProcess:
         """Execute command (Docker or local mode)"""
         if use_docker:
             container_name = self._get_container_name(session_id)
@@ -451,14 +380,18 @@ class TmuxProtocol(AgentProtocol):
                 return {"exists": False}
 
         # Check if tmux session exists (same for both modes via _exec)
-        check_result = self._exec(session_id, ["tmux", "has-session", "-t", session_id], use_docker)
+        check_result = self._exec(
+            session_id, ["tmux", "has-session", "-t", session_id], use_docker
+        )
         if check_result.returncode != 0:
             return {"exists": False}
 
         # Get session info (same for both modes via _exec)
         fmt = "#{session_windows}\t#{session_attached}"
         result = self._exec(
-            session_id, ["tmux", "display-message", "-t", session_id, "-p", fmt], use_docker
+            session_id,
+            ["tmux", "display-message", "-t", session_id, "-p", fmt],
+            use_docker,
         )
 
         if result.returncode != 0:
@@ -480,13 +413,19 @@ class TmuxProtocol(AgentProtocol):
         target = f"{session_id}:0.0"
         # Send the literal bytes of the message (same for both modes via _exec)
         r1 = self._exec(
-            session_id, ["tmux", "send-keys", "-t", target, "-l", "--", message], use_docker
+            session_id,
+            ["tmux", "send-keys", "-t", target, "-l", "--", message],
+            use_docker,
         )
         # Then send a carriage return (equivalent to pressing Enter)
-        r2 = self._exec(session_id, ["tmux", "send-keys", "-t", target, "C-m"], use_docker)
+        r2 = self._exec(
+            session_id, ["tmux", "send-keys", "-t", target, "C-m"], use_docker
+        )
         return r1.returncode == 0 and r2.returncode == 0
 
-    def attach(self, session_id: str, target_pane: str = "2", use_docker: bool = False) -> bool:
+    def attach(
+        self, session_id: str, target_pane: str = "2", use_docker: bool = False
+    ) -> bool:
         """Attach to a tmux session in the specified pane"""
         if use_docker:
             # Docker mode: spawn docker exec command in the pane
@@ -545,108 +484,53 @@ class TmuxProtocol(AgentProtocol):
 
     def toggle_pairing(self, session: "Session") -> tuple[bool, str]:
         """
-        Toggle pairing mode for a session.
+        Toggle pairing mode using symlinks.
+
+        Paired: Move user's dir aside, symlink source → worktree
+        Unpaired: Remove symlink, restore user's dir
+
         Returns: (success, error_message)
         """
-        import shutil
-
         if not session.work_path or not session.source_path:
             return False, "Session not properly initialized"
 
+        source = Path(session.source_path)
+        worktree = Path(session.work_path)
+        backup = Path(f"{session.source_path}.backup")
+
         # Switching to paired mode
         if not session.paired:
-            # Safety check: source must have clean working tree
-            result = subprocess.run(
-                ["git", "diff", "--quiet"],
-                cwd=session.source_path,
-                capture_output=True
-            )
-            if result.returncode != 0:
-                return False, "Source directory has uncommitted changes. Commit or stash first."
+            # Check if backup already exists
+            if backup.exists():
+                return False, f"Backup directory already exists: {backup}"
 
-            result = subprocess.run(
-                ["git", "diff", "--cached", "--quiet"],
-                cwd=session.source_path,
-                capture_output=True
-            )
-            if result.returncode != 0:
-                return False, "Source directory has staged changes. Commit or stash first."
+            # Move user's dir to backup
+            try:
+                source.rename(backup)
+                logger.info(f"Moved {source} → {backup}")
+            except Exception as e:
+                return False, f"Failed to backup source directory: {e}"
 
-            # Auto-commit changes in worktree before merging
-            # Stage modified tracked files
-            subprocess.run(
-                ["git", "add", "-u"],
-                cwd=session.work_path,
-                capture_output=True
-            )
+            source.symlink_to(worktree)
+            logger.info(f"Created symlink {source} → {worktree}")
 
-            # Find untracked files in worktree that are not in source
-            result = subprocess.run(
-                ["git", "ls-files", "--others", "--exclude-standard"],
-                cwd=session.work_path,
-                capture_output=True,
-                text=True
-            )
-            untracked_files = result.stdout.strip().split("\n") if result.stdout.strip() else []
+            session.paired = True
 
-            # Stage untracked files that don't exist in source
-            for file in untracked_files:
-                if file:
-                    source_file = Path(session.source_path) / file
-                    if not source_file.exists():
-                        subprocess.run(
-                            ["git", "add", file],
-                            cwd=session.work_path,
-                            capture_output=True
-                        )
+        else:
+            # Switching to unpaired mode
+            # Check if backup exists
+            if not backup.exists():
+                return False, f"Backup directory not found: {backup}"
 
-            # Commit if there are changes
-            result = subprocess.run(
-                ["git", "diff", "--cached", "--quiet"],
-                cwd=session.work_path,
-                capture_output=True
-            )
-            if result.returncode != 0:
-                # There are staged changes, commit them
-                subprocess.run(
-                    ["git", "commit", "-m", "Auto-commit before pairing"],
-                    cwd=session.work_path,
-                    capture_output=True,
-                    text=True
-                )
-                logger.info(f"Auto-committed changes in worktree {session.work_path}")
+            if source.is_symlink():
+                source.unlink()
+                logger.info(f"Removed symlink {source}")
+            else:
+                return False, f"Expected symlink at {source}, found regular directory"
 
-            # Git merge (no commit)
-            result = subprocess.run(
-                ["git", "merge", "--no-commit", session.session_id],
-                cwd=session.source_path,
-                capture_output=True,
-                text=True
-            )
-            if result.returncode != 0:
-                # Check if it's "already up to date"
-                if "Already up to date" not in result.stdout:
-                    return False, f"Git merge failed: {result.stderr}"
+            backup.rename(source)
+            logger.info(f"Restored {backup} → {source}")
 
-            # Copy conversation from worktree to persistent location
-            worktree_claude = Path(session.work_path) / ".claude"
-            persistent_claude = Path.home() / ".kerberos" / "claude-sessions" / session.session_id
-
-            if worktree_claude.exists():
-                persistent_claude.parent.mkdir(parents=True, exist_ok=True)
-                if persistent_claude.exists():
-                    shutil.rmtree(persistent_claude)
-                shutil.copytree(worktree_claude, persistent_claude)
-                logger.info(f"Copied conversation from worktree to {persistent_claude}")
-
-        # Toggle the flag
-        session.paired = not session.paired
-
-        # Restart container with new mounts
-        logger.info(f"Restarting container for session {session.session_id} (paired={session.paired})")
-        self.delete(session.session_id, session.use_docker)
-
-        if not self.start(session):
-            return False, "Failed to restart container"
+            session.paired = False
 
         return True, ""

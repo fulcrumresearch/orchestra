@@ -71,14 +71,9 @@ class Session:
         # Create/update kerberos.md with session-specific information
         kerberos_md_path = claude_dir / "kerberos.md"
         formatted_prompt = prompt_template.format(
-            session_id=self.session_id, work_path=self.work_path
+            session_id=self.session_id, work_path=self.work_path, source_path=self.source_path
         )
         kerberos_md_path.write_text(formatted_prompt)
-
-        # add source path
-        source_path_file = claude_dir / "source_path"
-
-        source_path_file.write_text(self.source_path)
 
         # Add import to CLAUDE.md if not already present
         claude_md_path = claude_dir / "CLAUDE.md"
@@ -132,12 +127,20 @@ class Session:
 
     def prepare(self):
         """
-        Uses git worktree. If worktree exists, use it. Otherwise create a new one on branch session_id.
+        Prepare the session work directory.
+        - Designer: works directly in source_path (no worktree)
+        - Executor: creates a git worktree
         """
         if not self.source_path:
             raise ValueError("Source path is not set")
 
-        # Set work_path in ~/.kerberos/worktrees/source_dir_name/session_id
+        # Designer works directly in source directory
+        if self.agent_type == AgentType.DESIGNER:
+            self.work_path = self.source_path
+            self.add_instructions()
+            return
+
+        # Executor uses worktree
         source_dir_name = Path(self.source_path).name
         worktree_base = Path.home() / ".kerberos" / "worktrees" / source_dir_name
         self.work_path = str(worktree_base / self.session_id)
@@ -237,7 +240,8 @@ class Session:
         new_session.send_message(
             f"Please review your task instructions in @instructions.md, and then start implementing the task. "
             f"Your parent session ID is: {self.session_id}. "
-            f'When you\'re done or need help, use: send_message_to_session(session_id="{self.session_id}", message="your summary/question here")'
+            f"Your source path is: {self.source_path}. "
+            f'When you\'re done or need help, use: send_message_to_session(session_id="{self.session_id}", message="your summary/question here", source_path="{self.source_path}")'
         )
 
         return new_session

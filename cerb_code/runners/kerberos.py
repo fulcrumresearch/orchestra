@@ -36,7 +36,7 @@ from cerb_code.lib.monitor import SessionMonitorWatcher
 from cerb_code.lib.file_watcher import FileWatcher, watch_designer_file
 from cerb_code.lib.logger import get_logger
 from cerb_code.lib.config import load_config
-from cerb_code.lib.helpers import get_current_branch
+from cerb_code.lib.helpers import get_current_branch, ensure_stable_git_location
 import re
 
 logger = get_logger(__name__)
@@ -238,19 +238,28 @@ class UnifiedApp(App):
 
         # Ensure branch session exists
         if not self.sessions:
-            # Create designer session for this branch
-            logger.info(f"Creating designer session for branch: {branch_name}")
-            new_session = Session(
-                session_id=branch_name,
-                agent_type=AgentType.DESIGNER,
-                protocol=self.agent,
-                source_path=str(Path.cwd()),
-                active=False,
-            )
-            new_session.prepare()
-            if new_session.start():
-                self.sessions = [new_session]
-                save_session(new_session)
+            try:
+                # First time setup - ensure .git is in stable location
+                ensure_stable_git_location(Path.cwd())
+
+                # Create designer session for this branch
+                logger.info(f"Creating designer session for branch: {branch_name}")
+                new_session = Session(
+                    session_id=branch_name,
+                    agent_type=AgentType.DESIGNER,
+                    protocol=self.agent,
+                    source_path=str(Path.cwd()),
+                    active=False,
+                )
+                new_session.prepare()
+                if new_session.start():
+                    self.sessions = [new_session]
+                    save_session(new_session)
+                    logger.info(f"Successfully created and saved session {branch_name}")
+                else:
+                    logger.error(f"Failed to start session {branch_name}")
+            except Exception as e:
+                logger.exception(f"Error creating designer session: {e}")
 
         # Update branch info display
         self.branch_info.update(f"Designer: {branch_name}")

@@ -38,8 +38,8 @@ Mostly you manage the workflow, understand the human intentions, and make sure t
 ## Communication Tools
 
 You have access to MCP tools for coordination:
-- **`spawn_subagent(parent_session_id, child_session_id, instructions)`**: Create an executor agent with detailed task instructions
-- **`send_message_to_session(session_id, message)`**: Send messages to executor agents (or other sessions) to provide clarification, feedback, or updates
+- **`spawn_subagent(parent_session_id, child_session_id, instructions, source_path)`**: Create an executor agent with detailed task instructions
+- **`send_message_to_session(session_id, message, source_path)`**: Send messages to executor agents (or other sessions) to provide clarification, feedback, or updates
 
 When spawning executors, provide clear, detailed specifications in the instructions. If executors reach out with questions, respond promptly with clarifications.
 
@@ -48,6 +48,7 @@ When spawning executors, provide clear, detailed specifications in the instructi
 - **Session ID**: {session_id}
 - **Session Type**: Designer
 - **Work Directory**: {work_path}
+- **Source Path**: {source_path} (use this when calling MCP tools)
 """
 
 EXECUTOR_PROMPT = """# Executor Agent Instructions
@@ -63,9 +64,9 @@ You are an executor agent, spawned by a designer agent to complete a specific ta
 ## Communication with Parent
 
 You have access to the MCP tool to communicate with your parent session:
-- **`send_message_to_session(session_id, message)`**: Send questions, concerns, status updates, or error reports to your parent session
+- **`send_message_to_session(session_id, message, source_path)`**: Send questions, concerns, status updates, or error reports to your parent session
 
-Your parent designer is there to provide clarification and guidance. Your parent session ID will be provided in the initial message when you're spawned.
+Your parent designer is there to provide clarification and guidance. Your parent session ID and source_path will be provided in the initial message when you're spawned.
 
 ### CRITICAL: When to Report Back Immediately
 
@@ -120,6 +121,7 @@ Remember: You are working in a child worktree branch. Your changes will be revie
 - **Session ID**: {session_id}
 - **Session Type**: Executor
 - **Work Directory**: {work_path}
+- **Source Path**: {source_path} (use this when calling MCP tools)
 """
 
 PROJECT_CONF = """

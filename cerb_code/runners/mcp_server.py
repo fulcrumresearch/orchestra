@@ -18,20 +18,9 @@ mcp = FastMCP("cerb-subagent", port=port, host=host)
 protocol = TmuxProtocol(default_command="claude")
 
 
-def get_source_path() -> Path:
-    """Get the source path for this session by reading .claude/source_path file"""
-    source_path_file = Path.cwd() / ".claude" / "source_path"
-
-    if source_path_file.exists():
-        return Path(source_path_file.read_text().strip())
-
-    # Fallback to cwd if file doesn't exist (for backward compatibility)
-    return Path.cwd()
-
-
 @mcp.tool()
 def spawn_subagent(
-    parent_session_id: str, child_session_id: str, instructions: str
+    parent_session_id: str, child_session_id: str, instructions: str, source_path: str
 ) -> str:
     """
     Spawn a child Claude session with specific instructions.
@@ -40,15 +29,13 @@ def spawn_subagent(
         parent_session_id: ID of the parent session
         child_session_id: ID for the new child session
         instructions: Instructions to give to the child session
+        source_path: Source path of the parent session's project
 
     Returns:
         Success message with child session ID, or error message
     """
-    # Get source path for session lookups (handles worktrees correctly)
-    source_path = get_source_path()
-
     # Load sessions from source path
-    sessions = load_sessions(protocol=protocol, project_dir=source_path)
+    sessions = load_sessions(protocol=protocol, project_dir=Path(source_path))
 
     # Find parent session
     parent = find_session(sessions, parent_session_id)
@@ -60,28 +47,26 @@ def spawn_subagent(
     child = parent.spawn_executor(child_session_id, instructions)
 
     # Save updated parent session
-    save_session(parent, project_dir=source_path)
+    save_session(parent, project_dir=Path(source_path))
 
     return f"Successfully spawned child session '{child_session_id}' under parent '{parent_session_id}'"
 
 
 @mcp.tool()
-def send_message_to_session(session_id: str, message: str) -> str:
+def send_message_to_session(session_id: str, message: str, source_path: str) -> str:
     """
     Send a message to a specific Claude session.
 
     Args:
         session_id: ID of the session to send the message to
         message: Message to send to the session
+        source_path: Source path of the project
 
     Returns:
         Success or error message
     """
-    # Get source path for session lookups (handles worktrees correctly)
-    source_path = get_source_path()
-
     # Load sessions from source path
-    sessions = load_sessions(protocol=protocol, project_dir=source_path)
+    sessions = load_sessions(protocol=protocol, project_dir=Path(source_path))
 
     # Find target session
     target = find_session(sessions, session_id)
