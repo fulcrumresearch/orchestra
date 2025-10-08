@@ -265,56 +265,11 @@ class Session:
         return self.protocol.toggle_pairing(self)
 
 
-def ensure_default_session(sessions: List[Session], protocol=None) -> List[Session]:
-    """Ensure main session exists at the beginning of the sessions list"""
-    # Determine the default session ID from current git branch
-    default_session_id = "main"  # Fallback
-    try:
-        result = subprocess.run(
-            ["git", "branch", "--show-current"],
-            cwd=Path.cwd(),
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            default_session_id = result.stdout.strip()
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
-        pass  # Use fallback "main"
-
-    # Look for existing default session
-    main_session = None
-    other_sessions = []
-
-    for session in sessions:
-        if session.session_id == default_session_id:
-            main_session = session
-        else:
-            other_sessions.append(session)
-
-    # If default session doesn't exist, create it
-    if not main_session:
-        main_session = Session(
-            session_id=default_session_id,
-            agent_type=AgentType.DESIGNER,
-            protocol=protocol,
-            source_path=str(Path.cwd()),
-            active=False,
-        )
-
-        # For the main session, use the source directory directly instead of a worktree
-        # This avoids the issue of multiple worktrees for the same branch
-        main_session.work_path = main_session.source_path
-
-    # Ensure main session has designer instructions in CLAUDE.md
-    main_session.add_instructions()
-
-    # Always put main first
-    return [main_session] + other_sessions
-
-
 def load_sessions(
-    protocol=TmuxProtocol(), flat=False, project_dir: Optional[Path] = None
+    protocol=TmuxProtocol(),
+    flat=False,
+    project_dir: Optional[Path] = None,
+    root: Optional[str] = None,
 ) -> List[Session]:
     """Load sessions from JSON file for a specific project directory
 
@@ -322,6 +277,7 @@ def load_sessions(
         protocol: Protocol to use for sessions
         flat: If True, return flattened list of sessions (including children)
         project_dir: Specific project directory to load sessions for. If None, uses cwd.
+        root: If specified, only return the session with this ID (+ children). Otherwise return all.
     """
     if project_dir is None:
         project_dir = Path.cwd()
@@ -333,16 +289,17 @@ def load_sessions(
         try:
             with open(SESSIONS_FILE, "r") as f:
                 data = json.load(f)
-                if isinstance(data, dict):
-                    project_sessions = data.get(project_dir_str, [])
-                    sessions = [
-                        Session.from_dict(session_data, protocol)
-                        for session_data in project_sessions
-                    ]
+                project_sessions = data.get(project_dir_str, [])
+                sessions = [
+                    Session.from_dict(session_data, protocol)
+                    for session_data in project_sessions
+                ]
         except (json.JSONDecodeError, KeyError):
             pass
 
-    sessions = ensure_default_session(sessions, protocol)
+    # Filter by root if specified
+    if root:
+        sessions = [s for s in sessions if s.session_id == root]
 
     if flat:
 
@@ -363,18 +320,34 @@ def load_sessions(
         return sessions
 
 
-def save_sessions(sessions: List[Session], project_dir: Optional[Path] = None) -> None:
-    """Save sessions for a specific project directory to JSON file"""
+def save_session(session: Session, project_dir: Optional[Path] = None) -> None:
+    """
+    Save a single session (and its children) to JSON file.
+    Updates the session in-place if it exists, or adds it if new.
+    """
     if project_dir is None:
         project_dir = Path.cwd()
 
-    # Normalize project_dir to absolute string
     project_dir_str = str(project_dir.resolve())
+
+    # Load existing sessions (without protocol since we just need the structure)
+    existing_sessions = load_sessions(protocol=None, project_dir=project_dir)
+
+    # Find and update the session, or append if not found
+    found = False
+    for i, existing in enumerate(existing_sessions):
+        if existing.session_id == session.session_id:
+            existing_sessions[i] = session
+            found = True
+            break
+
+    if not found:
+        existing_sessions.append(session)
 
     # Ensure directory exists
     SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    # Load existing sessions dict (or start with empty dict)
+    # Load full sessions dict (may have other projects)
     sessions_dict = {}
     if SESSIONS_FILE.exists():
         try:
@@ -385,10 +358,10 @@ def save_sessions(sessions: List[Session], project_dir: Optional[Path] = None) -
         except (json.JSONDecodeError, KeyError):
             pass
 
-    # Update sessions for this project directory
-    sessions_dict[project_dir_str] = [session.to_dict() for session in sessions]
+    # Update this project's sessions
+    sessions_dict[project_dir_str] = [s.to_dict() for s in existing_sessions]
 
-    # Write entire dict back
+    # Write back
     with open(SESSIONS_FILE, "w") as f:
         json.dump(sessions_dict, f, indent=2)
 

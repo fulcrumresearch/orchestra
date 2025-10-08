@@ -17,7 +17,6 @@ from textual.widgets import (
     TabPane,
     ListView,
     ListItem,
-    Input,
     Tabs,
     RichLog,
 )
@@ -29,7 +28,7 @@ from cerb_code.lib.sessions import (
     Session,
     AgentType,
     load_sessions,
-    save_sessions,
+    save_session,
     SESSIONS_FILE,
 )
 from cerb_code.lib.tmux_agent import TmuxProtocol
@@ -37,6 +36,8 @@ from cerb_code.lib.monitor import SessionMonitorWatcher
 from cerb_code.lib.file_watcher import FileWatcher, watch_designer_file
 from cerb_code.lib.logger import get_logger
 from cerb_code.lib.config import load_config
+from cerb_code.lib.helpers import get_current_branch
+import re
 
 logger = get_logger(__name__)
 
@@ -47,7 +48,7 @@ class HUD(Static):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.default_text = (
-            "⌃N new • ⌃D delete • ⌃R refresh • S spec • T terminal • ⌃Q quit"
+            "⌃D delete • ⌃R refresh • P pair • S spec • T terminal • ⌃Q quit"
         )
         self.current_session = ""
 
@@ -66,7 +67,7 @@ class UnifiedApp(App):
     }
 
     #header {
-        height: 5;
+        height: 2;
         background: #111111;
         border-bottom: solid #333333;
         dock: top;
@@ -77,22 +78,6 @@ class UnifiedApp(App):
         padding: 0 1;
         color: #C0FFFD;
         text-align: center;
-    }
-
-    #session-input {
-        margin: 0 1;
-        background: #1a1a1a;
-        border: solid #333333;
-        color: #ffffff;
-        height: 3;
-    }
-
-    #session-input:focus {
-        border: solid #00ff9f;
-    }
-
-    #session-input.--placeholder {
-        color: #666666;
     }
 
     #main-content {
@@ -135,6 +120,13 @@ class UnifiedApp(App):
     #sidebar-title {
         color: #00ff9f;
         text-style: bold;
+        margin-bottom: 0;
+        height: 1;
+    }
+
+    #branch-info {
+        color: #888888;
+        text-style: italic;
         margin-bottom: 1;
         height: 1;
     }
@@ -173,7 +165,6 @@ class UnifiedApp(App):
 
     BINDINGS = [
         Binding("ctrl+q", "quit", "Quit", priority=True),
-        Binding("ctrl+n", "new_session", "New Session", priority=True, show=True),
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
         Binding("ctrl+d", "delete_session", "Delete", priority=True),
         Binding("p", "toggle_pairing", "Toggle Pairing", priority=True, show=True),
@@ -214,20 +205,18 @@ class UnifiedApp(App):
             yield Static("tmux not found. Install tmux first (apt/brew).", id="error")
             return
 
-        # Global header with HUD and input
+        # Global header with HUD
         with Container(id="header"):
-            self.hud = HUD("⌃N new • ⌃D delete • ⌃R refresh • ⌃Q quit", id="hud")
+            self.hud = HUD("⌃D delete • ⌃R refresh • P pair • S spec • T terminal • ⌃Q quit", id="hud")
             yield self.hud
-            self.session_input = Input(
-                placeholder="New session name...", id="session-input"
-            )
-            yield self.session_input
 
         # Main content area - split horizontally
         with Horizontal(id="main-content"):
             # Left pane - session list
             with Container(id="left-pane"):
-                yield Static("● SESSIONS", id="sidebar-title")
+                yield Static("Orchestra", id="sidebar-title")
+                self.branch_info = Static("", id="branch-info")
+                yield self.branch_info
                 self.session_list = ListView(id="session-list")
                 yield self.session_list
 
@@ -241,15 +230,36 @@ class UnifiedApp(App):
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
-        # Load existing sessions with the shared agent protocol
-        self.sessions = load_sessions(protocol=self.agent)
+        # Detect current git branch
+        branch_name = get_current_branch()
+
+        # Load sessions for current branch only
+        self.sessions = load_sessions(protocol=self.agent, root=branch_name)
+
+        # Ensure branch session exists
+        if not self.sessions:
+            # Create designer session for this branch
+            logger.info(f"Creating designer session for branch: {branch_name}")
+            new_session = Session(
+                session_id=branch_name,
+                agent_type=AgentType.DESIGNER,
+                protocol=self.agent,
+                source_path=str(Path.cwd()),
+                active=False,
+            )
+            new_session.prepare()
+            if new_session.start():
+                self.sessions = [new_session]
+                save_session(new_session)
+
+        # Update branch info display
+        self.branch_info.update(f"Designer: {branch_name}")
+
         await self.action_refresh()
 
-        # Auto-load 'main' session if it exists
-        for session in self.sessions:
-            if session.session_id == "main":
-                self._attach_to_session(session)
-                break
+        # Auto-load branch session
+        if self.sessions:
+            self._attach_to_session(self.sessions[0])
 
         # Focus the session list by default
         self.set_focus(self.session_list)
@@ -272,8 +282,7 @@ class UnifiedApp(App):
         self.flat_sessions = []  # Keep flat list for selection
 
         if not self.sessions:
-            self.session_list.append(ListItem(Label("No sessions yet")))
-            self.session_list.append(ListItem(Label("Press ⌃N to create")))
+            self.session_list.append(ListItem(Label("No sessions found")))
             return
 
         # Add sessions to list with hierarchy
@@ -305,95 +314,6 @@ class UnifiedApp(App):
                     break
 
         # Don't save here - this causes an infinite loop with the file watcher!
-
-    def action_new_session(self) -> None:
-        """Toggle focus on the session input"""
-        logger.info("action_new_session called - toggling input focus")
-        if self.focused == self.session_input:
-            # If already focused, return focus to session list
-            self.session_list.focus()
-        else:
-            # Focus and clear the input
-            self.session_input.focus()
-            self.session_input.clear()
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle when user presses Enter in the input field"""
-        # Debug: Show that we received the event
-        self.hud.update(f"Creating session...")
-        if event.input.id == "session-input":
-            session_name = event.value.strip()
-
-            if not session_name:
-                # Generate default name with cerb-reponame format
-                repo_name = self._get_repo_name()
-                session_num = 1
-                existing_ids = {s.session_id for s in self.sessions}
-                while f"cerb-{repo_name}-{session_num}" in existing_ids:
-                    session_num += 1
-                session_name = f"cerb-{repo_name}-{session_num}"
-
-            # Add visual feedback
-            self.session_input.placeholder = f"Creating {session_name}..."
-            self.session_input.disabled = True
-
-            self.create_session(session_name)
-
-            # Clear the input and unfocus it
-            self.session_input.clear()
-            self.session_input.placeholder = "New session name..."
-            self.session_input.disabled = False
-            # Focus back on the session list
-            self.set_focus(self.session_list)
-
-    def create_session(self, session_name: str) -> None:
-        """Actually create the session with the given name"""
-        logger.info(f"Creating new session: {session_name}")
-
-        try:
-            # Check if session name already exists
-            if any(s.session_id == session_name for s in self.sessions):
-                logger.warning(f"Session {session_name} already exists")
-                return
-
-            # Create Session object with the protocol
-            new_session = Session(
-                session_id=session_name,
-                agent_type=AgentType.DESIGNER,
-                protocol=self.agent,
-                source_path=str(Path.cwd()),
-                active=False,
-            )
-
-            # Prepare the worktree for this session
-            logger.info(f"Preparing worktree for session {session_name}")
-            new_session.prepare()
-            logger.info(f"Worktree prepared at: {new_session.work_path}")
-
-            # Start the session (it will use its protocol internally)
-            logger.info(f"Starting session {session_name}")
-            result = new_session.start()
-            logger.info(f"Session start result: {result}")
-
-            if result:
-                # Add to sessions list
-                self.sessions.append(new_session)
-                save_sessions(self.sessions)
-                logger.info(f"Session {session_name} saved")
-
-                # Refresh the session list immediately
-                self.run_worker(self.action_refresh())
-
-                # Attach to the new session (this also updates HUD and current_session)
-                self._attach_to_session(new_session)
-
-                logger.info(f"Successfully created and attached to {session_name}")
-            else:
-                logger.error(f"Failed to start session {session_name}")
-                self.hud.update(f"ERROR: Failed to start {session_name}")
-        except Exception as e:
-            logger.exception(f"Error in create_session: {e}")
-            self.hud.update(f"ERROR: {str(e)[:50]}")
 
     def action_cursor_up(self) -> None:
         """Move cursor up in the list"""
@@ -454,7 +374,8 @@ class UnifiedApp(App):
         self.sessions = [
             s for s in self.sessions if s.session_id != session_to_delete.session_id
         ]
-        save_sessions(self.sessions)
+        if self.sessions:
+            save_session(self.sessions[0])
 
         # If we deleted the current session, handle the right pane
         if (
@@ -476,7 +397,7 @@ class UnifiedApp(App):
                 self.hud.set_session("")
                 # Clear pane 2 (claude pane) with a message
                 msg_cmd = (
-                    "echo 'No active sessions. Press Ctrl+N to create a new session.'"
+                    "echo 'No active sessions.'"
                 )
                 subprocess.run(
                     ["tmux", "respawn-pane", "-t", "2", "-k", msg_cmd],
@@ -512,8 +433,8 @@ class UnifiedApp(App):
             logger.error(f"Failed to toggle pairing: {error_msg}")
             return
 
-        # Save sessions to persist paired state
-        save_sessions(self.sessions)
+        # Save session to persist paired state
+        save_session(session)
 
         # Update UI
         paired_indicator = "[P] " if session.paired else ""

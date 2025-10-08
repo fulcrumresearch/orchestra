@@ -6,7 +6,7 @@ from pathlib import Path
 
 from mcp.server import FastMCP
 
-from cerb_code.lib.sessions import load_sessions, save_sessions, find_session
+from cerb_code.lib.sessions import load_sessions, save_session, find_session
 from cerb_code.lib.tmux_agent import TmuxProtocol
 
 # Create FastMCP server instance
@@ -59,8 +59,8 @@ def spawn_subagent(
     # Spawn the executor (this adds child to parent.children in memory)
     child = parent.spawn_executor(child_session_id, instructions)
 
-    # Save updated sessions
-    save_sessions(sessions, project_dir=source_path)
+    # Save updated parent session
+    save_session(parent, project_dir=source_path)
 
     return f"Successfully spawned child session '{child_session_id}' under parent '{parent_session_id}'"
 
