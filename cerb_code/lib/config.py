@@ -1,5 +1,7 @@
 """Global configuration for Cerberus"""
 
+# Test pairing: Added comment to test pairing functionality
+
 import json
 from pathlib import Path
 from typing import Any, Dict
