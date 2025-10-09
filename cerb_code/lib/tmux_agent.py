@@ -126,9 +126,6 @@ class TmuxProtocol(AgentProtocol):
 
         if result.returncode == 0:
             # Send Enter to accept the trust prompt
-            logger.info(
-                f"Starting 2 second wait before sending Enter to {session.session_id}"
-            )
             time.sleep(2)  # Give Claude a moment to start
             logger.info(f"Wait complete, now sending Enter to {session.session_id}")
             session.send_message("")

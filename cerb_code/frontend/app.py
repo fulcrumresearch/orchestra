@@ -186,8 +186,6 @@ class UnifiedApp(App):
 
         # Store the original project directory (resolve now, before any pairing)
         project_dir = Path.cwd().resolve()
-
-        # Initialize state
         self.state = AppState(project_dir)
 
         logger.info(f"KerberosApp initialized")
@@ -205,7 +203,6 @@ class UnifiedApp(App):
             except Exception:
                 pass
 
-        # Delay the kill slightly to allow the app to exit cleanly first
         threading.Timer(0.2, kill_tmux_server).start()
         self.exit()
 
@@ -214,7 +211,6 @@ class UnifiedApp(App):
             yield Static("tmux not found. Install tmux first (apt/brew).", id="error")
             return
 
-        # Global header with HUD
         with Container(id="header"):
             self.hud = HUD(
                 "⌃D delete • ⌃R refresh • P pair • S spec • T terminal • ⌃Q quit",
@@ -222,9 +218,7 @@ class UnifiedApp(App):
             )
             yield self.hud
 
-        # Main content area - split horizontally
         with Horizontal(id="main-content"):
-            # Left pane - session list
             with Container(id="left-pane"):
                 yield Static("Orchestra", id="sidebar-title")
                 self.status_indicator = Static("", id="status-indicator")
@@ -232,7 +226,6 @@ class UnifiedApp(App):
                 self.session_list = ListView(id="session-list")
                 yield self.session_list
 
-            # Right pane - tabbed monitor view
             with Container(id="right-pane"):
                 with TabbedContent(initial="diff-tab"):
                     with TabPane("Diff", id="diff-tab"):
@@ -245,11 +238,8 @@ class UnifiedApp(App):
         # Detect current git branch and store as fixed root
         branch_name = get_current_branch()
         self.state.root_session_id = branch_name
-
-        # Load sessions for current branch only
         self.state.load(root_session_id=self.state.root_session_id)
 
-        # Ensure branch session exists
         if not self.state.root_session:
             try:
                 self.status_indicator.update("⏳ Creating session...")
@@ -257,7 +247,6 @@ class UnifiedApp(App):
                 # First time setup - ensure .git is in stable location
                 ensure_stable_git_location(Path.cwd())
 
-                # Create designer session for this branch
                 logger.info(f"Creating designer session for branch: {branch_name}")
                 new_session = Session(
                     session_id=branch_name,
@@ -279,11 +268,9 @@ class UnifiedApp(App):
 
         await self.action_refresh()
 
-        # Auto-load branch session
         if self.state.root_session:
             self._attach_to_session(self.state.root_session)
 
-        # Focus the session list by default
         self.set_focus(self.session_list)
 
         # Watch sessions.json for changes
@@ -293,36 +280,29 @@ class UnifiedApp(App):
             await self.action_refresh()
 
         self.state.file_watcher.register(SESSIONS_FILE, on_sessions_file_change)
-
-        # Start the file watcher
         await self.state.file_watcher.start()
 
     async def action_refresh(self) -> None:
         """Refresh the session list"""
-        # Save current selection
         index = self.session_list.index if self.session_list.index is not None else 0
         current_session = self.state.get_session_by_index(index)
         selected_id = current_session.session_id if current_session else None
 
-        # Clear and rebuild list
         self.session_list.clear()
 
         root = self.state.root_session
         if not root:
             return
 
-        # Render designer session
         paired_marker = "[P] " if self.state.paired_session_id == root.session_id else ""
         label_text = f"[D] {paired_marker}{root.session_id}"
         self.session_list.append(ListItem(Label(label_text)))
 
-        # Render executor sessions
         for child in root.children:
             paired_marker = "[P] " if self.state.paired_session_id == child.session_id else ""
             label_text = f"[E] {paired_marker}{child.session_id}"
             self.session_list.append(ListItem(Label(label_text)))
 
-        # Restore selection
         if selected_id:
             new_index = self.state.get_index_by_session_id(selected_id)
             self.session_list.index = new_index if new_index is not None else 0
@@ -385,12 +365,10 @@ class UnifiedApp(App):
         if not session_to_delete:
             return
 
-        # Can't delete root session
         if session_to_delete == self.state.root_session:
             self.status_indicator.update("Cannot delete designer session")
             return
 
-        # If deleting the active session, switch to designer first
         if self.state.active_session_id == session_to_delete.session_id:
             self._attach_to_session(self.state.root_session)
 
@@ -448,15 +426,12 @@ class UnifiedApp(App):
         work_path = Path(session.work_path)
         designer_md = work_path / "designer.md"
 
-        # Create designer.md if it doesn't exist
         if not designer_md.exists():
             designer_md.touch()
             logger.info(f"Created {designer_md}")
 
-        # Register file watcher for designer.md to notify session on changes
         self.state.file_watcher.add_designer_watcher(designer_md, session)
 
-        # Use helper to respawn pane with vim
         if respawn_pane_with_vim(designer_md):
             logger.info(f"Opened spec editor for {designer_md}")
         else:
@@ -473,7 +448,6 @@ class UnifiedApp(App):
             return
         work_path = Path(session.work_path)
 
-        # Use helper to respawn pane with terminal
         if respawn_pane_with_terminal(work_path):
             logger.info(f"Opened terminal for {work_path}")
         else:
@@ -481,30 +455,21 @@ class UnifiedApp(App):
 
     def _attach_to_session(self, session: Session) -> None:
         """Select a session and update monitors to show it"""
-        # Update state
         self.state.set_active_session(session.session_id)
-
-        # Check session status
         status = session.get_status()
 
         if not status.get("exists", False):
-            # Session doesn't exist, create it
             logger.info(f"Session {session.session_id} doesn't exist, creating it")
 
             if not session.start():
-                # Failed to create session, show error in pane
                 logger.error(f"Failed to start session {session.session_id}")
                 error_cmd = f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
                 respawn_pane(PANE_AGENT, error_cmd)
                 return
 
-        # At this point, session exists - attach to it in pane 2
         session.protocol.attach(session.session_id, target_pane=PANE_AGENT)
-
-        # Update HUD with session name
         self.hud.set_session(session.session_id)
 
-        # Immediately refresh monitor tab to show new session's monitor
         monitor_tab = self.query_one(ModelMonitorTab)
         monitor_tab.refresh_monitor()
 

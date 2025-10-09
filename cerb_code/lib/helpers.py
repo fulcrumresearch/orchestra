@@ -1,4 +1,5 @@
 """Helper utilities for kerberos"""
+
 import json
 import os
 import subprocess
@@ -11,10 +12,9 @@ from .logger import get_logger
 logger = get_logger(__name__)
 
 
-def get_current_branch(cwd: Path = None) -> str:
+def get_current_branch(cwd: Path | None = None) -> str:
     """Get the current git branch name"""
-    if cwd is None:
-        cwd = Path.cwd()
+    cwd = cwd or Path.cwd()
 
     try:
         result = subprocess.run(
@@ -51,7 +51,9 @@ def ensure_stable_git_location(project_dir: Path) -> None:
         return
 
     source_dir_name = project_dir.name
-    stable_git_dir = Path.home() / ".kerberos" / "repos" / source_dir_name / ".git" # handle duplicate names later
+    stable_git_dir = (
+        Path.home() / ".kerberos" / "repos" / source_dir_name / ".git"
+    )  # handle duplicate names later
 
     # If stable location exists, just create symlink
     if stable_git_dir.exists():
@@ -125,6 +127,7 @@ def respawn_pane_with_terminal(work_path: Path) -> bool:
 
 # Docker Helper Functions
 
+
 def get_docker_container_name(session_id: str) -> str:
     """Get Docker container name for a session"""
     return f"cerb-{session_id}"
@@ -161,17 +164,12 @@ def ensure_docker_image() -> None:
         )
 
         if build_result.returncode != 0:
-            raise RuntimeError(
-                f"Failed to build Docker image: {build_result.stderr}"
-            )
+            raise RuntimeError(f"Failed to build Docker image: {build_result.stderr}")
         logger.info("Docker image built successfully")
 
 
 def start_docker_container(
-    container_name: str,
-    work_path: str,
-    mcp_port: int,
-    paired: bool = False
+    container_name: str, work_path: str, mcp_port: int, paired: bool = False
 ) -> bool:
     """Start Docker container with mounted worktree
 
@@ -304,24 +302,18 @@ def configure_mcp_in_container(container_name: str, mcp_port: int) -> None:
         json.dump(config, tmp, indent=2)
         tmp_path = tmp.name
 
-    try:
-        # Copy MCP config directly to container
-        copy_result = subprocess.run(
-            ["docker", "cp", tmp_path, f"{container_name}:/root/.claude.json"],
-            capture_output=True,
-            text=True,
+    copy_result = subprocess.run(
+        ["docker", "cp", tmp_path, f"{container_name}:/root/.claude.json"],
+        capture_output=True,
+        text=True,
+    )
+    if copy_result.returncode == 0:
+        logger.info(f"Configured MCP in container .claude.json (URL: {mcp_url})")
+    else:
+        logger.warning(
+            f"Failed to copy .claude.json to container: {copy_result.stderr}"
         )
-        if copy_result.returncode == 0:
-            logger.info(
-                f"Configured MCP in container .claude.json (URL: {mcp_url})"
-            )
-        else:
-            logger.warning(
-                f"Failed to copy .claude.json to container: {copy_result.stderr}"
-            )
-    finally:
-        # Clean up temp file
-        Path(tmp_path).unlink(missing_ok=True)
+    Path(tmp_path).unlink(missing_ok=True)
 
 
 def docker_exec(container_name: str, cmd: list[str]) -> subprocess.CompletedProcess:

@@ -46,7 +46,6 @@ class Session:
         else:
             self.use_docker = use_docker
 
-        # Create protocol instance based on config and session's use_docker
         config = load_config()
         self.protocol = TmuxProtocol(
             default_command="claude",
@@ -56,18 +55,13 @@ class Session:
 
     def start(self) -> bool:
         """Start the agent using the configured protocol"""
-        if not self.protocol:
-            return False
         return self.protocol.start(self)
 
     def delete(self) -> bool:
         """Delete the session using the configured protocol"""
-        if not self.protocol:
-            return False
         # Delete all children first
         for child in self.children:
             child.delete()
-        # Delete self
         return self.protocol.delete(self.session_id)
 
     def add_instructions(self) -> None:
@@ -88,7 +82,6 @@ class Session:
         )
         kerberos_md_path.write_text(formatted_prompt)
 
-        # Add import to CLAUDE.md if not already present
         claude_md_path = claude_dir / "CLAUDE.md"
         import_line = "@kerberos.md"
 
@@ -124,7 +117,7 @@ class Session:
             source_path=data.get("source_path", ""),
             work_path=data.get("work_path"),
             active=data.get("active", False),
-            use_docker=data.get("use_docker"),  # Will use default if None
+            use_docker=data.get("use_docker"),
         )
         # Recursively load children (each creates its own protocol)
         session.children = [
@@ -153,16 +146,13 @@ class Session:
         worktree_base = Path.home() / ".kerberos" / "worktrees" / source_dir_name
         self.work_path = str(worktree_base / self.session_id)
 
-        # Check if worktree already exists
         if Path(self.work_path).exists():
             return
 
-        # Ensure worktree base directory exists
         worktree_base.mkdir(parents=True, exist_ok=True)
 
         # Create new worktree on a new branch
         try:
-            # Check if branch exists
             result = subprocess.run(
                 ["git", "rev-parse", "--verify", f"refs/heads/{self.session_id}"],
                 cwd=self.source_path,
@@ -171,7 +161,6 @@ class Session:
             )
 
             if result.returncode == 0:
-                # Branch exists, use it
                 subprocess.run(
                     ["git", "worktree", "add", self.work_path, self.session_id],
                     cwd=self.source_path,
@@ -180,7 +169,6 @@ class Session:
                     text=True,
                 )
             else:
-                # Create new branch
                 subprocess.run(
                     ["git", "worktree", "add", "-b", self.session_id, self.work_path],
                     cwd=self.source_path,
@@ -189,14 +177,12 @@ class Session:
                     text=True,
                 )
 
-            # Create .claude/commands directory and add merge-child command
             claude_commands_dir = Path(self.work_path) / ".claude" / "commands"
             claude_commands_dir.mkdir(parents=True, exist_ok=True)
 
             merge_command_path = claude_commands_dir / "merge-child.md"
             merge_command_path.write_text(MERGE_CHILD_COMMAND)
 
-            # Add agent-specific instructions to CLAUDE.md
             self.add_instructions()
 
         except subprocess.CalledProcessError as e:
@@ -214,7 +200,6 @@ class Session:
         new_session = Session(
             session_id=session_id,
             agent_type=AgentType.EXECUTOR,
-            protocol=self.protocol,  # Inherit parent's protocol
             source_path=self.work_path,  # Child's source is parent's work directory
             use_docker=executor_use_docker,  # Use config value
         )
@@ -254,13 +239,6 @@ class Session:
 
         return new_session
 
-    @property
-    def display_name(self) -> str:
-        """Get display name for UI"""
-        status = "●" if self.active else "○"
-        paired_indicator = "[P] " if self.paired else ""
-        return f"{status} {paired_indicator}{self.session_id}"
-
     def get_status(self) -> Dict[str, Any]:
         """Get status information for this session"""
         return self.protocol.get_status(self.session_id)
@@ -274,10 +252,6 @@ class Session:
         Toggle pairing mode for this session.
         Returns: (success, error_message)
         """
-        if not self.protocol:
-            return False, "No protocol configured"
-
-        # Let protocol handle all the implementation details
         return self.protocol.toggle_pairing(self)
 
 
