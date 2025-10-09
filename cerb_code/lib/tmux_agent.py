@@ -275,6 +275,12 @@ class TmuxProtocol(AgentProtocol):
 
         source = Path(session.source_path)
         worktree = Path(session.work_path)
+
+        # Pairing only works for sessions with separate worktrees (executors)
+        # Designer sessions work directly in source, so pairing doesn't apply
+        if source == worktree:
+            return False, "Pairing not available for designer sessions (no separate worktree)"
+
         backup = Path(f"{session.source_path}.backup")
         worktree_git_file = worktree / ".git"
 
@@ -292,9 +298,13 @@ class TmuxProtocol(AgentProtocol):
                 return False, f"Failed to backup source directory: {e}"
 
             # Update worktree's .git file to point to new location
+            # Resolve any symlinks in the .git path
             try:
-                worktree_git_file.write_text(f"gitdir: {backup}/.git/worktrees/{session.session_id}\n")
-                logger.info(f"Updated {worktree_git_file} to point to {backup}/.git/worktrees/{session.session_id}")
+                backup_git = backup / ".git"
+                # Resolve symlink if .git is a symlink
+                resolved_git = backup_git.resolve() if backup_git.is_symlink() else backup_git
+                worktree_git_file.write_text(f"gitdir: {resolved_git}/worktrees/{session.session_id}\n")
+                logger.info(f"Updated {worktree_git_file} to point to {resolved_git}/worktrees/{session.session_id}")
             except Exception as e:
                 # Rollback: restore the directory
                 backup.rename(source)
@@ -321,8 +331,12 @@ class TmuxProtocol(AgentProtocol):
             logger.info(f"Restored {backup} → {source}")
 
             # Update worktree's .git file to point back to original location
+            # Resolve any symlinks in the .git path
             try:
-                worktree_git_file.write_text(f"gitdir: {source}/.git/worktrees/{session.session_id}\n")
+                source_git = source / ".git"
+                # Resolve symlink if .git is a symlink
+                resolved_git = source_git.resolve() if source_git.is_symlink() else source_git
+                worktree_git_file.write_text(f"gitdir: {resolved_git}/worktrees/{session.session_id}\n")
                 logger.info(f"Updated {worktree_git_file} to point to {source}/.git/worktrees/{session.session_id}")
             except Exception as e:
                 return False, f"Failed to update worktree .git file: {e}"

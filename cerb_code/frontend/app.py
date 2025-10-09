@@ -40,7 +40,6 @@ from cerb_code.lib.logger import get_logger
 from cerb_code.lib.config import load_config
 from cerb_code.lib.helpers import (
     get_current_branch,
-    ensure_stable_git_location,
     respawn_pane,
     respawn_pane_with_vim,
     respawn_pane_with_terminal,
@@ -227,9 +226,6 @@ class UnifiedApp(App):
         if not self.state.root_session:
             try:
                 self.status_indicator.update("⏳ Creating session...")
-
-                # First time setup - ensure .git is in stable location
-                ensure_stable_git_location(Path.cwd())
 
                 logger.info(f"Creating designer session for branch: {branch_name}")
                 new_session = Session(
