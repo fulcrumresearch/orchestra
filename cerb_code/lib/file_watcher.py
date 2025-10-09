@@ -43,7 +43,6 @@ class FileWatcher:
             self._watchers[file_path] = set()
 
         self._watchers[file_path].add(handler)
-        logger.info(f"Registered watcher for {file_path}")
 
     def unregister(self, file_path: Path) -> None:
         """
@@ -63,12 +62,10 @@ class FileWatcher:
     async def start(self) -> None:
         """Start the file watching task"""
         if self._task is not None:
-            logger.warning("FileWatcher already started")
             return
 
         self._stop_event.clear()
         self._task = asyncio.create_task(self._run())
-        logger.info("FileWatcher started")
 
     async def stop(self) -> None:
         """Stop the file watching task"""
@@ -88,7 +85,6 @@ class FileWatcher:
                 pass
 
         self._task = None
-        logger.info("FileWatcher stopped")
 
     async def _run(self) -> None:
         """Main watching loop"""
@@ -130,19 +126,13 @@ class FileWatcher:
                                 await handler(path, change_type)
                             except Exception as e:
                                 logger.error(f"Error in file watcher handler for {path}: {e}")
-                logger.info("File watcher stopped")
 
             except Exception as e:
                 logger.error(f"Error in file watcher: {e}")
-                await asyncio.sleep(1)  # Brief pause before retrying
+                await asyncio.sleep(1)
 
-            # awatch exited - check if we're restarting or stopping
             if self._should_stop:
-                logger.info("File watcher stopped")
                 break
-
-            # Otherwise, loop continues and restarts awatch with updated file list
-            logger.info(f"Restarting file watcher with {len(self._watchers)} files")
 
     def add_designer_watcher(self, designer_md: Path, session: "Session") -> None:
         """
@@ -156,9 +146,7 @@ class FileWatcher:
 
         async def on_designer_change(path: Path, change_type: Change) -> None:
             """Handler for designer.md changes"""
-            logger.info(f"designer.md changed ({change_type.name}) for session {session.session_id}")
             session.send_message("designer.md has been updated. Please review the changes")
-            logger.info(f"Notified session {session.session_id} about designer.md update")
 
         self.register(designer_md, on_designer_change)
         logger.info(f"Registered designer.md watcher for session {session.session_id}: {designer_md}")

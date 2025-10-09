@@ -181,13 +181,9 @@ class UnifiedApp(App):
 
     def __init__(self):
         super().__init__()
-        logger.info("KerberosApp initializing")
-
-        # Store the original project directory (resolve now, before any pairing)
         project_dir = Path.cwd().resolve()
         self.state = AppState(project_dir)
 
-        logger.info(f"KerberosApp initialized")
 
     def compose(self) -> ComposeResult:
         if not shutil.which("tmux"):
@@ -228,6 +224,7 @@ class UnifiedApp(App):
                 self.status_indicator.update("⏳ Creating session...")
 
                 logger.info(f"Creating designer session for branch: {branch_name}")
+
                 new_session = Session(
                     session_id=branch_name,
                     agent_type=AgentType.DESIGNER,
@@ -237,9 +234,9 @@ class UnifiedApp(App):
                 if new_session.start():
                     self.state.root_session = new_session
                     save_session(new_session, self.state.project_dir)
-                    logger.info(f"Successfully created and saved session {branch_name}")
+                    logger.info(f"Created designer session: {branch_name}")
                 else:
-                    logger.error(f"Failed to start session {branch_name}")
+                    logger.error(f"Failed to start designer session: {branch_name}")
 
                 self.status_indicator.update("")
             except Exception as e:
@@ -255,7 +252,6 @@ class UnifiedApp(App):
 
         # Watch sessions.json for changes
         async def on_sessions_file_change(path, change_type):
-            logger.info("Sessions file changed, refreshing...")
             self.state.load(root_session_id=self.state.root_session_id)
             await self.action_refresh()
 
@@ -408,14 +404,11 @@ class UnifiedApp(App):
 
         if not designer_md.exists():
             designer_md.touch()
-            logger.info(f"Created {designer_md}")
 
         self.state.file_watcher.add_designer_watcher(designer_md, session)
 
-        if respawn_pane_with_vim(designer_md):
-            logger.info(f"Opened spec editor for {designer_md}")
-        else:
-            logger.error(f"Failed to open spec")
+        if not respawn_pane_with_vim(designer_md):
+            logger.error(f"Failed to open spec: {designer_md}")
 
     def action_open_terminal(self) -> None:
         """Open bash terminal in the highlighted session's worktree in pane 1"""
@@ -428,10 +421,8 @@ class UnifiedApp(App):
             return
         work_path = Path(session.work_path)
 
-        if respawn_pane_with_terminal(work_path):
-            logger.info(f"Opened terminal for {work_path}")
-        else:
-            logger.error(f"Failed to open terminal")
+        if not respawn_pane_with_terminal(work_path):
+            logger.error(f"Failed to open terminal: {work_path}")
 
     def _attach_to_session(self, session: Session) -> None:
         """Select a session and update monitors to show it"""
@@ -439,11 +430,11 @@ class UnifiedApp(App):
         status = session.get_status()
 
         if not status.get("exists", False):
-            logger.info(f"Session {session.session_id} doesn't exist, creating it")
-
             if not session.start():
-                logger.error(f"Failed to start session {session.session_id}")
-                error_cmd = f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
+                logger.error(f"Failed to start session: {session.session_id}")
+                error_cmd = (
+                    f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
+                )
                 respawn_pane(PANE_AGENT, error_cmd)
                 return
 
