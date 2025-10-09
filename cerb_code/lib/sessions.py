@@ -52,6 +52,10 @@ class Session:
         """Delete the session using the configured protocol"""
         if not self.protocol:
             return False
+        # Delete all children first
+        for child in self.children:
+            child.delete()
+        # Then delete self
         return self.protocol.delete(self.session_id, self.use_docker)
 
     def add_instructions(self) -> None:
@@ -116,7 +120,6 @@ class Session:
             active=data.get("active", False),
             use_docker=data.get("use_docker"),  # Will use default if None
         )
-        session.paired = data.get("paired", False)
         # Recursively load children (they inherit the same protocol)
         session.children = [
             cls.from_dict(child_data, protocol)
