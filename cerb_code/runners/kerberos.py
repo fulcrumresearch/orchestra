@@ -7,7 +7,7 @@ import subprocess
 import os
 import shutil
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Sequence, Tuple
 
 from textual.app import App, ComposeResult
 from textual.widgets import (
@@ -324,13 +324,56 @@ class UnifiedApp(App):
 
         # Don't save here - this causes an infinite loop with the file watcher!
 
+    def _invoke_widget_action(
+        self,
+        widget: Any,
+        candidate_methods: Sequence[str],
+        action_description: str,
+        args: Tuple[Any, ...] | None = None,
+        kwargs: Dict[str, Any] | None = None,
+    ) -> None:
+        """Safely invoke widget actions, falling back to alternative names."""
+
+        args = args or ()
+        kwargs = kwargs or {}
+
+        for method_name in candidate_methods:
+            method = getattr(widget, method_name, None)
+            if callable(method):
+                try:
+                    method(*args, **kwargs)
+                    return
+                except Exception:
+                    logger.exception(
+                        "Failed to perform %s using %s on %r",
+                        action_description,
+                        method_name,
+                        widget,
+                    )
+                    return
+
+        logger.warning(
+            "No action handler available for %s on %r (tried: %s)",
+            action_description,
+            widget,
+            ", ".join(candidate_methods),
+        )
+
     def action_cursor_up(self) -> None:
         """Move cursor up in the list"""
-        self.session_list.action_up()
+        self._invoke_widget_action(
+            self.session_list,
+            ("action_cursor_up", "action_up", "cursor_up"),
+            "session list cursor up",
+        )
 
     def action_cursor_down(self) -> None:
         """Move cursor down in the list"""
-        self.session_list.action_down()
+        self._invoke_widget_action(
+            self.session_list,
+            ("action_cursor_down", "action_down", "cursor_down"),
+            "session list cursor down",
+        )
 
     def action_scroll_tab_up(self) -> None:
         """Scroll up in the active monitor/diff tab"""
@@ -339,7 +382,12 @@ class UnifiedApp(App):
         if active_pane:
             # Find and scroll the RichLog widget directly
             for widget in active_pane.query(RichLog):
-                widget.scroll_relative(y=-1)
+                self._invoke_widget_action(
+                    widget,
+                    ("action_scroll_up", "scroll_relative"),
+                    "scroll log up",
+                    kwargs={"y": -1},
+                )
 
     def action_scroll_tab_down(self) -> None:
         """Scroll down in the active monitor/diff tab"""
@@ -348,17 +396,30 @@ class UnifiedApp(App):
         if active_pane:
             # Find and scroll the RichLog widget directly
             for widget in active_pane.query(RichLog):
-                widget.scroll_relative(y=1)
+                self._invoke_widget_action(
+                    widget,
+                    ("action_scroll_down", "scroll_relative"),
+                    "scroll log down",
+                    kwargs={"y": 1},
+                )
 
     def action_prev_tab(self) -> None:
         """Switch to previous tab"""
         tabs = self.query_one(Tabs)
-        tabs.action_previous_tab()
+        self._invoke_widget_action(
+            tabs,
+            ("action_previous_tab", "action_prev_tab", "action_scroll_left"),
+            "previous tab",
+        )
 
     def action_next_tab(self) -> None:
         """Switch to next tab"""
         tabs = self.query_one(Tabs)
-        tabs.action_next_tab()
+        self._invoke_widget_action(
+            tabs,
+            ("action_next_tab", "action_scroll_right"),
+            "next tab",
+        )
 
     def action_select_session(self) -> None:
         """Select the highlighted session"""
