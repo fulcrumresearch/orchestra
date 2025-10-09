@@ -549,6 +549,7 @@ class UnifiedApp(App):
                         "-k",
                         msg_cmd,
                     ],
+                  )
 
         # Show status indicator
         self.status_indicator.update("⏳ Deleting session...")
