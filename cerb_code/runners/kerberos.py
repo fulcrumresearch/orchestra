@@ -343,6 +343,13 @@ class UnifiedApp(App):
                 try:
                     method(*args, **kwargs)
                     return
+                except TypeError:
+                    logger.debug(
+                        "Signature mismatch performing %s using %s on %r; trying next candidate",
+                        action_description,
+                        method_name,
+                        widget,
+                    )
                 except Exception:
                     logger.exception(
                         "Failed to perform %s using %s on %r",
