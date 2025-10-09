@@ -67,3 +67,67 @@ def ensure_stable_git_location(project_dir: Path) -> None:
     # Create symlink back
     source_git.symlink_to(stable_git_dir)
     logger.info(f"Created symlink {source_git} → {stable_git_dir}")
+
+
+# Tmux pane constants
+PANE_UI = "0"
+PANE_EDITOR = "1"
+PANE_AGENT = "2"
+
+
+def respawn_pane(pane: str, command: str) -> bool:
+    """Generic helper to respawn a tmux pane with a command.
+
+    Args:
+        pane: The pane number to respawn
+        command: The command to run in the pane
+
+    Returns:
+        True if successful, False otherwise
+    """
+    result = subprocess.run(
+        ["tmux", "-L", "orchestra", "respawn-pane", "-t", pane, "-k", command],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
+
+
+def respawn_pane_with_vim(spec_file: Path) -> bool:
+    """Open vim in editor pane.
+
+    Args:
+        spec_file: Path to the file to open in vim
+
+    Returns:
+        True if successful, False otherwise
+    """
+    vim_cmd = f"bash -c '$EDITOR {spec_file}; clear; echo \"Press S to open spec editor\"; exec bash'"
+    return respawn_pane(PANE_EDITOR, vim_cmd)
+
+
+def respawn_pane_with_terminal(work_path: Path) -> bool:
+    """Open bash in editor pane.
+
+    Args:
+        work_path: Path to cd into before starting bash
+
+    Returns:
+        True if successful, False otherwise
+    """
+    bash_cmd = f"bash -c 'cd {work_path} && exec bash'"
+    return respawn_pane(PANE_EDITOR, bash_cmd)
+
+
+def clear_pane(pane: str, message: str = "") -> bool:
+    """Clear pane with optional message.
+
+    Args:
+        pane: The pane number to clear
+        message: Optional message to display
+
+    Returns:
+        True if successful, False otherwise
+    """
+    cmd = f"echo '{message}'" if message else "clear"
+    return respawn_pane(pane, cmd)

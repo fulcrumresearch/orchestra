@@ -28,7 +28,6 @@ class Session:
         self,
         session_id: str,
         agent_type: AgentType,
-        protocol=None,  # AgentProtocol instance
         source_path: str = "",
         work_path: Optional[str] = None,
         active: bool = False,
@@ -36,7 +35,6 @@ class Session:
     ):
         self.session_id = session_id
         self.agent_type = agent_type
-        self.protocol = protocol
         self.source_path = source_path
         self.work_path = work_path
         self.active = active
@@ -47,6 +45,13 @@ class Session:
             self.use_docker = agent_type == AgentType.EXECUTOR
         else:
             self.use_docker = use_docker
+
+        # Create protocol instance based on config
+        config = load_config()
+        self.protocol = TmuxProtocol(
+            default_command="claude",
+            mcp_port=config.get("mcp_port", 8765),
+        )
 
     def start(self) -> bool:
         """Start the agent using the configured protocol"""
