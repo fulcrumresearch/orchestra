@@ -36,12 +36,12 @@ from cerb_code.lib.sessions import (
     SESSIONS_FILE,
 )
 from cerb_code.lib.tmux_agent import TmuxProtocol
-from cerb_code.lib.file_watcher import watch_designer_file
 from cerb_code.lib.logger import get_logger
 from cerb_code.lib.config import load_config
 from cerb_code.lib.helpers import (
     get_current_branch,
     ensure_stable_git_location,
+    respawn_pane,
     respawn_pane_with_vim,
     respawn_pane_with_terminal,
     PANE_AGENT,
@@ -169,6 +169,7 @@ class UnifiedApp(App):
         Binding("p", "toggle_pairing", "Toggle Pairing", priority=True, show=True),
         Binding("s", "open_spec", "Open Spec", priority=True),
         Binding("t", "open_terminal", "Open Terminal", priority=True),
+        Binding("enter", "select_session", "Select", show=False),
         Binding("up", "cursor_up", show=False),
         Binding("down", "cursor_down", show=False),
         Binding("k", "scroll_tab_up", "Scroll Tab Up", show=False),
@@ -189,20 +190,7 @@ class UnifiedApp(App):
         # Initialize state
         self.state = AppState(project_dir)
 
-        # Load config and create TmuxProtocol
-        config = load_config()
-        self.agent = TmuxProtocol(
-            default_command="claude",
-            mcp_port=config.get("mcp_port", 8765),
-        )
-
-        # File watcher state
-        self._last_session_mtime = None
-        self._watch_task = None
-
-        logger.info(
-            f"KerberosApp initialized (Docker: {config.get('use_docker', True)})"
-        )
+        logger.info(f"KerberosApp initialized")
 
     def action_quit(self) -> None:
         """Quit the UI and kill the dedicated tmux server named 'orchestra'."""
@@ -239,8 +227,6 @@ class UnifiedApp(App):
             # Left pane - session list
             with Container(id="left-pane"):
                 yield Static("Orchestra", id="sidebar-title")
-                self.branch_info = Static("", id="branch-info")
-                yield self.branch_info
                 self.status_indicator = Static("", id="status-indicator")
                 yield self.status_indicator
                 self.session_list = ListView(id="session-list")
@@ -261,43 +247,35 @@ class UnifiedApp(App):
         self.state.root_session_id = branch_name
 
         # Load sessions for current branch only
-        self.state.load(root_session_id=self.state.root_session_id, protocol=self.agent)
+        self.state.load(root_session_id=self.state.root_session_id)
 
         # Ensure branch session exists
         if not self.state.root_session:
             try:
-                # Show status indicator
                 self.status_indicator.update("⏳ Creating session...")
 
                 # First time setup - ensure .git is in stable location
-                await asyncio.to_thread(ensure_stable_git_location, Path.cwd())
+                ensure_stable_git_location(Path.cwd())
 
                 # Create designer session for this branch
                 logger.info(f"Creating designer session for branch: {branch_name}")
                 new_session = Session(
                     session_id=branch_name,
                     agent_type=AgentType.DESIGNER,
-                    protocol=self.agent,
                     source_path=str(Path.cwd()),
                 )
-                await asyncio.to_thread(new_session.prepare)
-                if await asyncio.to_thread(new_session.start):
+                new_session.prepare()
+                if new_session.start():
                     self.state.root_session = new_session
-                    await asyncio.to_thread(
-                        save_session, new_session, self.state.project_dir
-                    )
+                    save_session(new_session, self.state.project_dir)
                     logger.info(f"Successfully created and saved session {branch_name}")
                 else:
                     logger.error(f"Failed to start session {branch_name}")
 
-                # Clear status indicator
                 self.status_indicator.update("")
             except Exception as e:
                 logger.exception(f"Error creating designer session: {e}")
                 self.status_indicator.update("")
-
-        # Update branch info display
-        self.branch_info.update(f"Designer: {branch_name}")
 
         await self.action_refresh()
 
@@ -308,8 +286,13 @@ class UnifiedApp(App):
         # Focus the session list by default
         self.set_focus(self.session_list)
 
-        # Start watching sessions file for changes
-        self._watch_task = asyncio.create_task(self._watch_sessions_file())
+        # Watch sessions.json for changes
+        async def on_sessions_file_change(path, change_type):
+            logger.info("Sessions file changed, refreshing...")
+            self.state.load(root_session_id=self.state.root_session_id)
+            await self.action_refresh()
+
+        self.state.file_watcher.register(SESSIONS_FILE, on_sessions_file_change)
 
         # Start the file watcher
         await self.state.file_watcher.start()
@@ -317,44 +300,32 @@ class UnifiedApp(App):
     async def action_refresh(self) -> None:
         """Refresh the session list"""
         # Save current selection
-        current_session = self.state.get_session_by_index(self.session_list.index)
+        index = self.session_list.index if self.session_list.index is not None else 0
+        current_session = self.state.get_session_by_index(index)
         selected_id = current_session.session_id if current_session else None
 
+        # Clear and rebuild list
         self.session_list.clear()
 
-        if not self.state.root_session:
-            self.session_list.append(ListItem(Label("No sessions found")))
+        root = self.state.root_session
+        if not root:
             return
 
-        # Add designer session
-        root = self.state.root_session
-        status = self.agent.get_status(root.session_id, root.use_docker)
-        status_icon = "●" if status.get("attached", False) else "○"
-        paired_indicator = (
-            "[P] " if self.state.paired_session_id == root.session_id else ""
-        )
-        self.session_list.append(
-            ListItem(Label(f"{status_icon} {paired_indicator}🎨 {root.session_id}"))
-        )
+        # Render designer session
+        paired_marker = "[P] " if self.state.paired_session_id == root.session_id else ""
+        label_text = f"[D] {paired_marker}{root.session_id}"
+        self.session_list.append(ListItem(Label(label_text)))
 
-        # Add executor sessions
+        # Render executor sessions
         for child in root.children:
-            status = self.agent.get_status(child.session_id, child.use_docker)
-            status_icon = "●" if status.get("attached", False) else "○"
-            paired_indicator = (
-                "[P] " if self.state.paired_session_id == child.session_id else ""
-            )
-            self.session_list.append(
-                ListItem(
-                    Label(f"{status_icon} {paired_indicator}👷 {child.session_id}")
-                )
-            )
+            paired_marker = "[P] " if self.state.paired_session_id == child.session_id else ""
+            label_text = f"[E] {paired_marker}{child.session_id}"
+            self.session_list.append(ListItem(Label(label_text)))
 
         # Restore selection
         if selected_id:
             new_index = self.state.get_index_by_session_id(selected_id)
-            if new_index is not None:
-                self.session_list.index = new_index
+            self.session_list.index = new_index if new_index is not None else 0
 
     def action_cursor_up(self) -> None:
         """Move cursor up in the list"""
@@ -363,6 +334,12 @@ class UnifiedApp(App):
     def action_cursor_down(self) -> None:
         """Move cursor down in the list"""
         self.session_list.action_cursor_down()
+
+    def action_select_session(self) -> None:
+        """Select and attach to the currently highlighted session"""
+        session = self.state.get_session_by_index(self.session_list.index)
+        if session:
+            self._attach_to_session(session)
 
     def action_scroll_tab_up(self) -> None:
         """Scroll up in the active monitor/diff tab"""
@@ -392,32 +369,11 @@ class UnifiedApp(App):
 
     async def _delete_session_task(self, session_to_delete: Session) -> None:
         """Background task for deleting a session"""
-        try:
-            # Delete the session (handles Docker or local mode)
-            await asyncio.to_thread(session_to_delete.delete)
-
-            # Save the root session (if it still exists)
-            if self.state.root_session and session_to_delete != self.state.root_session:
-                await asyncio.to_thread(
-                    save_session, self.state.root_session, self.state.project_dir
-                )
-        finally:
-            # Remove from state - simple: root or child
-            if (
-                self.state.root_session
-                and session_to_delete.session_id == self.state.root_session.session_id
-            ):
-                # Deleting root - clear everything
-                self.state.root_session = None
-            else:
-                # Deleting a child
-                self.state.remove_child(session_to_delete.session_id)
-
-            # Refresh the list
-            await self.action_refresh()
-
-            # Clear status indicator
-            self.status_indicator.update("")
+        await asyncio.to_thread(session_to_delete.delete)
+        self.state.remove_child(session_to_delete.session_id)
+        save_session(self.state.root_session, self.state.project_dir)
+        await self.action_refresh()
+        self.status_indicator.update("")
 
     def action_delete_session(self) -> None:
         """Delete the currently selected session"""
@@ -429,25 +385,21 @@ class UnifiedApp(App):
         if not session_to_delete:
             return
 
+        # Can't delete root session
+        if session_to_delete == self.state.root_session:
+            self.status_indicator.update("Cannot delete designer session")
+            return
+
         # If deleting the active session, switch to designer first
         if self.state.active_session_id == session_to_delete.session_id:
-            if self.state.root_session and session_to_delete != self.state.root_session:
-                self._attach_to_session(self.state.root_session)
-            else:
-                self.hud.set_session("")
+            self._attach_to_session(self.state.root_session)
 
-        # Show status indicator
         self.status_indicator.update("⏳ Deleting session...")
-
-        # Run delete in background without waiting
         asyncio.create_task(self._delete_session_task(session_to_delete))
 
     async def _toggle_pairing_task(self, session: Session, is_paired: bool) -> None:
         """Background task for toggling pairing"""
-        # Set session.paired temporarily for toggle_pairing to work
         session.paired = is_paired
-
-        # Toggle pairing (this does I/O)
         success, error_msg = await asyncio.to_thread(session.toggle_pairing)
 
         if not success:
@@ -456,22 +408,15 @@ class UnifiedApp(App):
             self.status_indicator.update("")
             return
 
-        # Update state based on new pairing status
         if is_paired:
-            # Was paired, now unpaired
             self.state.paired_session_id = None
             paired_indicator = ""
         else:
-            # Was unpaired, now paired
             self.state.paired_session_id = session.session_id
             paired_indicator = "[P] "
 
         self.hud.set_session(f"{paired_indicator}{session.session_id}")
-
-        # Refresh the list to show pairing status
         await self.action_refresh()
-
-        # Clear status indicator
         self.status_indicator.update("")
 
     def action_toggle_pairing(self) -> None:
@@ -484,15 +429,11 @@ class UnifiedApp(App):
         if not session:
             return
 
-        # Check if this session is currently paired (from state)
         is_paired = self.state.paired_session_id == session.session_id
-
-        # Show status indicators
         pairing_mode = "paired" if not is_paired else "unpaired"
         self.status_indicator.update(f"⏳ Switching to {pairing_mode}...")
         self.hud.set_session(f"Switching to {pairing_mode} mode...")
 
-        # Run toggle in background without waiting
         asyncio.create_task(self._toggle_pairing_task(session, is_paired))
 
     def action_open_spec(self) -> None:
@@ -513,7 +454,7 @@ class UnifiedApp(App):
             logger.info(f"Created {designer_md}")
 
         # Register file watcher for designer.md to notify session on changes
-        watch_designer_file(self.state.file_watcher, designer_md, session)
+        self.state.file_watcher.add_designer_watcher(designer_md, session)
 
         # Use helper to respawn pane with vim
         if respawn_pane_with_vim(designer_md):
@@ -543,8 +484,8 @@ class UnifiedApp(App):
         # Update state
         self.state.set_active_session(session.session_id)
 
-        # Check session status using the protocol
-        status = self.agent.get_status(session.session_id, session.use_docker)
+        # Check session status
+        status = session.get_status()
 
         if not status.get("exists", False):
             # Session doesn't exist, create it
@@ -554,26 +495,11 @@ class UnifiedApp(App):
                 # Failed to create session, show error in pane
                 logger.error(f"Failed to start session {session.session_id}")
                 error_cmd = f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
-                subprocess.run(
-                    [
-                        "tmux",
-                        "-L",
-                        "orchestra",
-                        "respawn-pane",
-                        "-t",
-                        PANE_AGENT,
-                        "-k",
-                        error_cmd,
-                    ],
-                    capture_output=True,
-                    text=True,
-                )
+                respawn_pane(PANE_AGENT, error_cmd)
                 return
 
         # At this point, session exists - attach to it in pane 2
-        self.agent.attach(
-            session.session_id, target_pane=PANE_AGENT, use_docker=session.use_docker
-        )
+        session.protocol.attach(session.session_id, target_pane=PANE_AGENT)
 
         # Update HUD with session name
         self.hud.set_session(session.session_id)
@@ -582,38 +508,6 @@ class UnifiedApp(App):
         monitor_tab = self.query_one(ModelMonitorTab)
         monitor_tab.refresh_monitor()
 
-    async def _watch_sessions_file(self) -> None:
-        """Watch sessions.json for changes and refresh when modified"""
-        while True:
-            try:
-                if SESSIONS_FILE.exists():
-                    current_mtime = SESSIONS_FILE.stat().st_mtime
-                    if (
-                        self._last_session_mtime is not None
-                        and current_mtime != self._last_session_mtime
-                    ):
-                        logger.info("Sessions file changed, refreshing...")
-                        # Reload sessions from disk
-                        self.state.load(
-                            root_session_id=self.state.root_session_id,
-                            protocol=self.agent,
-                        )
-                        await self.action_refresh()
-                    self._last_session_mtime = current_mtime
-            except Exception as e:
-                logger.error(f"Error watching sessions file: {e}")
-
-            # Check every second
-            await asyncio.sleep(1)
-
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle session selection from list when clicked"""
-        idx = event.list_view.index
-        if idx is None:
-            return
-
-        session = self.state.get_session_by_index(idx)
-        if not session:
-            return
-
-        self._attach_to_session(session)
+        self.action_select_session()

@@ -11,6 +11,7 @@ from cerb_code.lib.config import load_config
 
 logger = get_logger(__name__)
 
+# UnifiedApp is imported from cerb_code.frontend.app above
 
 START_MONITOR = True
 

@@ -74,17 +74,16 @@ class ModelMonitorTab(Container):
 
         for session_id, monitor_data in sorted_monitors:
             # Header for each session
-            agent_icon = (
-                "👷" if monitor_data.get("agent_type") == "executor" else "🎨"
-            )
+            agent_type = monitor_data.get('agent_type', 'unknown')
+            agent_prefix = "[E]" if agent_type == "executor" else "[D]"
             self.monitor_log.write("", expand=True)
             self.monitor_log.write(
                 "[bold cyan]══════════════════════════════════════════════════[/bold cyan]",
                 expand=True,
             )
             self.monitor_log.write(
-                f"[bold yellow]{agent_icon} {session_id}[/bold yellow] "
-                f"[dim]({monitor_data.get('agent_type', 'unknown')})[/dim]",
+                f"[bold yellow]{agent_prefix} {session_id}[/bold yellow] "
+                f"[dim]({agent_type})[/dim]",
                 expand=True,
             )
             self.monitor_log.write(

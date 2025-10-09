@@ -46,11 +46,12 @@ class Session:
         else:
             self.use_docker = use_docker
 
-        # Create protocol instance based on config
+        # Create protocol instance based on config and session's use_docker
         config = load_config()
         self.protocol = TmuxProtocol(
             default_command="claude",
             mcp_port=config.get("mcp_port", 8765),
+            use_docker=self.use_docker,
         )
 
     def start(self) -> bool:
@@ -66,8 +67,8 @@ class Session:
         # Delete all children first
         for child in self.children:
             child.delete()
-        # Then delete self
-        return self.protocol.delete(self.session_id, self.use_docker)
+        # Delete self
+        return self.protocol.delete(self.session_id)
 
     def add_instructions(self) -> None:
         """Add agent-specific instructions to CLAUDE.md"""
@@ -115,20 +116,19 @@ class Session:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], protocol=None) -> "Session":
+    def from_dict(cls, data: Dict[str, Any]) -> "Session":
         """Deserialize session from dictionary"""
         session = cls(
             session_id=data["session_id"],
             agent_type=AgentType(data["agent_type"]),
-            protocol=protocol,
             source_path=data.get("source_path", ""),
             work_path=data.get("work_path"),
             active=data.get("active", False),
             use_docker=data.get("use_docker"),  # Will use default if None
         )
-        # Recursively load children (they inherit the same protocol)
+        # Recursively load children (each creates its own protocol)
         session.children = [
-            cls.from_dict(child_data, protocol)
+            cls.from_dict(child_data)
             for child_data in data.get("children", [])
         ]
         return session
@@ -261,9 +261,13 @@ class Session:
         paired_indicator = "[P] " if self.paired else ""
         return f"{status} {paired_indicator}{self.session_id}"
 
+    def get_status(self) -> Dict[str, Any]:
+        """Get status information for this session"""
+        return self.protocol.get_status(self.session_id)
+
     def send_message(self, message: str) -> None:
         """Send a message to the session"""
-        self.protocol.send_message(self.session_id, message, self.use_docker)
+        self.protocol.send_message(self.session_id, message)
 
     def toggle_pairing(self) -> tuple[bool, str]:
         """
@@ -278,7 +282,6 @@ class Session:
 
 
 def load_sessions(
-    protocol=TmuxProtocol(),
     flat=False,
     project_dir: Optional[Path] = None,
     root: Optional[str] = None,
@@ -286,7 +289,6 @@ def load_sessions(
     """Load sessions from JSON file for a specific project directory
 
     Args:
-        protocol: Protocol to use for sessions
         flat: If True, return flattened list of sessions (including children)
         project_dir: Specific project directory to load sessions for. If None, uses cwd.
         root: If specified, only return the session with this ID (+ children). Otherwise return all.
@@ -304,7 +306,7 @@ def load_sessions(
                 data = json.load(f)
                 project_sessions = data.get(project_dir_str, [])
                 sessions = [
-                    Session.from_dict(session_data, protocol)
+                    Session.from_dict(session_data)
                     for session_data in project_sessions
                 ]
         except (json.JSONDecodeError, KeyError):
@@ -344,8 +346,8 @@ def save_session(session: Session, project_dir: Optional[Path] = None) -> None:
     # Don't resolve - if project_dir is a symlink (from pairing), we want to keep the original path
     project_dir_str = str(project_dir)
 
-    # Load existing sessions (without protocol since we just need the structure)
-    existing_sessions = load_sessions(protocol=None, project_dir=project_dir)
+    # Load existing sessions
+    existing_sessions = load_sessions(project_dir=project_dir)
 
     # Find and update the session, or append if not found
     found = False

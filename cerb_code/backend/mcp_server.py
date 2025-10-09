@@ -7,16 +7,11 @@ from pathlib import Path
 from mcp.server import FastMCP
 
 from cerb_code.lib.sessions import load_sessions, save_session, find_session
-from cerb_code.lib.tmux_agent import TmuxProtocol
 
 # Create FastMCP server instance
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
 host = "0.0.0.0"
 mcp = FastMCP("cerb-subagent", port=port, host=host)
-
-# Create a shared protocol for sessions
-protocol = TmuxProtocol(default_command="claude")
-
 
 @mcp.tool()
 def spawn_subagent(
@@ -35,7 +30,7 @@ def spawn_subagent(
         Success message with child session ID, or error message
     """
     # Load sessions from source path
-    sessions = load_sessions(protocol=protocol, project_dir=Path(source_path))
+    sessions = load_sessions(project_dir=Path(source_path))
 
     # Find parent session
     parent = find_session(sessions, parent_session_id)
@@ -66,7 +61,7 @@ def send_message_to_session(session_id: str, message: str, source_path: str) -> 
         Success or error message
     """
     # Load sessions from source path
-    sessions = load_sessions(protocol=protocol, project_dir=Path(source_path))
+    sessions = load_sessions(project_dir=Path(source_path))
 
     # Find target session
     target = find_session(sessions, session_id)

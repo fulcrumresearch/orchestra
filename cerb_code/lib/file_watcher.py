@@ -148,34 +148,25 @@ class FileWatcher:
             # Otherwise, loop continues and restarts awatch with updated file list
             logger.info(f"Restarting file watcher with {len(self._watchers)} files")
 
+    def add_designer_watcher(self, designer_md: Path, session: "Session") -> None:
+        """
+        Register a watcher for designer.md that notifies the session when it changes.
 
-def watch_designer_file(
-    file_watcher: FileWatcher,
-    designer_md: Path,
-    session: "Session",
-) -> None:
-    """
-    Register a watcher for designer.md that notifies the session when it changes.
+        Args:
+            designer_md: Path to the designer.md file
+            session: The session to notify
+        """
+        designer_md = Path(designer_md).resolve()
 
-    Args:
-        file_watcher: The FileWatcher instance to register with
-        designer_md: Path to the designer.md file
-        session: The session to notify
-    """
-    designer_md = Path(designer_md).resolve()
+        async def on_designer_change(path: Path, change_type: Change) -> None:
+            """Handler for designer.md changes"""
+            logger.info(
+                f"designer.md changed ({change_type.name}) for session {session.session_id}"
+            )
+            session.send_message("designer.md has been updated. Please review the changes")
+            logger.info(f"Notified session {session.session_id} about designer.md update")
 
-    async def on_designer_change(path: Path, change_type: Change) -> None:
-        """Handler for designer.md changes"""
+        self.register(designer_md, on_designer_change)
         logger.info(
-            f"designer.md changed ({change_type.name}) for session {session.session_id}"
+            f"Registered designer.md watcher for session {session.session_id}: {designer_md}"
         )
-
-        # Send notification to the session
-        session.send_message("designer.md has been updated. Please review the changes")
-        logger.info(f"Notified session {session.session_id} about designer.md update")
-
-    # Register with file path - FileWatcher will watch parent directory internally
-    file_watcher.register(designer_md, on_designer_change)
-    logger.info(
-        f"Registered designer.md watcher for session {session.session_id}: {designer_md}"
-    )

@@ -26,15 +26,13 @@ class AppState:
         self.project_dir = project_dir
         self.file_watcher = FileWatcher()
 
-    def load(self, root_session_id: str, protocol=None) -> None:
+    def load(self, root_session_id: str) -> None:
         """Load sessions from disk.
 
         Args:
             root_session_id: The root session ID to load
-            protocol: The TmuxProtocol instance to use for sessions
         """
         sessions = load_sessions(
-            protocol=protocol,
             root=root_session_id,
             project_dir=self.project_dir
         )
