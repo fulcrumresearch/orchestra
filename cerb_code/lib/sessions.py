@@ -91,7 +91,9 @@ class Session:
 
         if import_line not in existing_content:
             if existing_content:
-                new_content = f"{existing_content}\n# Kerberos Session Configuration\n{import_line}\n"
+                new_content = (
+                    f"{existing_content}\n# Kerberos Session Configuration\n{import_line}\n"
+                )
             else:
                 new_content = f"# Kerberos Session Configuration\n{import_line}\n"
 
@@ -120,10 +122,7 @@ class Session:
             use_docker=data.get("use_docker"),
         )
         # Recursively load children (each creates its own protocol)
-        session.children = [
-            cls.from_dict(child_data)
-            for child_data in data.get("children", [])
-        ]
+        session.children = [cls.from_dict(child_data) for child_data in data.get("children", [])]
         return session
 
     def prepare(self):
@@ -279,10 +278,7 @@ def load_sessions(
             with open(SESSIONS_FILE, "r") as f:
                 data = json.load(f)
                 project_sessions = data.get(project_dir_str, [])
-                sessions = [
-                    Session.from_dict(session_data)
-                    for session_data in project_sessions
-                ]
+                sessions = [Session.from_dict(session_data) for session_data in project_sessions]
         except (json.JSONDecodeError, KeyError):
             pass
 

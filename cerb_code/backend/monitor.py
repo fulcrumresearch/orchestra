@@ -46,9 +46,7 @@ os.environ["CLAUDE_MONITOR_SKIP_FORWARD"] = "1"
 app = FastAPI(title="Claude Code Multi-Monitor", version="1.0")
 
 logger = logging.getLogger("multi_monitor")
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(message)s")
 
 # session_id -> SessionWorker
 _workers: Dict[str, SessionMonitor] = {}
@@ -116,9 +114,7 @@ async def hook(request: Request, session_id: str) -> Dict[str, str]:
     }
 
     event_type = evt.get("event", "UnknownEvent")
-    logger.info(
-        f"Received event {event_type} for session {session_id} in {source_path}"
-    )
+    logger.info(f"Received event {event_type} for session {session_id} in {source_path}")
 
     if event_type == "Stop":
         logger.info(f"Received stop event for session {session_id}")

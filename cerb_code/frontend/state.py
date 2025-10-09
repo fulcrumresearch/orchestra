@@ -32,10 +32,7 @@ class AppState:
         Args:
             root_session_id: The root session ID to load
         """
-        sessions = load_sessions(
-            root=root_session_id,
-            project_dir=self.project_dir
-        )
+        sessions = load_sessions(root=root_session_id, project_dir=self.project_dir)
         self.root_session = sessions[0] if sessions else None
 
     def get_active_session(self) -> Optional[Session]:

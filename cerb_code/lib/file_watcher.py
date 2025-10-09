@@ -131,9 +131,7 @@ class FileWatcher:
                             try:
                                 await handler(path, change_type)
                             except Exception as e:
-                                logger.error(
-                                    f"Error in file watcher handler for {path}: {e}"
-                                )
+                                logger.error(f"Error in file watcher handler for {path}: {e}")
                 logger.info("File watcher stopped")
 
             except Exception as e:

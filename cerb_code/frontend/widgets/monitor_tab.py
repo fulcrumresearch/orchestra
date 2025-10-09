@@ -59,22 +59,15 @@ class ModelMonitorTab(Container):
         self.monitor_log.clear()
 
         if not monitors:
-            self.monitor_log.write(
-                "[dim]No monitor.md files found[/dim]",
-                expand=True
-            )
+            self.monitor_log.write("[dim]No monitor.md files found[/dim]", expand=True)
             return
 
         # Sort by last modified time (most recent first)
-        sorted_monitors = sorted(
-            monitors.items(),
-            key=lambda x: x[1]["mtime"],
-            reverse=True
-        )
+        sorted_monitors = sorted(monitors.items(), key=lambda x: x[1]["mtime"], reverse=True)
 
         for session_id, monitor_data in sorted_monitors:
             # Header for each session
-            agent_type = monitor_data.get('agent_type', 'unknown')
+            agent_type = monitor_data.get("agent_type", "unknown")
             agent_prefix = "[E]" if agent_type == "executor" else "[D]"
             self.monitor_log.write("", expand=True)
             self.monitor_log.write(
@@ -82,18 +75,14 @@ class ModelMonitorTab(Container):
                 expand=True,
             )
             self.monitor_log.write(
-                f"[bold yellow]{agent_prefix} {session_id}[/bold yellow] "
-                f"[dim]({agent_type})[/dim]",
+                f"[bold yellow]{agent_prefix} {session_id}[/bold yellow] [dim]({agent_type})[/dim]",
                 expand=True,
             )
             self.monitor_log.write(
                 f"[dim]Last updated: {monitor_data['last_updated']}[/dim]",
                 expand=True,
             )
-            self.monitor_log.write(
-                f"[dim]{monitor_data['path']}[/dim]",
-                expand=True
-            )
+            self.monitor_log.write(f"[dim]{monitor_data['path']}[/dim]", expand=True)
             self.monitor_log.write(
                 "[bold cyan]──────────────────────────────────────────────────[/bold cyan]",
                 expand=True,
@@ -120,25 +109,16 @@ class ModelMonitorTab(Container):
                             expand=True,
                         )
                     elif line.startswith("### "):
-                        self.monitor_log.write(
-                            f"[green]{escaped_line}[/green]",
-                            expand=True
-                        )
+                        self.monitor_log.write(f"[green]{escaped_line}[/green]", expand=True)
                     elif line.startswith("- "):
                         self.monitor_log.write(
                             f"[yellow]{escaped_line}[/yellow]",
                             expand=True,
                         )
                     elif "ERROR" in line or "WARNING" in line:
-                        self.monitor_log.write(
-                            f"[red]{escaped_line}[/red]",
-                            expand=True
-                        )
+                        self.monitor_log.write(f"[red]{escaped_line}[/red]", expand=True)
                     elif "SUCCESS" in line or "OK" in line or "✓" in line:
-                        self.monitor_log.write(
-                            f"[green]{escaped_line}[/green]",
-                            expand=True
-                        )
+                        self.monitor_log.write(f"[green]{escaped_line}[/green]", expand=True)
                     elif line.startswith("HOOK EVENT:"):
                         self.monitor_log.write(
                             f"[magenta]{escaped_line}[/magenta]",
@@ -149,9 +129,6 @@ class ModelMonitorTab(Container):
                         or line.startswith("session_id:")
                         or line.startswith("tool:")
                     ):
-                        self.monitor_log.write(
-                            f"[blue]{escaped_line}[/blue]",
-                            expand=True
-                        )
+                        self.monitor_log.write(f"[blue]{escaped_line}[/blue]", expand=True)
                     else:
                         self.monitor_log.write(escaped_line, expand=True)

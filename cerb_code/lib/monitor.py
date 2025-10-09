@@ -85,9 +85,7 @@ class SessionMonitor:
         # Format system prompt with session info
         system_prompt = self.system_prompt_template.format(
             session_id=self.session.session_id,
-            agent_type=self.session.agent_type.value
-            if self.session.agent_type
-            else "unknown",
+            agent_type=self.session.agent_type.value if self.session.agent_type else "unknown",
         )
 
         # MCP config to give monitor access to send_message_to_session
@@ -149,9 +147,7 @@ class SessionMonitor:
 
                 # Try to get more events (with timeout)
                 try:
-                    evt = await asyncio.wait_for(
-                        self.queue.get(), timeout=BATCH_WAIT_TIME
-                    )
+                    evt = await asyncio.wait_for(self.queue.get(), timeout=BATCH_WAIT_TIME)
                     batch.append(evt)
                 except asyncio.TimeoutError:
                     break
@@ -163,9 +159,7 @@ class SessionMonitor:
 
                 await self.client.query(combined_prompt)
                 async for chunk in self.client.receive_response():
-                    logger.info(
-                        "[%s] batch[%d]> %s", self.session.session_id, len(batch), chunk
-                    )
+                    logger.info("[%s] batch[%d]> %s", self.session.session_id, len(batch), chunk)
             finally:
                 # Mark all events as done
                 for _ in batch:
@@ -187,9 +181,7 @@ class SessionMonitorWatcher:
         self._collect_from_session(self.session, monitors)
         return monitors
 
-    def _collect_from_session(
-        self, sess: Session, monitors: Dict[str, Dict[str, Any]]
-    ) -> None:
+    def _collect_from_session(self, sess: Session, monitors: Dict[str, Dict[str, Any]]) -> None:
         """Recursively collect monitor files from a session and its children"""
         if not sess.work_path:
             return

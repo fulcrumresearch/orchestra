@@ -21,6 +21,7 @@ logger = get_logger(__name__)
 def tmux_env() -> dict:
     """Get environment for tmux commands"""
     import os
+
     return dict(os.environ, TERM="xterm-256color")
 
 
@@ -56,9 +57,7 @@ class TmuxProtocol(AgentProtocol):
         self.mcp_port = mcp_port
         self.use_docker = use_docker
 
-    def _exec(
-        self, session_id: str, cmd: list[str]
-    ) -> subprocess.CompletedProcess:
+    def _exec(self, session_id: str, cmd: list[str]) -> subprocess.CompletedProcess:
         """Execute command (Docker or local mode)"""
         if self.use_docker:
             container_name = get_docker_container_name(session_id)
@@ -96,7 +95,7 @@ class TmuxProtocol(AgentProtocol):
                 container_name=container_name,
                 work_path=session.work_path,
                 mcp_port=self.mcp_port,
-                paired=session.paired
+                paired=session.paired,
             ):
                 return False
 
@@ -129,9 +128,7 @@ class TmuxProtocol(AgentProtocol):
             time.sleep(2)  # Give Claude a moment to start
             logger.info(f"Wait complete, now sending Enter to {session.session_id}")
             session.send_message("")
-            logger.info(
-                f"Sent Enter to session {session.session_id} to accept trust prompt"
-            )
+            logger.info(f"Sent Enter to session {session.session_id} to accept trust prompt")
 
         return result.returncode == 0
 
@@ -200,9 +197,7 @@ class TmuxProtocol(AgentProtocol):
         )
         return r1.returncode == 0 and r2.returncode == 0
 
-    def attach(
-        self, session_id: str, target_pane: str = "2"
-    ) -> bool:
+    def attach(self, session_id: str, target_pane: str = "2") -> bool:
         """Attach to a tmux session in the specified pane"""
         if self.use_docker:
             # Docker mode: spawn docker exec command in the pane
@@ -301,7 +296,9 @@ class TmuxProtocol(AgentProtocol):
                 worktree_git_file.write_text(
                     f"gitdir: {backup}/.git/worktrees/{session.session_id}\n"
                 )
-                logger.info(f"Updated {worktree_git_file} to point to {backup}/.git/worktrees/{session.session_id}")
+                logger.info(
+                    f"Updated {worktree_git_file} to point to {backup}/.git/worktrees/{session.session_id}"
+                )
             except Exception as e:
                 # Rollback: restore the directory
                 backup.rename(source)
@@ -332,7 +329,9 @@ class TmuxProtocol(AgentProtocol):
                 worktree_git_file.write_text(
                     f"gitdir: {source}/.git/worktrees/{session.session_id}\n"
                 )
-                logger.info(f"Updated {worktree_git_file} to point to {source}/.git/worktrees/{session.session_id}")
+                logger.info(
+                    f"Updated {worktree_git_file} to point to {source}/.git/worktrees/{session.session_id}"
+                )
             except Exception as e:
                 return False, f"Failed to update worktree .git file: {e}"
 

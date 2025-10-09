@@ -463,7 +463,9 @@ class UnifiedApp(App):
 
             if not session.start():
                 logger.error(f"Failed to start session {session.session_id}")
-                error_cmd = f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
+                error_cmd = (
+                    f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
+                )
                 respawn_pane(PANE_AGENT, error_cmd)
                 return
 

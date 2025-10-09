@@ -53,10 +53,7 @@ class DiffTab(Container):
         try:
             # Get git diff
             result = subprocess.run(
-                ["git", "diff", "HEAD"],
-                cwd=work_path,
-                capture_output=True,
-                text=True
+                ["git", "diff", "HEAD"], cwd=work_path, capture_output=True, text=True
             )
 
             if result.returncode == 0:
@@ -73,10 +70,7 @@ class DiffTab(Container):
                                 expand=True,
                             )
                         elif line.startswith("-"):
-                            self.diff_log.write(
-                                f"[red]{escaped_line}[/red]",
-                                expand=True
-                            )
+                            self.diff_log.write(f"[red]{escaped_line}[/red]", expand=True)
                         elif line.startswith("@@"):
                             self.diff_log.write(
                                 f"[cyan]{escaped_line}[/cyan]",
@@ -94,18 +88,9 @@ class DiffTab(Container):
                         f"[dim]No changes in: {work_path}[/dim]",
                         expand=True,
                     )
-                    self.diff_log.write(
-                        f"[dim]Session: {session_id}[/dim]",
-                        expand=True
-                    )
+                    self.diff_log.write(f"[dim]Session: {session_id}[/dim]", expand=True)
             else:
-                self.diff_log.write(
-                    f"[red]Git error: {escape(result.stderr)}[/red]",
-                    expand=True
-                )
+                self.diff_log.write(f"[red]Git error: {escape(result.stderr)}[/red]", expand=True)
 
         except Exception as e:
-            self.diff_log.write(
-                f"[red]Error: {escape(str(e))}[/red]",
-                expand=True
-            )
+            self.diff_log.write(f"[red]Error: {escape(str(e))}[/red]", expand=True)

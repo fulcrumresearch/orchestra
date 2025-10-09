@@ -108,7 +108,9 @@ def respawn_pane_with_vim(spec_file: Path) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    vim_cmd = f"bash -c '$EDITOR {spec_file}; clear; echo \"Press S to open spec editor\"; exec bash'"
+    vim_cmd = (
+        f"bash -c '$EDITOR {spec_file}; clear; echo \"Press S to open spec editor\"; exec bash'"
+    )
     return respawn_pane(PANE_EDITOR, vim_cmd)
 
 
@@ -180,26 +182,19 @@ def start_docker_container(
         # Ensure Docker image exists
         ensure_docker_image()
 
-        # Check if container already exists
+        # Check if container already exists (exact name match)
         check_result = subprocess.run(
-            ["docker", "ps", "-a", "-q", "-f", f"name=^{container_name}$"],
+            ["docker", "inspect", "--format={{.State.Running}}", container_name],
             capture_output=True,
             text=True,
         )
 
-        if check_result.stdout.strip():
-            # Container exists, check if it's running
-            running_check = subprocess.run(
-                ["docker", "ps", "-q", "-f", f"name=^{container_name}$"],
-                capture_output=True,
-                text=True,
-            )
-            if running_check.stdout.strip():
-                # Already running, just return
+        if check_result.returncode == 0:
+            is_running = check_result.stdout.strip() == "true"
+            if is_running:
                 logger.info(f"Container {container_name} already running")
                 return True
             else:
-                # Stopped container, remove it
                 subprocess.run(["docker", "rm", container_name], capture_output=True)
 
         # Prepare volume mounts
@@ -254,9 +249,7 @@ def start_docker_container(
             if copy_result.returncode == 0:
                 logger.info(f"Copied .claude directory into container")
             else:
-                logger.warning(
-                    f"Failed to copy .claude directory: {copy_result.stderr}"
-                )
+                logger.warning(f"Failed to copy .claude directory: {copy_result.stderr}")
 
         # Copy user's .claude.json config file into container and inject MCP config
         configure_mcp_in_container(container_name, mcp_port)
@@ -310,9 +303,7 @@ def configure_mcp_in_container(container_name: str, mcp_port: int) -> None:
     if copy_result.returncode == 0:
         logger.info(f"Configured MCP in container .claude.json (URL: {mcp_url})")
     else:
-        logger.warning(
-            f"Failed to copy .claude.json to container: {copy_result.stderr}"
-        )
+        logger.warning(f"Failed to copy .claude.json to container: {copy_result.stderr}")
     Path(tmp_path).unlink(missing_ok=True)
 
 
