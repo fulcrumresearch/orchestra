@@ -17,6 +17,12 @@ class AgentType(Enum):
     EXECUTOR = "executor"
 
 
+AGENT_TEMPLATES = {
+    AgentType.DESIGNER: DESIGNER_PROMPT,
+    AgentType.EXECUTOR: EXECUTOR_PROMPT,
+}
+
+
 class Session:
     def __init__(
         self,
@@ -66,16 +72,13 @@ class Session:
         claude_dir = Path(self.work_path) / ".claude"
         claude_dir.mkdir(parents=True, exist_ok=True)
 
-        # Select the appropriate prompt based on agent type
-        if self.agent_type == AgentType.DESIGNER:
-            prompt_template = DESIGNER_PROMPT
-        else:  # AgentType.EXECUTOR
-            prompt_template = EXECUTOR_PROMPT
+        prompt_template = AGENT_TEMPLATES[self.agent_type]
 
-        # Create/update kerberos.md with session-specific information
         kerberos_md_path = claude_dir / "kerberos.md"
         formatted_prompt = prompt_template.format(
-            session_id=self.session_id, work_path=self.work_path, source_path=self.source_path
+            session_id=self.session_id,
+            work_path=self.work_path,
+            source_path=self.source_path,
         )
         kerberos_md_path.write_text(formatted_prompt)
 
@@ -87,11 +90,9 @@ class Session:
         if claude_md_path.exists():
             existing_content = claude_md_path.read_text()
 
-        # Check if import is already present
         if import_line not in existing_content:
-            # Add import line at the beginning with a separator
             if existing_content:
-                new_content = f"# Kerberos Session Configuration\n{import_line}\n\n{existing_content}"
+                new_content = f"{existing_content}\n# Kerberos Session Configuration\n{import_line}\n"
             else:
                 new_content = f"# Kerberos Session Configuration\n{import_line}\n"
 

@@ -178,6 +178,7 @@ class UnifiedApp(App):
         Binding("p", "toggle_pairing", "Toggle Pairing", priority=True, show=True),
         Binding("s", "open_spec", "Open Spec", priority=True),
         Binding("t", "open_terminal", "Open Terminal", priority=True),
+        Binding("enter", "select_session", "Select Session", show=False),
         Binding("up", "cursor_up", show=False),
         Binding("down", "cursor_down", show=False),
         Binding("k", "scroll_tab_up", "Scroll Tab Up", show=False),
