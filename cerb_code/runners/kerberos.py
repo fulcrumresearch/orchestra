@@ -373,6 +373,10 @@ class UnifiedApp(App):
                 if session.session_id == selected_session_id:
                     self.session_list.index = i
                     break
+        elif self.flat_sessions:
+            # If no selection exists but we have sessions, select the first one
+            self.session_list.index = 0
+            logger.info("Auto-selected first session in list")
 
         # Don't save here - this causes an infinite loop with the file watcher!
 
@@ -615,7 +619,7 @@ class UnifiedApp(App):
         # Get the highlighted session from the list
         index = self.session_list.index
         if index is None or index >= len(self.flat_sessions):
-            logger.warning("No session highlighted to open spec for")
+            logger.warning("No session selected to open spec for")
             return
 
         session = self.flat_sessions[index]
