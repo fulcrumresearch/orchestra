@@ -76,9 +76,23 @@ REPO_NAME=$(basename "$(pwd)")
 
 # Check if we're already in a tmux session
 if [[ -n "${TMUX:-}" ]]; then
-    # Create new window in current session
-    tmux -L orchestra new-window -n "cerb-${REPO_NAME}"
-    create_layout ""  # Empty prefix since we're in the current window
+    # When already inside tmux, create the dedicated 'orchestra' session and layout,
+    # then open a window in the current tmux that attaches (nested) to that server.
+    SESSION_NAME="cerb-${REPO_NAME}"
+    WINDOW_NAME="main"
+
+    # Ensure a clean orchestra session
+    tmux -L orchestra kill-session -t "$SESSION_NAME" 2>/dev/null || true
+    tmux -L orchestra new-session -d -s "$SESSION_NAME" -n "$WINDOW_NAME"
+    tmux -L orchestra set -t "$SESSION_NAME" -g mouse on
+    tmux -L orchestra bind-key -n C-s select-pane -t :.+
+
+    # Build the layout inside the orchestra server
+    create_layout "$SESSION_NAME:$WINDOW_NAME"
+
+    # Open a new window in the current tmux and nest an attach to the orchestra server
+    tmux new-window -n "cerb-${REPO_NAME}"
+    tmux send-keys -t "cerb-${REPO_NAME}" "TMUX= tmux -L orchestra attach-session -t \"$SESSION_NAME\"" C-m
 else
     # Not in tmux, create new session
     SESSION_NAME="cerb-${REPO_NAME}"
@@ -99,6 +113,7 @@ else
     # Create the two-pane layout
     create_layout "$SESSION_NAME:$WINDOW_NAME"
 
-    # Attach to the session
-    exec tmux -L orchestra attach-session -t "$SESSION_NAME"
+    # Attach to the session; don't propagate tmux's non-zero exit when server exits
+    tmux -L orchestra attach-session -t "$SESSION_NAME" || true
+    exit 0
 fi

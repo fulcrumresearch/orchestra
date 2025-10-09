@@ -8,6 +8,7 @@ import os
 import shutil
 from pathlib import Path
 from typing import Any, Dict
+import threading
 
 from textual.app import App, ComposeResult
 from textual.widgets import (
@@ -199,6 +200,29 @@ class UnifiedApp(App):
         logger.info(
             f"KerberosApp initialized (Docker: {config.get('use_docker', True)})"
         )
+
+    def action_quit(self) -> None:
+        """Quit the UI and kill the dedicated tmux server named 'orchestra'.
+
+        We schedule the tmux kill to occur shortly after exit so that the UI
+        can clean up normally while ensuring Docker containers, sessions, and
+        worktrees remain untouched.
+        """
+
+        def kill_tmux_server():
+            try:
+                subprocess.run(
+                    ["tmux", "-L", "orchestra", "kill-server"],
+                    capture_output=True,
+                    text=True,
+                )
+            except Exception:
+                # Ignore any errors while attempting to kill the tmux server
+                pass
+
+        # Delay the kill slightly to allow the app to exit cleanly first
+        threading.Timer(0.2, kill_tmux_server).start()
+        self.exit()
 
     def compose(self) -> ComposeResult:
         if not shutil.which("tmux"):
