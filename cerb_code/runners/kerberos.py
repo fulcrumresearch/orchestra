@@ -273,7 +273,9 @@ class UnifiedApp(App):
         """Load sessions and refresh list"""
         # Detect current git branch and store as fixed root
         branch_name = get_current_branch()
-        self.root_session_id = branch_name
+        # Use dirname-branchname format to avoid collisions across different orchestra instances
+        dir_name = Path.cwd().name
+        self.root_session_id = f"{dir_name}-{branch_name}"
 
         # Load sessions for current branch only
         self.sessions = load_sessions(protocol=self.agent, root=self.root_session_id, project_dir=self.project_dir)
@@ -288,9 +290,12 @@ class UnifiedApp(App):
                 await asyncio.to_thread(ensure_stable_git_location, Path.cwd())
 
                 # Create designer session for this branch
-                logger.info(f"Creating designer session for branch: {branch_name}")
+                # Use dirname-branchname format to avoid collisions across different orchestra instances
+                dir_name = Path.cwd().name
+                session_id = f"{dir_name}-{branch_name}"
+                logger.info(f"Creating designer session: {session_id}")
                 new_session = Session(
-                    session_id=branch_name,
+                    session_id=session_id,
                     agent_type=AgentType.DESIGNER,
                     protocol=self.agent,
                     source_path=str(Path.cwd()),
