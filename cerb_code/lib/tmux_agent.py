@@ -293,12 +293,8 @@ class TmuxProtocol(AgentProtocol):
 
             # Update worktree's .git file to point to new location
             try:
-                worktree_git_file.write_text(
-                    f"gitdir: {backup}/.git/worktrees/{session.session_id}\n"
-                )
-                logger.info(
-                    f"Updated {worktree_git_file} to point to {backup}/.git/worktrees/{session.session_id}"
-                )
+                worktree_git_file.write_text(f"gitdir: {backup}/.git/worktrees/{session.session_id}\n")
+                logger.info(f"Updated {worktree_git_file} to point to {backup}/.git/worktrees/{session.session_id}")
             except Exception as e:
                 # Rollback: restore the directory
                 backup.rename(source)
@@ -326,12 +322,8 @@ class TmuxProtocol(AgentProtocol):
 
             # Update worktree's .git file to point back to original location
             try:
-                worktree_git_file.write_text(
-                    f"gitdir: {source}/.git/worktrees/{session.session_id}\n"
-                )
-                logger.info(
-                    f"Updated {worktree_git_file} to point to {source}/.git/worktrees/{session.session_id}"
-                )
+                worktree_git_file.write_text(f"gitdir: {source}/.git/worktrees/{session.session_id}\n")
+                logger.info(f"Updated {worktree_git_file} to point to {source}/.git/worktrees/{session.session_id}")
             except Exception as e:
                 return False, f"Failed to update worktree .git file: {e}"
 

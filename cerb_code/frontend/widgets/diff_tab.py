@@ -52,9 +52,7 @@ class DiffTab(Container):
 
         try:
             # Get git diff
-            result = subprocess.run(
-                ["git", "diff", "HEAD"], cwd=work_path, capture_output=True, text=True
-            )
+            result = subprocess.run(["git", "diff", "HEAD"], cwd=work_path, capture_output=True, text=True)
 
             if result.returncode == 0:
                 # Clear previous content

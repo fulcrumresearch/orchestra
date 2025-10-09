@@ -15,9 +15,7 @@ mcp = FastMCP("cerb-subagent", port=port, host=host)
 
 
 @mcp.tool()
-def spawn_subagent(
-    parent_session_id: str, child_session_id: str, instructions: str, source_path: str
-) -> str:
+def spawn_subagent(parent_session_id: str, child_session_id: str, instructions: str, source_path: str) -> str:
     """
     Spawn a child Claude session with specific instructions.
 

@@ -51,9 +51,7 @@ def ensure_stable_git_location(project_dir: Path) -> None:
         return
 
     source_dir_name = project_dir.name
-    stable_git_dir = (
-        Path.home() / ".kerberos" / "repos" / source_dir_name / ".git"
-    )  # handle duplicate names later
+    stable_git_dir = Path.home() / ".kerberos" / "repos" / source_dir_name / ".git"  # handle duplicate names later
 
     # If stable location exists, just create symlink
     if stable_git_dir.exists():
@@ -108,9 +106,7 @@ def respawn_pane_with_vim(spec_file: Path) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    vim_cmd = (
-        f"bash -c '$EDITOR {spec_file}; clear; echo \"Press S to open spec editor\"; exec bash'"
-    )
+    vim_cmd = f"bash -c '$EDITOR {spec_file}; clear; echo \"Press S to open spec editor\"; exec bash'"
     return respawn_pane(PANE_EDITOR, vim_cmd)
 
 
@@ -170,9 +166,7 @@ def ensure_docker_image() -> None:
         logger.info("Docker image built successfully")
 
 
-def start_docker_container(
-    container_name: str, work_path: str, mcp_port: int, paired: bool = False
-) -> bool:
+def start_docker_container(container_name: str, work_path: str, mcp_port: int, paired: bool = False) -> bool:
     """Start Docker container with mounted worktree
 
     Returns:

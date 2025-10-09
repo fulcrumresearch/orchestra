@@ -124,11 +124,7 @@ class ModelMonitorTab(Container):
                             f"[magenta]{escaped_line}[/magenta]",
                             expand=True,
                         )
-                    elif (
-                        line.startswith("time:")
-                        or line.startswith("session_id:")
-                        or line.startswith("tool:")
-                    ):
+                    elif line.startswith("time:") or line.startswith("session_id:") or line.startswith("tool:"):
                         self.monitor_log.write(f"[blue]{escaped_line}[/blue]", expand=True)
                     else:
                         self.monitor_log.write(escaped_line, expand=True)

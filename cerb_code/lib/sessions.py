@@ -91,9 +91,7 @@ class Session:
 
         if import_line not in existing_content:
             if existing_content:
-                new_content = (
-                    f"{existing_content}\n# Kerberos Session Configuration\n{import_line}\n"
-                )
+                new_content = f"{existing_content}\n# Kerberos Session Configuration\n{import_line}\n"
             else:
                 new_content = f"# Kerberos Session Configuration\n{import_line}\n"
 
@@ -212,9 +210,7 @@ class Session:
 
         settings_path = claude_dir / "settings.json"
         # PROJECT_CONF is already a JSON string, just replace the placeholders
-        settings_json = PROJECT_CONF.replace("{session_id}", session_id).replace(
-            "{source_path}", self.source_path
-        )
+        settings_json = PROJECT_CONF.replace("{session_id}", session_id).replace("{source_path}", self.source_path)
         settings_path.write_text(settings_json)
 
         instructions_path = Path(new_session.work_path) / "instructions.md"

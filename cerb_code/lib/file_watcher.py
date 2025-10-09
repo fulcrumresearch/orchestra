@@ -112,9 +112,7 @@ class FileWatcher:
 
             try:
                 # Watch all registered paths (non-recursive)
-                async for changes in awatch(
-                    *watch_paths, stop_event=self._stop_event, recursive=False
-                ):
+                async for changes in awatch(*watch_paths, stop_event=self._stop_event, recursive=False):
                     # Group changes by path to avoid calling handlers multiple times
                     # awatch already debounces (1600ms), so changes is a batch
                     changed_paths = {}
@@ -158,13 +156,9 @@ class FileWatcher:
 
         async def on_designer_change(path: Path, change_type: Change) -> None:
             """Handler for designer.md changes"""
-            logger.info(
-                f"designer.md changed ({change_type.name}) for session {session.session_id}"
-            )
+            logger.info(f"designer.md changed ({change_type.name}) for session {session.session_id}")
             session.send_message("designer.md has been updated. Please review the changes")
             logger.info(f"Notified session {session.session_id} about designer.md update")
 
         self.register(designer_md, on_designer_change)
-        logger.info(
-            f"Registered designer.md watcher for session {session.session_id}: {designer_md}"
-        )
+        logger.info(f"Registered designer.md watcher for session {session.session_id}: {designer_md}")
