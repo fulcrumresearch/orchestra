@@ -600,6 +600,11 @@ class UnifiedApp(App):
 
         session = self.flat_sessions[index]
 
+        # Prevent pairing for designer sessions (they work directly in source_path)
+        if session.agent_type == AgentType.DESIGNER:
+            self.status_indicator.update("⚠ Pairing not supported for designer sessions")
+            return
+
         # Check if this session is currently paired (UI state)
         is_paired = (self.paired_session_id == session.session_id)
 

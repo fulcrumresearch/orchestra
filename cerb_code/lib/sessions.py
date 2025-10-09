@@ -267,6 +267,9 @@ class Session:
         if not self.protocol:
             return False, "No protocol configured"
 
+        if self.agent_type == AgentType.DESIGNER:
+            return False, "Pairing is not supported for designer sessions"
+
         # Let protocol handle all the implementation details
         return self.protocol.toggle_pairing(self)
 
