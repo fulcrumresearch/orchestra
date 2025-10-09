@@ -7,7 +7,7 @@ from watchfiles import awatch, Change
 from .logger import get_logger
 
 if TYPE_CHECKING:
-    from .tmux_agent import TmuxProtocol
+    from .sessions import Session
 
 logger = get_logger(__name__)
 
@@ -151,39 +151,31 @@ class FileWatcher:
 
 def watch_designer_file(
     file_watcher: FileWatcher,
-    protocol: "TmuxProtocol",
     designer_md: Path,
-    session_id: str,
+    session: "Session",
 ) -> None:
     """
     Register a watcher for designer.md that notifies the session when it changes.
 
     Args:
         file_watcher: The FileWatcher instance to register with
-        protocol: The TmuxProtocol instance to send messages with
         designer_md: Path to the designer.md file
-        session_id: ID of the session to notify
+        session: The session to notify
     """
     designer_md = Path(designer_md).resolve()
 
     async def on_designer_change(path: Path, change_type: Change) -> None:
         """Handler for designer.md changes"""
         logger.info(
-            f"designer.md changed ({change_type.name}) for session {session_id}"
+            f"designer.md changed ({change_type.name}) for session {session.session_id}"
         )
 
         # Send notification to the session
-        success = protocol.send_message(
-            session_id, "designer.md has been updated. Please review the changes"
-        )
-
-        if success:
-            logger.info(f"Notified session {session_id} about designer.md update")
-        else:
-            logger.error(f"Failed to notify session {session_id}")
+        session.send_message("designer.md has been updated. Please review the changes")
+        logger.info(f"Notified session {session.session_id} about designer.md update")
 
     # Register with file path - FileWatcher will watch parent directory internally
     file_watcher.register(designer_md, on_designer_change)
     logger.info(
-        f"Registered designer.md watcher for session {session_id}: {designer_md}"
+        f"Registered designer.md watcher for session {session.session_id}: {designer_md}"
     )

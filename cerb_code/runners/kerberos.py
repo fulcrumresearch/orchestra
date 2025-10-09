@@ -7,7 +7,8 @@ import subprocess
 import os
 import shutil
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Sequence, Tuple
+import threading
 
 from textual.app import App, ComposeResult
 from textual.widgets import (
@@ -17,7 +18,6 @@ from textual.widgets import (
     TabPane,
     ListView,
     ListItem,
-    Input,
     Tabs,
     RichLog,
 )
@@ -29,14 +29,16 @@ from cerb_code.lib.sessions import (
     Session,
     AgentType,
     load_sessions,
-    save_sessions,
+    save_session,
     SESSIONS_FILE,
 )
 from cerb_code.lib.tmux_agent import TmuxProtocol
 from cerb_code.lib.monitor import SessionMonitorWatcher
 from cerb_code.lib.file_watcher import FileWatcher, watch_designer_file
 from cerb_code.lib.logger import get_logger
-
+from cerb_code.lib.config import load_config
+from cerb_code.lib.helpers import get_current_branch, ensure_stable_git_location
+import re
 
 logger = get_logger(__name__)
 
@@ -47,7 +49,7 @@ class HUD(Static):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.default_text = (
-            "⌃N new • ⌃D delete • ⌃R refresh • S spec • T terminal • ⌃Q quit"
+            "⌃D delete • ⌃R refresh • P pair • S spec • T terminal • ⌃Q quit"
         )
         self.current_session = ""
 
@@ -66,7 +68,7 @@ class UnifiedApp(App):
     }
 
     #header {
-        height: 5;
+        height: 2;
         background: #111111;
         border-bottom: solid #333333;
         dock: top;
@@ -77,22 +79,6 @@ class UnifiedApp(App):
         padding: 0 1;
         color: #C0FFFD;
         text-align: center;
-    }
-
-    #session-input {
-        margin: 0 1;
-        background: #1a1a1a;
-        border: solid #333333;
-        color: #ffffff;
-        height: 3;
-    }
-
-    #session-input:focus {
-        border: solid #00ff9f;
-    }
-
-    #session-input.--placeholder {
-        color: #666666;
     }
 
     #main-content {
@@ -135,6 +121,20 @@ class UnifiedApp(App):
     #sidebar-title {
         color: #00ff9f;
         text-style: bold;
+        margin-bottom: 0;
+        height: 1;
+    }
+
+    #branch-info {
+        color: #888888;
+        text-style: italic;
+        margin-bottom: 0;
+        height: 1;
+    }
+
+    #status-indicator {
+        color: #ffaa00;
+        text-style: italic;
         margin-bottom: 1;
         height: 1;
     }
@@ -173,9 +173,9 @@ class UnifiedApp(App):
 
     BINDINGS = [
         Binding("ctrl+q", "quit", "Quit", priority=True),
-        Binding("ctrl+n", "new_session", "New Session", priority=True, show=True),
         Binding("ctrl+r", "refresh", "Refresh", priority=True),
         Binding("ctrl+d", "delete_session", "Delete", priority=True),
+        Binding("p", "toggle_pairing", "Toggle Pairing", priority=True, show=True),
         Binding("s", "open_spec", "Open Spec", priority=True),
         Binding("t", "open_terminal", "Open Terminal", priority=True),
         Binding("up", "cursor_up", show=False),
@@ -194,33 +194,70 @@ class UnifiedApp(App):
         self.sessions: list[Session] = []
         self.flat_sessions: list[Session] = []  # Flattened list for selection
         self.current_session: Session | None = None
-        # Create a shared TmuxProtocol for all sessions
-        self.agent = TmuxProtocol(default_command="claude")
+        self.root_session_id: str | None = None  # Fixed root, doesn't change even when pairing
+        # Store the original project directory (resolve now, before any pairing)
+        self.project_dir: Path = Path.cwd().resolve()
+        # Track which session is currently paired (UI state only, not persisted)
+        self.paired_session_id: str | None = None
+        # Load config and create TmuxProtocol
+        config = load_config()
+        self.agent = TmuxProtocol(
+            default_command="claude",
+            mcp_port=config.get("mcp_port", 8765),
+        )
         self._last_session_mtime = None
         self._watch_task = None
         # Create a shared FileWatcher for monitoring files
         self.file_watcher = FileWatcher()
-        logger.info("KerberosApp initialized")
+        logger.info(
+            f"KerberosApp initialized (Docker: {config.get('use_docker', True)})"
+        )
+
+    def action_quit(self) -> None:
+        """Quit the UI and kill the dedicated tmux server named 'orchestra'.
+
+        We schedule the tmux kill to occur shortly after exit so that the UI
+        can clean up normally while ensuring Docker containers, sessions, and
+        worktrees remain untouched.
+        """
+
+        def kill_tmux_server():
+            try:
+                subprocess.run(
+                    ["tmux", "-L", "orchestra", "kill-server"],
+                    capture_output=True,
+                    text=True,
+                )
+            except Exception:
+                # Ignore any errors while attempting to kill the tmux server
+                pass
+
+        # Delay the kill slightly to allow the app to exit cleanly first
+        threading.Timer(0.2, kill_tmux_server).start()
+        self.exit()
 
     def compose(self) -> ComposeResult:
         if not shutil.which("tmux"):
             yield Static("tmux not found. Install tmux first (apt/brew).", id="error")
             return
 
-        # Global header with HUD and input
+        # Global header with HUD
         with Container(id="header"):
-            self.hud = HUD("⌃N new • ⌃D delete • ⌃R refresh • ⌃Q quit", id="hud")
-            yield self.hud
-            self.session_input = Input(
-                placeholder="New session name...", id="session-input"
+            self.hud = HUD(
+                "⌃D delete • ⌃R refresh • P pair • S spec • T terminal • ⌃Q quit",
+                id="hud",
             )
-            yield self.session_input
+            yield self.hud
 
         # Main content area - split horizontally
         with Horizontal(id="main-content"):
             # Left pane - session list
             with Container(id="left-pane"):
-                yield Static("● SESSIONS", id="sidebar-title")
+                yield Static("Orchestra", id="sidebar-title")
+                self.branch_info = Static("", id="branch-info")
+                yield self.branch_info
+                self.status_indicator = Static("", id="status-indicator")
+                yield self.status_indicator
                 self.session_list = ListView(id="session-list")
                 yield self.session_list
 
@@ -234,15 +271,53 @@ class UnifiedApp(App):
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
-        # Load existing sessions with the shared agent protocol
-        self.sessions = load_sessions(protocol=self.agent)
+        # Detect current git branch and store as fixed root
+        branch_name = get_current_branch()
+        self.root_session_id = branch_name
+
+        # Load sessions for current branch only
+        self.sessions = load_sessions(protocol=self.agent, root=self.root_session_id, project_dir=self.project_dir)
+
+        # Ensure branch session exists
+        if not self.sessions:
+            try:
+                # Show status indicator
+                self.status_indicator.update("⏳ Creating session...")
+
+                # First time setup - ensure .git is in stable location
+                await asyncio.to_thread(ensure_stable_git_location, Path.cwd())
+
+                # Create designer session for this branch
+                logger.info(f"Creating designer session for branch: {branch_name}")
+                new_session = Session(
+                    session_id=branch_name,
+                    agent_type=AgentType.DESIGNER,
+                    protocol=self.agent,
+                    source_path=str(Path.cwd()),
+                    active=False,
+                )
+                await asyncio.to_thread(new_session.prepare)
+                if await asyncio.to_thread(new_session.start):
+                    self.sessions = [new_session]
+                    await asyncio.to_thread(save_session, new_session, self.project_dir)
+                    logger.info(f"Successfully created and saved session {branch_name}")
+                else:
+                    logger.error(f"Failed to start session {branch_name}")
+
+                # Clear status indicator
+                self.status_indicator.update("")
+            except Exception as e:
+                logger.exception(f"Error creating designer session: {e}")
+                self.status_indicator.update("")
+
+        # Update branch info display
+        self.branch_info.update(f"Designer: {branch_name}")
+
         await self.action_refresh()
 
-        # Auto-load 'main' session if it exists
-        for session in self.sessions:
-            if session.session_id == "main":
-                self._attach_to_session(session)
-                break
+        # Auto-load branch session
+        if self.sessions:
+            self._attach_to_session(self.sessions[0])
 
         # Focus the session list by default
         self.set_focus(self.session_list)
@@ -265,14 +340,13 @@ class UnifiedApp(App):
         self.flat_sessions = []  # Keep flat list for selection
 
         if not self.sessions:
-            self.session_list.append(ListItem(Label("No sessions yet")))
-            self.session_list.append(ListItem(Label("Press ⌃N to create")))
+            self.session_list.append(ListItem(Label("No sessions found")))
             return
 
         # Add sessions to list with hierarchy
         def add_session_tree(session, indent=0):
             # Update status for this session
-            status = self.agent.get_status(session.session_id)
+            status = self.agent.get_status(session.session_id, session.use_docker)
             session.active = status.get("attached", False)
 
             # Keep track in flat list for selection
@@ -280,7 +354,10 @@ class UnifiedApp(App):
 
             # Display with indentation
             prefix = "  " * indent
-            item = ListItem(Label(f"{prefix}{session.display_name}"))
+            status_icon = "●" if session.active else "○"
+            paired_indicator = "[P] " if self.paired_session_id == session.session_id else ""
+            display_name = f"{status_icon} {paired_indicator}{session.session_id}"
+            item = ListItem(Label(f"{prefix}{display_name}"))
             self.session_list.append(item)
 
             # Add children recursively
@@ -299,102 +376,63 @@ class UnifiedApp(App):
 
         # Don't save here - this causes an infinite loop with the file watcher!
 
-    def action_new_session(self) -> None:
-        """Toggle focus on the session input"""
-        logger.info("action_new_session called - toggling input focus")
-        if self.focused == self.session_input:
-            # If already focused, return focus to session list
-            self.session_list.focus()
-        else:
-            # Focus and clear the input
-            self.session_input.focus()
-            self.session_input.clear()
+    def _invoke_widget_action(
+        self,
+        widget: Any,
+        candidate_methods: Sequence[str],
+        action_description: str,
+        args: Tuple[Any, ...] | None = None,
+        kwargs: Dict[str, Any] | None = None,
+    ) -> None:
+        """Safely invoke widget actions, falling back to alternative names."""
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle when user presses Enter in the input field"""
-        # Debug: Show that we received the event
-        self.hud.update(f"Creating session...")
-        if event.input.id == "session-input":
-            session_name = event.value.strip()
+        args = args or ()
+        kwargs = kwargs or {}
 
-            if not session_name:
-                # Generate default name with cerb-reponame format
-                repo_name = self._get_repo_name()
-                session_num = 1
-                existing_ids = {s.session_id for s in self.sessions}
-                while f"cerb-{repo_name}-{session_num}" in existing_ids:
-                    session_num += 1
-                session_name = f"cerb-{repo_name}-{session_num}"
+        for method_name in candidate_methods:
+            method = getattr(widget, method_name, None)
+            if callable(method):
+                try:
+                    method(*args, **kwargs)
+                    return
+                except TypeError:
+                    logger.debug(
+                        "Signature mismatch performing %s using %s on %r; trying next candidate",
+                        action_description,
+                        method_name,
+                        widget,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to perform %s using %s on %r",
+                        action_description,
+                        method_name,
+                        widget,
+                    )
+                    return
 
-            # Add visual feedback
-            self.session_input.placeholder = f"Creating {session_name}..."
-            self.session_input.disabled = True
-
-            self.create_session(session_name)
-
-            # Clear the input and unfocus it
-            self.session_input.clear()
-            self.session_input.placeholder = "New session name..."
-            self.session_input.disabled = False
-            # Focus back on the session list
-            self.set_focus(self.session_list)
-
-    def create_session(self, session_name: str) -> None:
-        """Actually create the session with the given name"""
-        logger.info(f"Creating new session: {session_name}")
-
-        try:
-            # Check if session name already exists
-            if any(s.session_id == session_name for s in self.sessions):
-                logger.warning(f"Session {session_name} already exists")
-                return
-
-            # Create Session object with the protocol
-            new_session = Session(
-                session_id=session_name,
-                agent_type=AgentType.DESIGNER,
-                protocol=self.agent,
-                source_path=str(Path.cwd()),
-                active=False,
-            )
-
-            # Prepare the worktree for this session
-            logger.info(f"Preparing worktree for session {session_name}")
-            new_session.prepare()
-            logger.info(f"Worktree prepared at: {new_session.work_path}")
-
-            # Start the session (it will use its protocol internally)
-            logger.info(f"Starting session {session_name}")
-            result = new_session.start()
-            logger.info(f"Session start result: {result}")
-
-            if result:
-                # Add to sessions list
-                self.sessions.append(new_session)
-                save_sessions(self.sessions)
-                logger.info(f"Session {session_name} saved")
-
-                # Refresh the session list immediately
-                self.run_worker(self.action_refresh())
-
-                # Attach to the new session (this also updates HUD and current_session)
-                self._attach_to_session(new_session)
-
-                logger.info(f"Successfully created and attached to {session_name}")
-            else:
-                logger.error(f"Failed to start session {session_name}")
-                self.hud.update(f"ERROR: Failed to start {session_name}")
-        except Exception as e:
-            logger.exception(f"Error in create_session: {e}")
-            self.hud.update(f"ERROR: {str(e)[:50]}")
+        logger.warning(
+            "No action handler available for %s on %r (tried: %s)",
+            action_description,
+            widget,
+            ", ".join(candidate_methods),
+        )
 
     def action_cursor_up(self) -> None:
         """Move cursor up in the list"""
-        self.session_list.action_up()
+        self._invoke_widget_action(
+            self.session_list,
+            ("action_cursor_up", "action_up", "cursor_up"),
+            "session list cursor up",
+        )
 
     def action_cursor_down(self) -> None:
         """Move cursor down in the list"""
-        self.session_list.action_down()
+        self._invoke_widget_action(
+            self.session_list,
+            ("action_cursor_down", "action_down", "cursor_down"),
+            "session list cursor down",
+        )
 
     def action_scroll_tab_up(self) -> None:
         """Scroll up in the active monitor/diff tab"""
@@ -403,7 +441,12 @@ class UnifiedApp(App):
         if active_pane:
             # Find and scroll the RichLog widget directly
             for widget in active_pane.query(RichLog):
-                widget.scroll_relative(y=-1)
+                self._invoke_widget_action(
+                    widget,
+                    ("action_scroll_up", "scroll_relative"),
+                    "scroll log up",
+                    kwargs={"y": -1},
+                )
 
     def action_scroll_tab_down(self) -> None:
         """Scroll down in the active monitor/diff tab"""
@@ -412,17 +455,30 @@ class UnifiedApp(App):
         if active_pane:
             # Find and scroll the RichLog widget directly
             for widget in active_pane.query(RichLog):
-                widget.scroll_relative(y=1)
+                self._invoke_widget_action(
+                    widget,
+                    ("action_scroll_down", "scroll_relative"),
+                    "scroll log down",
+                    kwargs={"y": 1},
+                )
 
     def action_prev_tab(self) -> None:
         """Switch to previous tab"""
         tabs = self.query_one(Tabs)
-        tabs.action_previous_tab()
+        self._invoke_widget_action(
+            tabs,
+            ("action_previous_tab", "action_prev_tab", "action_scroll_left"),
+            "previous tab",
+        )
 
     def action_next_tab(self) -> None:
         """Switch to next tab"""
         tabs = self.query_one(Tabs)
-        tabs.action_next_tab()
+        self._invoke_widget_action(
+            tabs,
+            ("action_next_tab", "action_scroll_right"),
+            "next tab",
+        )
 
     def action_select_session(self) -> None:
         """Select the highlighted session"""
@@ -431,61 +487,128 @@ class UnifiedApp(App):
             session = self.flat_sessions[index]
             self._attach_to_session(session)
 
+    def _remove_session_from_tree(self, sessions: list[Session], session_id: str) -> bool:
+        """Recursively remove a session from the tree. Returns True if found and removed."""
+        for i, session in enumerate(sessions):
+            if session.session_id == session_id:
+                sessions.pop(i)
+                return True
+            # Recursively check children
+            if self._remove_session_from_tree(session.children, session_id):
+                return True
+        return False
+
+    async def _delete_session_task(self, session_to_delete: Session) -> None:
+        """Background task for deleting a session"""
+        try:
+            # Delete the session (handles Docker or local mode)
+            await asyncio.to_thread(session_to_delete.delete)
+
+            # Remove from sessions tree (handles both top-level and child sessions)
+            self._remove_session_from_tree(self.sessions, session_to_delete.session_id)
+
+            # Save the root session (if any remain)
+            if self.sessions:
+                await asyncio.to_thread(save_session, self.sessions[0], self.project_dir)
+
+            # Refresh the list
+            await self.action_refresh()
+        finally:
+            # Clear status indicator
+            self.status_indicator.update("")
+
     def action_delete_session(self) -> None:
         """Delete the currently selected session"""
-        # Get the currently highlighted session from the list instead of current_session
+        # Get the currently highlighted session from the list
         index = self.session_list.index
         if index is None or index >= len(self.flat_sessions):
             return
 
         session_to_delete = self.flat_sessions[index]
 
-        # Kill the tmux session
-        subprocess.run(
-            ["tmux", "kill-session", "-t", session_to_delete.session_id],
-            capture_output=True,
-            text=True,
-        )
-
-        # Remove from sessions list
-        self.sessions = [
-            s for s in self.sessions if s.session_id != session_to_delete.session_id
-        ]
-        save_sessions(self.sessions)
-
-        # If we deleted the current session, handle the right pane
+        # If deleting the current session, switch to designer first (before background deletion)
         if (
             self.current_session
             and self.current_session.session_id == session_to_delete.session_id
         ):
-            self.current_session = None
-
+            # Switch to designer immediately
             if self.sessions:
-                # Try to select the session at the same index, or the previous one if we deleted the last
-                new_index = min(index, len(self.sessions) - 1)
-                if new_index >= 0:
-                    # Move the list highlight to the new index
-                    self.session_list.index = new_index
-                    # Attach to the new session
-                    self._attach_to_session(self.sessions[new_index])
+                self._attach_to_session(self.sessions[0])
             else:
-                # No sessions left, show empty state
                 self.hud.set_session("")
                 # Clear pane 2 (claude pane) with a message
-                msg_cmd = (
-                    "echo 'No active sessions. Press Ctrl+N to create a new session.'"
-                )
+                msg_cmd = "echo 'No active sessions.'"
                 subprocess.run(
-                    ["tmux", "respawn-pane", "-t", "2", "-k", msg_cmd],
-                    capture_output=True,
-                    text=True,
-                )
+                    [
+                        "tmux",
+                        "-L",
+                        "orchestra",
+                        "respawn-pane",
+                        "-t",
+                        "2",
+                        "-k",
+                        msg_cmd,
+                    ],
+                  )
 
-        # Keep focus on the session list
-        self.set_focus(self.session_list)
+        # Show status indicator
+        self.status_indicator.update("⏳ Deleting session...")
 
-        # Refresh the list
-        self.call_later(self.action_refresh)
+        # Run delete in background without waiting
+        asyncio.create_task(self._delete_session_task(session_to_delete))
+
+    async def _toggle_pairing_task(self, session: Session, is_paired: bool) -> None:
+        """Background task for toggling pairing"""
+        try:
+            # Set session.paired temporarily for toggle_pairing to work
+            session.paired = is_paired
+
+            # Toggle pairing
+            success, error_msg = await asyncio.to_thread(session.toggle_pairing)
+
+            if not success:
+                # Show error message
+                self.hud.set_session(f"Error: {error_msg}")
+                logger.error(f"Failed to toggle pairing: {error_msg}")
+                return
+
+            # Update UI state based on new pairing status
+            if is_paired:
+                # Was paired, now unpaired
+                self.paired_session_id = None
+                paired_indicator = ""
+            else:
+                # Was unpaired, now paired
+                self.paired_session_id = session.session_id
+                paired_indicator = "[P] "
+
+            self.hud.set_session(f"{paired_indicator}{session.session_id}")
+
+            # Refresh the list to show pairing status
+            await self.action_refresh()
+        finally:
+            # Clear status indicator
+            self.status_indicator.update("")
+
+    def action_toggle_pairing(self) -> None:
+        """Toggle pairing mode for the currently selected session"""
+        # Get the currently highlighted session from the list
+        index = self.session_list.index
+        if index is None or index >= len(self.flat_sessions):
+            return
+
+        session = self.flat_sessions[index]
+
+        # Check if this session is currently paired (UI state)
+        is_paired = (self.paired_session_id == session.session_id)
+
+        # Show status indicators
+        pairing_mode = "paired" if not is_paired else "unpaired"
+        self.status_indicator.update(f"⏳ Switching to {pairing_mode}...")
+        self.hud.set_session(f"Switching to {pairing_mode} mode...")
+
+        # Run toggle in background without waiting
+        asyncio.create_task(self._toggle_pairing_task(session, is_paired))
 
     def action_open_spec(self) -> None:
         """Open designer.md in vim in a split tmux pane"""
@@ -505,15 +628,13 @@ class UnifiedApp(App):
             logger.info(f"Created {designer_md}")
 
         # Register file watcher for designer.md to notify session on changes
-        watch_designer_file(
-            self.file_watcher, self.agent, designer_md, session.session_id
-        )
+        watch_designer_file(self.file_watcher, designer_md, session)
 
         # Respawn pane 1 (editor pane) with vim, wrapped in bash to keep pane alive after quit
         # When vim exits, show placeholder and keep shell running
         vim_cmd = f"bash -c '$EDITOR {designer_md}; clear; echo \"Press S to open spec editor\"; exec bash'"
         result = subprocess.run(
-            ["tmux", "respawn-pane", "-t", "1", "-k", vim_cmd],
+            ["tmux", "-L", "orchestra", "respawn-pane", "-t", "1", "-k", vim_cmd],
             capture_output=True,
             text=True,
         )
@@ -538,7 +659,7 @@ class UnifiedApp(App):
         # Keep the shell running and show current directory
         bash_cmd = f"bash -c 'cd {work_path} && exec bash'"
         result = subprocess.run(
-            ["tmux", "respawn-pane", "-t", "1", "-k", bash_cmd],
+            ["tmux", "-L", "orchestra", "respawn-pane", "-t", "1", "-k", bash_cmd],
             capture_output=True,
             text=True,
         )
@@ -556,7 +677,7 @@ class UnifiedApp(App):
         session.active = True
 
         # Check session status using the protocol
-        status = self.agent.get_status(session.session_id)
+        status = self.agent.get_status(session.session_id, session.use_docker)
 
         if not status.get("exists", False):
             # Session doesn't exist, create it
@@ -570,18 +691,24 @@ class UnifiedApp(App):
                 logger.error(f"Failed to start session {session.session_id}")
                 error_cmd = f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
                 subprocess.run(
-                    ["tmux", "respawn-pane", "-t", "2", "-k", error_cmd],
+                    [
+                        "tmux",
+                        "-L",
+                        "orchestra",
+                        "respawn-pane",
+                        "-t",
+                        "2",
+                        "-k",
+                        error_cmd,
+                    ],
                     capture_output=True,
                     text=True,
                 )
                 return
 
         # At this point, session exists - attach to it in pane 2
-        cmd = f"TMUX= tmux attach-session -t {session.session_id}"
-        subprocess.run(
-            ["tmux", "respawn-pane", "-t", "2", "-k", cmd],
-            capture_output=True,
-            text=True,
+        self.agent.attach(
+            session.session_id, target_pane="2", use_docker=session.use_docker
         )
 
         # Don't auto-focus pane 2 - let user stay in the UI
@@ -605,8 +732,8 @@ class UnifiedApp(App):
                         and current_mtime != self._last_session_mtime
                     ):
                         logger.info("Sessions file changed, refreshing...")
-                        # Reload sessions from disk
-                        self.sessions = load_sessions(protocol=self.agent)
+                        # Reload sessions from disk (only current root session)
+                        self.sessions = load_sessions(protocol=self.agent, root=self.root_session_id, project_dir=self.project_dir)
                         await self.action_refresh()
                     self._last_session_mtime = current_mtime
             except Exception as e:
@@ -849,6 +976,26 @@ def main():
     os.environ.setdefault("TERM", "xterm-256color")
     os.environ.setdefault("TMUX_TMPDIR", "/tmp")  # Use local tmp for better performance
 
+    # Load config
+    config = load_config()
+    mcp_port = config.get("mcp_port", 8765)
+
+    # Start the MCP server in the background
+    mcp_log = Path.home() / ".kerberos" / "mcp-server.log"
+    mcp_log.parent.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"Starting MCP server on port {mcp_port}")
+    logger.info(f"MCP server logs: {mcp_log}")
+
+    with open(mcp_log, "w") as log_file:
+        mcp_proc = subprocess.Popen(
+            ["cerb-mcp", str(mcp_port)],
+            stdout=log_file,
+            stderr=log_file,
+            start_new_session=True,
+        )
+    logger.info(f"MCP server started with PID {mcp_proc.pid}")
+
     # Start the monitoring server in the background
     if START_MONITOR:
         monitor_port = 8081
@@ -870,7 +1017,14 @@ def main():
     try:
         UnifiedApp().run()
     finally:
-        # Clean up monitor server on exit
+        # Clean up servers on exit
+        logger.info("Shutting down MCP server")
+        mcp_proc.terminate()
+        try:
+            mcp_proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            mcp_proc.kill()
+
         if START_MONITOR:
             logger.info("Shutting down monitor server")
             monitor_proc.terminate()
