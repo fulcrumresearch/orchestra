@@ -55,8 +55,15 @@ class Session:
         # Delete all children first
         for child in self.children:
             child.delete()
-        # Then delete self
-        return self.protocol.delete(self.session_id, self.use_docker)
+        # Temporarily set protocol's use_docker to match session
+        original_use_docker = self.protocol.use_docker
+        self.protocol.use_docker = self.use_docker
+        try:
+            # Then delete self
+            return self.protocol.delete(self.session_id)
+        finally:
+            # Restore original setting
+            self.protocol.use_docker = original_use_docker
 
     def add_instructions(self) -> None:
         """Add agent-specific instructions to CLAUDE.md"""
@@ -257,7 +264,14 @@ class Session:
 
     def send_message(self, message: str) -> None:
         """Send a message to the session"""
-        self.protocol.send_message(self.session_id, message, self.use_docker)
+        # Temporarily set protocol's use_docker to match session
+        original_use_docker = self.protocol.use_docker
+        self.protocol.use_docker = self.use_docker
+        try:
+            self.protocol.send_message(self.session_id, message)
+        finally:
+            # Restore original setting
+            self.protocol.use_docker = original_use_docker
 
     def toggle_pairing(self) -> tuple[bool, str]:
         """

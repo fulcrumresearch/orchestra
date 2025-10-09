@@ -8,6 +8,7 @@ from mcp.server import FastMCP
 
 from cerb_code.lib.sessions import load_sessions, save_session, find_session
 from cerb_code.lib.tmux_agent import TmuxProtocol
+from cerb_code.lib.config import load_config
 
 # Create FastMCP server instance
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
@@ -15,7 +16,11 @@ host = "0.0.0.0"
 mcp = FastMCP("cerb-subagent", port=port, host=host)
 
 # Create a shared protocol for sessions
-protocol = TmuxProtocol(default_command="claude")
+config = load_config()
+protocol = TmuxProtocol(
+    default_command="claude",
+    use_docker=config.get("use_docker", True),
+)
 
 
 @mcp.tool()

@@ -204,6 +204,7 @@ class UnifiedApp(App):
         self.agent = TmuxProtocol(
             default_command="claude",
             mcp_port=config.get("mcp_port", 8765),
+            use_docker=config.get("use_docker", True),
         )
         self._last_session_mtime = None
         self._watch_task = None
