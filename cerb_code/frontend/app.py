@@ -190,22 +190,6 @@ class UnifiedApp(App):
 
         logger.info(f"KerberosApp initialized")
 
-    def action_quit(self) -> None:
-        """Quit the UI and kill the dedicated tmux server named 'orchestra'."""
-
-        def kill_tmux_server():
-            try:
-                subprocess.run(
-                    ["tmux", "-L", "orchestra", "kill-server"],
-                    capture_output=True,
-                    text=True,
-                )
-            except Exception:
-                pass
-
-        threading.Timer(0.2, kill_tmux_server).start()
-        self.exit()
-
     def compose(self) -> ComposeResult:
         if not shutil.which("tmux"):
             yield Static("tmux not found. Install tmux first (apt/brew).", id="error")
@@ -463,9 +447,7 @@ class UnifiedApp(App):
 
             if not session.start():
                 logger.error(f"Failed to start session {session.session_id}")
-                error_cmd = (
-                    f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
-                )
+                error_cmd = f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
                 respawn_pane(PANE_AGENT, error_cmd)
                 return
 

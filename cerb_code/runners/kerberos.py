@@ -2,6 +2,7 @@
 """Kerberos UI entry point - minimal launcher"""
 
 import os
+import signal
 import subprocess
 from pathlib import Path
 
@@ -65,19 +66,35 @@ def main():
     finally:
         # Clean up servers on exit
         logger.info("Shutting down MCP server")
-        mcp_proc.terminate()
         try:
+            # Kill the process group since we used start_new_session=True
+            os.killpg(os.getpgid(mcp_proc.pid), signal.SIGTERM)
             mcp_proc.wait(timeout=2)
         except subprocess.TimeoutExpired:
-            mcp_proc.kill()
+            os.killpg(os.getpgid(mcp_proc.pid), signal.SIGKILL)
+        except ProcessLookupError:
+            pass  # Process already gone
 
         if START_MONITOR:
             logger.info("Shutting down monitor server")
-            monitor_proc.terminate()
             try:
+                # Kill the process group since we used start_new_session=True
+                os.killpg(os.getpgid(monitor_proc.pid), signal.SIGTERM)
                 monitor_proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                monitor_proc.kill()
+                os.killpg(os.getpgid(monitor_proc.pid), signal.SIGKILL)
+            except ProcessLookupError:
+                pass  # Process already gone
+
+        # kill the tmux server
+        try:
+            subprocess.run(
+                ["tmux", "-L", "orchestra", "kill-server"],
+                capture_output=True,
+                text=True,
+            )
+        except:
+            pass
 
 
 if __name__ == "__main__":

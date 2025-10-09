@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from typing import Optional, List
-from cerb_code.lib.sessions import Session, load_sessions, SESSIONS_FILE
+from cerb_code.lib.sessions import Session, load_sessions
 from cerb_code.lib.file_watcher import FileWatcher
 
 
