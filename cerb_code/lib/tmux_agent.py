@@ -21,9 +21,9 @@ def tmux_env() -> dict:
 
 
 def tmux(args: list[str]) -> subprocess.CompletedProcess:
-    """Execute tmux command"""
+    """Execute tmux command against the dedicated 'orchestra' server"""
     return subprocess.run(
-        ["tmux", *args],
+        ["tmux", "-L", "orchestra", *args],
         env=tmux_env(),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -328,6 +328,8 @@ class TmuxProtocol(AgentProtocol):
             session.session_id,
             [
                 "tmux",
+                "-L",
+                "orchestra",
                 "new-session",
                 "-d",  # detached
                 "-s",
@@ -381,7 +383,9 @@ class TmuxProtocol(AgentProtocol):
 
         # Check if tmux session exists (same for both modes via _exec)
         check_result = self._exec(
-            session_id, ["tmux", "has-session", "-t", session_id], use_docker
+            session_id,
+            ["tmux", "-L", "orchestra", "has-session", "-t", session_id],
+            use_docker,
         )
         if check_result.returncode != 0:
             return {"exists": False}
@@ -390,7 +394,7 @@ class TmuxProtocol(AgentProtocol):
         fmt = "#{session_windows}\t#{session_attached}"
         result = self._exec(
             session_id,
-            ["tmux", "display-message", "-t", session_id, "-p", fmt],
+            ["tmux", "-L", "orchestra", "display-message", "-t", session_id, "-p", fmt],
             use_docker,
         )
 
@@ -414,12 +418,14 @@ class TmuxProtocol(AgentProtocol):
         # Send the literal bytes of the message (same for both modes via _exec)
         r1 = self._exec(
             session_id,
-            ["tmux", "send-keys", "-t", target, "-l", "--", message],
+            ["tmux", "-L", "orchestra", "send-keys", "-t", target, "-l", "--", message],
             use_docker,
         )
         # Then send a carriage return (equivalent to pressing Enter)
         r2 = self._exec(
-            session_id, ["tmux", "send-keys", "-t", target, "C-m"], use_docker
+            session_id,
+            ["tmux", "-L", "orchestra", "send-keys", "-t", target, "C-m"],
+            use_docker,
         )
         return r1.returncode == 0 and r2.returncode == 0
 
@@ -433,6 +439,8 @@ class TmuxProtocol(AgentProtocol):
             result = subprocess.run(
                 [
                     "tmux",
+                    "-L",
+                    "orchestra",
                     "respawn-pane",
                     "-t",
                     target_pane,
@@ -442,6 +450,8 @@ class TmuxProtocol(AgentProtocol):
                     "-it",
                     container_name,
                     "tmux",
+                    "-L",
+                    "orchestra",
                     "attach-session",
                     "-t",
                     session_id,
@@ -454,13 +464,15 @@ class TmuxProtocol(AgentProtocol):
             result = subprocess.run(
                 [
                     "tmux",
+                    "-L",
+                    "orchestra",
                     "respawn-pane",
                     "-t",
                     target_pane,
                     "-k",
                     "sh",
                     "-c",
-                    f"TMUX= tmux attach-session -t {session_id}",
+                    f"TMUX= tmux -L orchestra attach-session -t {session_id}",
                 ],
                 capture_output=True,
                 text=True,
@@ -476,7 +488,7 @@ class TmuxProtocol(AgentProtocol):
         else:
             # Local mode: kill the tmux session
             subprocess.run(
-                ["tmux", "kill-session", "-t", session_id],
+                ["tmux", "-L", "orchestra", "kill-session", "-t", session_id],
                 capture_output=True,
                 text=True,
             )

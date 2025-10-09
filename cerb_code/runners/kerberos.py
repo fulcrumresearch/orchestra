@@ -8,6 +8,7 @@ import os
 import shutil
 from pathlib import Path
 from typing import Any, Dict, Sequence, Tuple
+import threading
 
 from textual.app import App, ComposeResult
 from textual.widgets import (
@@ -200,6 +201,29 @@ class UnifiedApp(App):
             f"KerberosApp initialized (Docker: {config.get('use_docker', True)})"
         )
 
+    def action_quit(self) -> None:
+        """Quit the UI and kill the dedicated tmux server named 'orchestra'.
+
+        We schedule the tmux kill to occur shortly after exit so that the UI
+        can clean up normally while ensuring Docker containers, sessions, and
+        worktrees remain untouched.
+        """
+
+        def kill_tmux_server():
+            try:
+                subprocess.run(
+                    ["tmux", "-L", "orchestra", "kill-server"],
+                    capture_output=True,
+                    text=True,
+                )
+            except Exception:
+                # Ignore any errors while attempting to kill the tmux server
+                pass
+
+        # Delay the kill slightly to allow the app to exit cleanly first
+        threading.Timer(0.2, kill_tmux_server).start()
+        self.exit()
+
     def compose(self) -> ComposeResult:
         if not shutil.which("tmux"):
             yield Static("tmux not found. Install tmux first (apt/brew).", id="error")
@@ -207,7 +231,10 @@ class UnifiedApp(App):
 
         # Global header with HUD
         with Container(id="header"):
-            self.hud = HUD("⌃D delete • ⌃R refresh • P pair • S spec • T terminal • ⌃Q quit", id="hud")
+            self.hud = HUD(
+                "⌃D delete • ⌃R refresh • P pair • S spec • T terminal • ⌃Q quit",
+                id="hud",
+            )
             yield self.hud
 
         # Main content area - split horizontally
@@ -473,11 +500,18 @@ class UnifiedApp(App):
                 # No sessions left, show empty state
                 self.hud.set_session("")
                 # Clear pane 2 (claude pane) with a message
-                msg_cmd = (
-                    "echo 'No active sessions.'"
-                )
+                msg_cmd = "echo 'No active sessions.'"
                 subprocess.run(
-                    ["tmux", "respawn-pane", "-t", "2", "-k", msg_cmd],
+                    [
+                        "tmux",
+                        "-L",
+                        "orchestra",
+                        "respawn-pane",
+                        "-t",
+                        "2",
+                        "-k",
+                        msg_cmd,
+                    ],
                     capture_output=True,
                     text=True,
                 )
@@ -544,7 +578,7 @@ class UnifiedApp(App):
         # When vim exits, show placeholder and keep shell running
         vim_cmd = f"bash -c '$EDITOR {designer_md}; clear; echo \"Press S to open spec editor\"; exec bash'"
         result = subprocess.run(
-            ["tmux", "respawn-pane", "-t", "1", "-k", vim_cmd],
+            ["tmux", "-L", "orchestra", "respawn-pane", "-t", "1", "-k", vim_cmd],
             capture_output=True,
             text=True,
         )
@@ -569,7 +603,7 @@ class UnifiedApp(App):
         # Keep the shell running and show current directory
         bash_cmd = f"bash -c 'cd {work_path} && exec bash'"
         result = subprocess.run(
-            ["tmux", "respawn-pane", "-t", "1", "-k", bash_cmd],
+            ["tmux", "-L", "orchestra", "respawn-pane", "-t", "1", "-k", bash_cmd],
             capture_output=True,
             text=True,
         )
@@ -601,14 +635,25 @@ class UnifiedApp(App):
                 logger.error(f"Failed to start session {session.session_id}")
                 error_cmd = f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
                 subprocess.run(
-                    ["tmux", "respawn-pane", "-t", "2", "-k", error_cmd],
+                    [
+                        "tmux",
+                        "-L",
+                        "orchestra",
+                        "respawn-pane",
+                        "-t",
+                        "2",
+                        "-k",
+                        error_cmd,
+                    ],
                     capture_output=True,
                     text=True,
                 )
                 return
 
         # At this point, session exists - attach to it in pane 2
-        self.agent.attach(session.session_id, target_pane="2", use_docker=session.use_docker)
+        self.agent.attach(
+            session.session_id, target_pane="2", use_docker=session.use_docker
+        )
 
         # Don't auto-focus pane 2 - let user stay in the UI
 
