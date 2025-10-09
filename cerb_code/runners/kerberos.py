@@ -207,7 +207,10 @@ class UnifiedApp(App):
 
         # Global header with HUD
         with Container(id="header"):
-            self.hud = HUD("⌃D delete • ⌃R refresh • P pair • S spec • T terminal • ⌃Q quit", id="hud")
+            self.hud = HUD(
+                "⌃D delete • ⌃R refresh • P pair • S spec • T terminal • ⌃Q quit",
+                id="hud",
+            )
             yield self.hud
 
         # Main content area - split horizontally
@@ -405,11 +408,18 @@ class UnifiedApp(App):
                 # No sessions left, show empty state
                 self.hud.set_session("")
                 # Clear pane 2 (claude pane) with a message
-                msg_cmd = (
-                    "echo 'No active sessions.'"
-                )
+                msg_cmd = "echo 'No active sessions.'"
                 subprocess.run(
-                    ["tmux", "respawn-pane", "-t", "2", "-k", msg_cmd],
+                    [
+                        "tmux",
+                        "-L",
+                        "orchestra",
+                        "respawn-pane",
+                        "-t",
+                        "2",
+                        "-k",
+                        msg_cmd,
+                    ],
                     capture_output=True,
                     text=True,
                 )
@@ -476,7 +486,7 @@ class UnifiedApp(App):
         # When vim exits, show placeholder and keep shell running
         vim_cmd = f"bash -c '$EDITOR {designer_md}; clear; echo \"Press S to open spec editor\"; exec bash'"
         result = subprocess.run(
-            ["tmux", "respawn-pane", "-t", "1", "-k", vim_cmd],
+            ["tmux", "-L", "orchestra", "respawn-pane", "-t", "1", "-k", vim_cmd],
             capture_output=True,
             text=True,
         )
@@ -501,7 +511,7 @@ class UnifiedApp(App):
         # Keep the shell running and show current directory
         bash_cmd = f"bash -c 'cd {work_path} && exec bash'"
         result = subprocess.run(
-            ["tmux", "respawn-pane", "-t", "1", "-k", bash_cmd],
+            ["tmux", "-L", "orchestra", "respawn-pane", "-t", "1", "-k", bash_cmd],
             capture_output=True,
             text=True,
         )
@@ -533,14 +543,25 @@ class UnifiedApp(App):
                 logger.error(f"Failed to start session {session.session_id}")
                 error_cmd = f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
                 subprocess.run(
-                    ["tmux", "respawn-pane", "-t", "2", "-k", error_cmd],
+                    [
+                        "tmux",
+                        "-L",
+                        "orchestra",
+                        "respawn-pane",
+                        "-t",
+                        "2",
+                        "-k",
+                        error_cmd,
+                    ],
                     capture_output=True,
                     text=True,
                 )
                 return
 
         # At this point, session exists - attach to it in pane 2
-        self.agent.attach(session.session_id, target_pane="2", use_docker=session.use_docker)
+        self.agent.attach(
+            session.session_id, target_pane="2", use_docker=session.use_docker
+        )
 
         # Don't auto-focus pane 2 - let user stay in the UI
 
