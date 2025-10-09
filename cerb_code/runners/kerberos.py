@@ -37,7 +37,7 @@ from cerb_code.lib.monitor import SessionMonitorWatcher
 from cerb_code.lib.file_watcher import FileWatcher, watch_designer_file
 from cerb_code.lib.logger import get_logger
 from cerb_code.lib.config import load_config
-from cerb_code.lib.helpers import get_current_branch, ensure_stable_git_location
+from cerb_code.lib.helpers import get_current_branch
 import re
 
 logger = get_logger(__name__)
@@ -283,9 +283,6 @@ class UnifiedApp(App):
             try:
                 # Show status indicator
                 self.status_indicator.update("⏳ Creating session...")
-
-                # First time setup - ensure .git is in stable location
-                await asyncio.to_thread(ensure_stable_git_location, Path.cwd())
 
                 # Create designer session for this branch
                 logger.info(f"Creating designer session for branch: {branch_name}")

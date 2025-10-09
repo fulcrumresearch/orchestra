@@ -498,8 +498,8 @@ class TmuxProtocol(AgentProtocol):
         """
         Toggle pairing mode using symlinks.
 
-        Paired: Move user's dir aside, symlink source → worktree
-        Unpaired: Remove symlink, restore user's dir
+        Paired: Move user's dir aside, symlink source → worktree, update worktree's .git file
+        Unpaired: Remove symlink, restore user's dir, update worktree's .git file
 
         Returns: (success, error_message)
         """
@@ -509,6 +509,7 @@ class TmuxProtocol(AgentProtocol):
         source = Path(session.source_path)
         worktree = Path(session.work_path)
         backup = Path(f"{session.source_path}.backup")
+        worktree_git_file = worktree / ".git"
 
         # Switching to paired mode
         if not session.paired:
@@ -522,6 +523,17 @@ class TmuxProtocol(AgentProtocol):
                 logger.info(f"Moved {source} → {backup}")
             except Exception as e:
                 return False, f"Failed to backup source directory: {e}"
+
+            # Update worktree's .git file to point to new location
+            try:
+                worktree_git_file.write_text(
+                    f"gitdir: {backup}/.git/worktrees/{session.session_id}\n"
+                )
+                logger.info(f"Updated {worktree_git_file} to point to {backup}/.git/worktrees/{session.session_id}")
+            except Exception as e:
+                # Rollback: restore the directory
+                backup.rename(source)
+                return False, f"Failed to update worktree .git file: {e}"
 
             source.symlink_to(worktree)
             logger.info(f"Created symlink {source} → {worktree}")
@@ -542,6 +554,15 @@ class TmuxProtocol(AgentProtocol):
 
             backup.rename(source)
             logger.info(f"Restored {backup} → {source}")
+
+            # Update worktree's .git file to point back to original location
+            try:
+                worktree_git_file.write_text(
+                    f"gitdir: {source}/.git/worktrees/{session.session_id}\n"
+                )
+                logger.info(f"Updated {worktree_git_file} to point to {source}/.git/worktrees/{session.session_id}")
+            except Exception as e:
+                return False, f"Failed to update worktree .git file: {e}"
 
             session.paired = False
 
