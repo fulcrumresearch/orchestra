@@ -101,7 +101,6 @@ class Session:
             "source_path": self.source_path,
             "work_path": self.work_path,
             "use_docker": self.use_docker,
-            "paired": self.paired,
             "children": [child.to_dict() for child in self.children],
         }
 
@@ -286,7 +285,8 @@ def load_sessions(
     if project_dir is None:
         project_dir = Path.cwd()
 
-    project_dir_str = str(project_dir.resolve())
+    # Don't resolve - if project_dir is a symlink (from pairing), we want to keep the original path
+    project_dir_str = str(project_dir)
     sessions = []
 
     if SESSIONS_FILE.exists():
@@ -332,7 +332,8 @@ def save_session(session: Session, project_dir: Optional[Path] = None) -> None:
     if project_dir is None:
         project_dir = Path.cwd()
 
-    project_dir_str = str(project_dir.resolve())
+    # Don't resolve - if project_dir is a symlink (from pairing), we want to keep the original path
+    project_dir_str = str(project_dir)
 
     # Load existing sessions (without protocol since we just need the structure)
     existing_sessions = load_sessions(protocol=None, project_dir=project_dir)

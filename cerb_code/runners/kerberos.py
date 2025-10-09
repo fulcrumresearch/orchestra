@@ -128,6 +128,13 @@ class UnifiedApp(App):
     #branch-info {
         color: #888888;
         text-style: italic;
+        margin-bottom: 0;
+        height: 1;
+    }
+
+    #status-indicator {
+        color: #ffaa00;
+        text-style: italic;
         margin-bottom: 1;
         height: 1;
     }
@@ -187,6 +194,11 @@ class UnifiedApp(App):
         self.sessions: list[Session] = []
         self.flat_sessions: list[Session] = []  # Flattened list for selection
         self.current_session: Session | None = None
+        self.root_session_id: str | None = None  # Fixed root, doesn't change even when pairing
+        # Store the original project directory (resolve now, before any pairing)
+        self.project_dir: Path = Path.cwd().resolve()
+        # Track which session is currently paired (UI state only, not persisted)
+        self.paired_session_id: str | None = None
         # Load config and create TmuxProtocol
         config = load_config()
         self.agent = TmuxProtocol(
@@ -244,6 +256,8 @@ class UnifiedApp(App):
                 yield Static("Orchestra", id="sidebar-title")
                 self.branch_info = Static("", id="branch-info")
                 yield self.branch_info
+                self.status_indicator = Static("", id="status-indicator")
+                yield self.status_indicator
                 self.session_list = ListView(id="session-list")
                 yield self.session_list
 
@@ -257,17 +271,21 @@ class UnifiedApp(App):
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
-        # Detect current git branch
+        # Detect current git branch and store as fixed root
         branch_name = get_current_branch()
+        self.root_session_id = branch_name
 
         # Load sessions for current branch only
-        self.sessions = load_sessions(protocol=self.agent, root=branch_name)
+        self.sessions = load_sessions(protocol=self.agent, root=self.root_session_id, project_dir=self.project_dir)
 
         # Ensure branch session exists
         if not self.sessions:
             try:
+                # Show status indicator
+                self.status_indicator.update("⏳ Creating session...")
+
                 # First time setup - ensure .git is in stable location
-                ensure_stable_git_location(Path.cwd())
+                await asyncio.to_thread(ensure_stable_git_location, Path.cwd())
 
                 # Create designer session for this branch
                 logger.info(f"Creating designer session for branch: {branch_name}")
@@ -278,15 +296,19 @@ class UnifiedApp(App):
                     source_path=str(Path.cwd()),
                     active=False,
                 )
-                new_session.prepare()
-                if new_session.start():
+                await asyncio.to_thread(new_session.prepare)
+                if await asyncio.to_thread(new_session.start):
                     self.sessions = [new_session]
-                    save_session(new_session)
+                    await asyncio.to_thread(save_session, new_session, self.project_dir)
                     logger.info(f"Successfully created and saved session {branch_name}")
                 else:
                     logger.error(f"Failed to start session {branch_name}")
+
+                # Clear status indicator
+                self.status_indicator.update("")
             except Exception as e:
                 logger.exception(f"Error creating designer session: {e}")
+                self.status_indicator.update("")
 
         # Update branch info display
         self.branch_info.update(f"Designer: {branch_name}")
@@ -332,7 +354,10 @@ class UnifiedApp(App):
 
             # Display with indentation
             prefix = "  " * indent
-            item = ListItem(Label(f"{prefix}{session.display_name}"))
+            status_icon = "●" if session.active else "○"
+            paired_indicator = "[P] " if self.paired_session_id == session.session_id else ""
+            display_name = f"{status_icon} {paired_indicator}{session.session_id}"
+            item = ListItem(Label(f"{prefix}{display_name}"))
             self.session_list.append(item)
 
             # Add children recursively
@@ -462,42 +487,54 @@ class UnifiedApp(App):
             session = self.flat_sessions[index]
             self._attach_to_session(session)
 
+    def _remove_session_from_tree(self, sessions: list[Session], session_id: str) -> bool:
+        """Recursively remove a session from the tree. Returns True if found and removed."""
+        for i, session in enumerate(sessions):
+            if session.session_id == session_id:
+                sessions.pop(i)
+                return True
+            # Recursively check children
+            if self._remove_session_from_tree(session.children, session_id):
+                return True
+        return False
+
+    async def _delete_session_task(self, session_to_delete: Session) -> None:
+        """Background task for deleting a session"""
+        try:
+            # Delete the session (handles Docker or local mode)
+            await asyncio.to_thread(session_to_delete.delete)
+
+            # Remove from sessions tree (handles both top-level and child sessions)
+            self._remove_session_from_tree(self.sessions, session_to_delete.session_id)
+
+            # Save the root session (if any remain)
+            if self.sessions:
+                await asyncio.to_thread(save_session, self.sessions[0], self.project_dir)
+
+            # Refresh the list
+            await self.action_refresh()
+        finally:
+            # Clear status indicator
+            self.status_indicator.update("")
+
     def action_delete_session(self) -> None:
         """Delete the currently selected session"""
-        # Get the currently highlighted session from the list instead of current_session
+        # Get the currently highlighted session from the list
         index = self.session_list.index
         if index is None or index >= len(self.flat_sessions):
             return
 
         session_to_delete = self.flat_sessions[index]
 
-        # Delete the session (handles Docker or local mode)
-        session_to_delete.delete()
-
-        # Remove from sessions list
-        self.sessions = [
-            s for s in self.sessions if s.session_id != session_to_delete.session_id
-        ]
-        if self.sessions:
-            save_session(self.sessions[0])
-
-        # If we deleted the current session, handle the right pane
+        # If deleting the current session, switch to designer first (before background deletion)
         if (
             self.current_session
             and self.current_session.session_id == session_to_delete.session_id
         ):
-            self.current_session = None
-
+            # Switch to designer immediately
             if self.sessions:
-                # Try to select the session at the same index, or the previous one if we deleted the last
-                new_index = min(index, len(self.sessions) - 1)
-                if new_index >= 0:
-                    # Move the list highlight to the new index
-                    self.session_list.index = new_index
-                    # Attach to the new session
-                    self._attach_to_session(self.sessions[new_index])
+                self._attach_to_session(self.sessions[0])
             else:
-                # No sessions left, show empty state
                 self.hud.set_session("")
                 # Clear pane 2 (claude pane) with a message
                 msg_cmd = "echo 'No active sessions.'"
@@ -512,15 +549,45 @@ class UnifiedApp(App):
                         "-k",
                         msg_cmd,
                     ],
-                    capture_output=True,
-                    text=True,
-                )
 
-        # Keep focus on the session list
-        self.set_focus(self.session_list)
+        # Show status indicator
+        self.status_indicator.update("⏳ Deleting session...")
 
-        # Refresh the list
-        self.call_later(self.action_refresh)
+        # Run delete in background without waiting
+        asyncio.create_task(self._delete_session_task(session_to_delete))
+
+    async def _toggle_pairing_task(self, session: Session, is_paired: bool) -> None:
+        """Background task for toggling pairing"""
+        try:
+            # Set session.paired temporarily for toggle_pairing to work
+            session.paired = is_paired
+
+            # Toggle pairing
+            success, error_msg = await asyncio.to_thread(session.toggle_pairing)
+
+            if not success:
+                # Show error message
+                self.hud.set_session(f"Error: {error_msg}")
+                logger.error(f"Failed to toggle pairing: {error_msg}")
+                return
+
+            # Update UI state based on new pairing status
+            if is_paired:
+                # Was paired, now unpaired
+                self.paired_session_id = None
+                paired_indicator = ""
+            else:
+                # Was unpaired, now paired
+                self.paired_session_id = session.session_id
+                paired_indicator = "[P] "
+
+            self.hud.set_session(f"{paired_indicator}{session.session_id}")
+
+            # Refresh the list to show pairing status
+            await self.action_refresh()
+        finally:
+            # Clear status indicator
+            self.status_indicator.update("")
 
     def action_toggle_pairing(self) -> None:
         """Toggle pairing mode for the currently selected session"""
@@ -531,28 +598,16 @@ class UnifiedApp(App):
 
         session = self.flat_sessions[index]
 
-        # Show status message
-        pairing_mode = "paired" if not session.paired else "unpaired"
+        # Check if this session is currently paired (UI state)
+        is_paired = (self.paired_session_id == session.session_id)
+
+        # Show status indicators
+        pairing_mode = "paired" if not is_paired else "unpaired"
+        self.status_indicator.update(f"⏳ Switching to {pairing_mode}...")
         self.hud.set_session(f"Switching to {pairing_mode} mode...")
 
-        # Toggle pairing
-        success, error_msg = session.toggle_pairing()
-
-        if not success:
-            # Show error message
-            self.hud.set_session(f"Error: {error_msg}")
-            logger.error(f"Failed to toggle pairing: {error_msg}")
-            return
-
-        # Save session to persist paired state
-        save_session(session)
-
-        # Update UI
-        paired_indicator = "[P] " if session.paired else ""
-        self.hud.set_session(f"{paired_indicator}{session.session_id}")
-
-        # Refresh the list to show pairing status
-        self.call_later(self.action_refresh)
+        # Run toggle in background without waiting
+        asyncio.create_task(self._toggle_pairing_task(session, is_paired))
 
     def action_open_spec(self) -> None:
         """Open designer.md in vim in a split tmux pane"""
@@ -676,8 +731,8 @@ class UnifiedApp(App):
                         and current_mtime != self._last_session_mtime
                     ):
                         logger.info("Sessions file changed, refreshing...")
-                        # Reload sessions from disk
-                        self.sessions = load_sessions(protocol=self.agent)
+                        # Reload sessions from disk (only current root session)
+                        self.sessions = load_sessions(protocol=self.agent, root=self.root_session_id, project_dir=self.project_dir)
                         await self.action_refresh()
                     self._last_session_mtime = current_mtime
             except Exception as e:
