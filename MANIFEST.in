@@ -1,4 +1,0 @@
-include launch.sh
-include README.md
-include *.py
-recursive-include lib *.py
