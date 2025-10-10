@@ -39,10 +39,12 @@ from cerb_code.lib.tmux_agent import TmuxProtocol
 from cerb_code.lib.logger import get_logger
 from cerb_code.lib.config import load_config
 from cerb_code.lib.helpers import (
+    check_dependencies,
     get_current_branch,
     respawn_pane,
     respawn_pane_with_vim,
     respawn_pane_with_terminal,
+    ensure_docker_image,
     PANE_AGENT,
 )
 
@@ -186,8 +188,14 @@ class UnifiedApp(App):
 
 
     def compose(self) -> ComposeResult:
-        if not shutil.which("tmux"):
-            yield Static("tmux not found. Install tmux first (apt/brew).", id="error")
+        # Check dependencies based on config
+        config = load_config()
+        require_docker = config.get("use_docker", True)
+        success, missing = check_dependencies(require_docker=require_docker)
+
+        if not success:
+            error_msg = "Missing dependencies:\n" + "\n".join(f"  • {dep}" for dep in missing)
+            yield Static(error_msg, id="error")
             return
 
         with Container(id="header"):
@@ -214,6 +222,11 @@ class UnifiedApp(App):
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
+        # Build docker image in background if needed
+        config = load_config()
+        if config.get("use_docker", True):
+            asyncio.create_task(asyncio.to_thread(ensure_docker_image))
+
         # Detect current git branch and store as fixed root
         branch_name = get_current_branch()
         self.state.root_session_id = branch_name

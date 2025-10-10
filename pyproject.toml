@@ -1,6 +1,6 @@
 [project]
 name = "cerb-code"
-version = "0.1.11"
+version = "0.1.15"
 description = "Terminal UI for managing multiple Claude sessions with tmux"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -25,7 +25,8 @@ cerb-hook = "cerb_code.runners.hook_monitor:main"
 packages = ["cerb_code", "cerb_code.lib", "cerb_code.runners", "cerb_code.backend", "cerb_code.frontend", "cerb_code.frontend.widgets"]
 
 [tool.setuptools.package-data]
-cerb_code = ["launch.sh"]
+cerb_code = ["launch.sh", "Dockerfile"]
+"cerb_code.runners" = ["cerb-hook-forward.sh"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

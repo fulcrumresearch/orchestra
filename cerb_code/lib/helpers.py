@@ -4,11 +4,49 @@ import json
 import os
 import subprocess
 import tempfile
+import importlib.resources as resources
+import shutil
 
 from pathlib import Path
 from .logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def check_dependencies(require_docker: bool = True) -> tuple[bool, list[str]]:
+    """Check if required dependencies are available
+
+    Args:
+        require_docker: Whether docker is required (default: True)
+
+    Returns:
+        (success, missing_dependencies)
+    """
+    missing = []
+
+    # Check tmux
+    if not shutil.which("tmux"):
+        missing.append("tmux (install with: apt install tmux / brew install tmux)")
+
+    # Check claude
+    if not shutil.which("claude"):
+        missing.append("claude (install with: npm install -g @anthropic-ai/claude-code)")
+
+    # Check docker if required
+    if require_docker:
+        if not shutil.which("docker"):
+            missing.append("docker (install from: https://docs.docker.com/get-docker/)")
+        else:
+            # Check if docker daemon is running
+            result = subprocess.run(
+                ["docker", "info"],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                missing.append("docker daemon (not running - start docker service)")
+
+    return (len(missing) == 0, missing)
 
 
 def get_current_branch(cwd: Path | None = None) -> str:
@@ -99,8 +137,14 @@ def ensure_docker_image() -> None:
 
     if not result.stdout.strip():
         # Image doesn't exist, build it
-        dockerfile_path = Path(__file__).parent.parent.parent / "Dockerfile"
-        if not dockerfile_path.exists():
+        # Find Dockerfile in the cerb_code package
+        try:
+            dockerfile_path = resources.files('cerb_code') / 'Dockerfile'
+        except (ImportError, AttributeError):
+            # Fallback for older Python or development mode
+            dockerfile_path = Path(__file__).parent.parent / "Dockerfile"
+
+        if not Path(dockerfile_path).exists():
             raise RuntimeError(f"Dockerfile not found at {dockerfile_path}")
 
         logger.info(f"Building Docker image cerb-image...")
@@ -112,7 +156,7 @@ def ensure_docker_image() -> None:
                 "cerb-image",
                 "-f",
                 str(dockerfile_path),
-                str(dockerfile_path.parent),
+                str(Path(dockerfile_path).parent),
             ],
             capture_output=True,
             text=True,
