@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cerb monitoring server - receives hook events and routes them to monitoring agents.
+Orchestra monitoring server - receives hook events and routes them to monitoring agents.
 
 - FastAPI app exposes POST /hook/{session_id} endpoint
 - Each session gets its own Claude SDK monitoring agent
@@ -116,7 +116,7 @@ def main():
     """Entry point for the monitoring server"""
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8081
 
-    print(f"Starting Cerb Monitor Server on port {port}")
+    print(f"Starting Orchestra Monitor Server on port {port}")
     print(f"Hook endpoint: http://0.0.0.0:{port}/hook/{{session_id}}")
 
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")

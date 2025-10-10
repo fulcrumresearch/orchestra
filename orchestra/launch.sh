@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Simple launcher script for Cerb - just left UI and right terminal
+# Simple launcher script for Orchestra - creates 3-pane layout
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
