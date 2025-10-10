@@ -1,3 +1,4 @@
+import json
 import subprocess
 import time
 from pathlib import Path
@@ -98,6 +99,9 @@ class TmuxProtocol(AgentProtocol):
                 paired=session.paired,
             ):
                 return False
+        else:
+            # Configure MCP for local (non-Docker) session
+            self._configure_mcp_for_local_session(session)
 
         # Determine working directory
         work_dir = "/workspace" if self.use_docker else session.work_path
@@ -260,6 +264,33 @@ class TmuxProtocol(AgentProtocol):
                 text=True,
             )
         return True
+
+    def _configure_mcp_for_local_session(self, session: "Session") -> None:
+        """Configure MCP for local (non-Docker) session using .mcp.json
+
+        Creates a project-specific .mcp.json file in the session's worktree.
+        Claude Code will prompt the user to approve this MCP server on first use.
+        """
+        logger.info(f"Configuring MCP for local session {session.session_id}")
+
+        if not session.work_path:
+            logger.warning("Cannot configure MCP: work_path not set")
+            return
+
+        # MCP URL for local sessions (localhost, not host.docker.internal)
+        mcp_url = f"http://localhost:{self.mcp_port}/sse"
+
+        # Create .mcp.json in the session's worktree
+        mcp_config = {"mcpServers": {"orchestra-mcp": {"url": mcp_url, "type": "sse"}}}
+
+        mcp_config_path = Path(session.work_path) / ".mcp.json"
+        try:
+            with open(mcp_config_path, "w") as f:
+                json.dump(mcp_config, f, indent=2)
+            logger.info(f"Created .mcp.json at {mcp_config_path} (URL: {mcp_url})")
+            logger.info("Claude Code will prompt user to approve this MCP server on first use")
+        except Exception as e:
+            logger.error(f"Failed to create .mcp.json: {e}")
 
     def toggle_pairing(self, session: "Session") -> tuple[bool, str]:
         """

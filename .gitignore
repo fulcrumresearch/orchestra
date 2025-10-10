@@ -1,4 +1,5 @@
 *.egg-info/
 .claude/
 __pycache__/
+.mcp.json
 instructions.md
