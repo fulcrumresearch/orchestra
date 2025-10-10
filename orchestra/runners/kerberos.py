@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Kerberos UI entry point - minimal launcher"""
+"""Orchestra UI entry point - minimal launcher"""
 
 import os
 import signal
 import subprocess
 from pathlib import Path
 
-from cerb_code.frontend.app import UnifiedApp
-from cerb_code.lib.logger import get_logger
-from cerb_code.lib.config import load_config, ORCHESTRA_HOME
+from orchestra.frontend.app import UnifiedApp
+from orchestra.lib.logger import get_logger
+from orchestra.lib.config import load_config, ORCHESTRA_HOME
 
 logger = get_logger(__name__)
 
-# UnifiedApp is imported from cerb_code.frontend.app above
+# UnifiedApp is imported from orchestra.frontend.app above
 
 START_MONITOR = True
 
@@ -36,7 +36,7 @@ def main():
 
     with open(mcp_log, "w") as log_file:
         mcp_proc = subprocess.Popen(
-            ["cerb-mcp", str(mcp_port)],
+            ["orchestra-mcp", str(mcp_port)],
             stdout=log_file,
             stderr=log_file,
             start_new_session=True,
@@ -54,7 +54,7 @@ def main():
 
         with open(monitor_log, "w") as log_file:
             monitor_proc = subprocess.Popen(
-                ["cerb-monitor-server", str(monitor_port)],
+                ["orchestra-monitor-server", str(monitor_port)],
                 stdout=log_file,
                 stderr=log_file,
                 start_new_session=True,

@@ -52,7 +52,7 @@ create_layout() {
 
         case $pane in
             0) # Sidebar - Unified UI
-                tmux -L orchestra send-keys -t "$pane_target" "cerb-ui" C-m
+                tmux -L orchestra send-keys -t "$pane_target" "orchestra-ui" C-m
                 ;;
             1) # Editor placeholder
                 tmux -L orchestra send-keys -t "$pane_target" "clear; echo 'Press S to open spec editor'; echo ''" C-m
@@ -78,7 +78,7 @@ REPO_NAME=$(basename "$(pwd)")
 if [[ -n "${TMUX:-}" ]]; then
     # When already inside tmux, create the dedicated 'orchestra' session and layout,
     # then open a window in the current tmux that attaches (nested) to that server.
-    SESSION_NAME="cerb-${REPO_NAME}"
+    SESSION_NAME="orchestra-${REPO_NAME}"
     WINDOW_NAME="main"
 
     # Ensure a clean orchestra session
@@ -91,11 +91,11 @@ if [[ -n "${TMUX:-}" ]]; then
     create_layout "$SESSION_NAME:$WINDOW_NAME"
 
     # Open a new window in the current tmux and nest an attach to the orchestra server
-    tmux new-window -n "cerb-${REPO_NAME}"
-    tmux send-keys -t "cerb-${REPO_NAME}" "TMUX= tmux -L orchestra attach-session -t \"$SESSION_NAME\"" C-m
+    tmux new-window -n "orchestra-${REPO_NAME}"
+    tmux send-keys -t "orchestra-${REPO_NAME}" "TMUX= tmux -L orchestra attach-session -t \"$SESSION_NAME\"" C-m
 else
     # Not in tmux, create new session
-    SESSION_NAME="cerb-${REPO_NAME}"
+    SESSION_NAME="orchestra-${REPO_NAME}"
     WINDOW_NAME="main"
 
     # Kill existing session if it exists

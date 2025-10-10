@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entry point for cerb command"""
+"""Entry point for orchestra command"""
 
 import os
 import sys
@@ -9,8 +9,8 @@ from pathlib import Path
 
 def main():
     """Run the launch.sh script"""
-    # launch.sh is in cerb_code/, but we're in cerb_code/runners/
-    script_dir = Path(__file__).parent.parent  # Go up to cerb_code
+    # launch.sh is in the package root, one level above this runners/ dir
+    script_dir = Path(__file__).parent.parent
     launch_script = script_dir / "launch.sh"
 
     if not launch_script.exists():

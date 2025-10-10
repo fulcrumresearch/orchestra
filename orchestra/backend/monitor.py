@@ -7,13 +7,13 @@ Cerb monitoring server - receives hook events and routes them to monitoring agen
 - Events are batched and sent to the monitoring agent
 - Monitor agent updates monitor.md in real-time
 
-Configuration is in cerb_code/lib/monitor.py (ALLOWED_TOOLS, PERMISSION_MODE, etc.)
+Configuration is in orchestra/lib/monitor.py (ALLOWED_TOOLS, PERMISSION_MODE, etc.)
 
 Required environment:
   ANTHROPIC_API_KEY=...  # Required by Claude SDK
 
 Run:
-  cerb-monitor-server [port]  # defaults to port 8081
+  orchestra-monitor-server [port]  # defaults to port 8081
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ from typing import Any, Dict, List, Optional
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 
-from cerb_code.lib.monitor import SessionMonitor
-from cerb_code.lib.sessions import Session, load_sessions
+from orchestra.lib.monitor import SessionMonitor
+from orchestra.lib.sessions import Session, load_sessions
 
 import os
 

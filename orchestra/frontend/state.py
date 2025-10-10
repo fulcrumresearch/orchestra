@@ -1,13 +1,13 @@
-"""Application state management for Kerberos UI"""
+"""Application state management for Orchestra UI"""
 
 from pathlib import Path
 from typing import Optional, List
-from cerb_code.lib.sessions import Session, load_sessions
-from cerb_code.lib.file_watcher import FileWatcher
+from orchestra.lib.sessions import Session, load_sessions
+from orchestra.lib.file_watcher import FileWatcher
 
 
 class AppState:
-    """Centralized application state for the Kerberos UI.
+    """Centralized application state for the Orchestra UI.
 
     Holds all session data and provides methods to access and manipulate it.
     No UI logic - just data management.

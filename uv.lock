@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11"
 
 [[package]]
@@ -33,39 +33,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/5a/b0/1367933a8532ee6ff
 wheels = [
     { url = "https://files.pythonhosted.org/packages/77/06/bb80f5f86020c4551da315d78b3ab75e8228f89f0162f2c3a819e407941a/attrs-25.3.0-py3-none-any.whl", hash = "sha256:427318ce031701fea540783410126f03899a97ffc6f61596ad581ac2e40e3bc3", size = 63815, upload-time = "2025-03-13T11:10:21.14Z" },
 ]
-
-[[package]]
-name = "cerb-code"
-version = "0.1.11"
-source = { editable = "." }
-dependencies = [
-    { name = "claude-agent-sdk" },
-    { name = "fastapi" },
-    { name = "mcp" },
-    { name = "requests" },
-    { name = "textual" },
-    { name = "uvicorn" },
-    { name = "watchfiles" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "claude-agent-sdk", specifier = ">=0.1.0" },
-    { name = "fastapi", specifier = ">=0.117.1" },
-    { name = "mcp", specifier = ">=1.0.0" },
-    { name = "requests", specifier = "==2.30.0" },
-    { name = "textual", specifier = "==5.3.0" },
-    { name = "uvicorn", specifier = ">=0.37.0" },
-    { name = "watchfiles", specifier = ">=0.24.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "ruff", specifier = ">=0.14.0" }]
 
 [[package]]
 name = "certifi"
@@ -333,6 +300,39 @@ sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec9
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
 ]
+
+[[package]]
+name = "orchestra"
+version = "0.1.11"
+source = { editable = "." }
+dependencies = [
+    { name = "claude-agent-sdk" },
+    { name = "fastapi" },
+    { name = "mcp" },
+    { name = "requests" },
+    { name = "textual" },
+    { name = "uvicorn" },
+    { name = "watchfiles" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "claude-agent-sdk", specifier = ">=0.1.0" },
+    { name = "fastapi", specifier = ">=0.117.1" },
+    { name = "mcp", specifier = ">=1.0.0" },
+    { name = "requests", specifier = "==2.30.0" },
+    { name = "textual", specifier = "==5.3.0" },
+    { name = "uvicorn", specifier = ">=0.37.0" },
+    { name = "watchfiles", specifier = ">=0.24.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "ruff", specifier = ">=0.14.0" }]
 
 [[package]]
 name = "platformdirs"

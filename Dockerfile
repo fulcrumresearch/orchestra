@@ -17,8 +17,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
 RUN npm install -g @anthropic-ai/claude-code
 
 # Copy and install hook forwarder script
-COPY cerb-hook-forward.sh /usr/local/bin/cerb-hook
-RUN chmod +x /usr/local/bin/cerb-hook
+COPY orchestra-hook-forward.sh /usr/local/bin/orchestra-hook
+RUN chmod +x /usr/local/bin/orchestra-hook
 
 # Set working directory
 WORKDIR /workspace

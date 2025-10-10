@@ -5,7 +5,7 @@ import json
 import subprocess
 import time
 
-from cerb_code.lib.tmux_agent import TmuxProtocol
+from orchestra.lib.tmux_agent import TmuxProtocol
 from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
 from .config import load_config, ORCHESTRA_HOME
 
@@ -74,16 +74,16 @@ class Session:
 
         prompt_template = AGENT_TEMPLATES[self.agent_type]
 
-        kerberos_md_path = claude_dir / "kerberos.md"
+        orchestra_md_path = claude_dir / "orchestra.md"
         formatted_prompt = prompt_template.format(
             session_id=self.session_id,
             work_path=self.work_path,
             source_path=self.source_path,
         )
-        kerberos_md_path.write_text(formatted_prompt)
+        orchestra_md_path.write_text(formatted_prompt)
 
         claude_md_path = claude_dir / "CLAUDE.md"
-        import_line = "@kerberos.md"
+        import_line = "@orchestra.md"
 
         existing_content = ""
         if claude_md_path.exists():
@@ -91,9 +91,9 @@ class Session:
 
         if import_line not in existing_content:
             if existing_content:
-                new_content = f"{existing_content}\n# Kerberos Session Configuration\n{import_line}\n"
+                new_content = f"{existing_content}\n# Orchestra Session Configuration\n{import_line}\n"
             else:
-                new_content = f"# Kerberos Session Configuration\n{import_line}\n"
+                new_content = f"# Orchestra Session Configuration\n{import_line}\n"
 
             claude_md_path.write_text(new_content)
 

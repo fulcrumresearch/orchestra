@@ -1,4 +1,4 @@
-"""Helper utilities for kerberos"""
+"""Helper utilities for orchestra"""
 
 import json
 import os
@@ -85,14 +85,14 @@ def respawn_pane_with_terminal(work_path: Path) -> bool:
 
 def get_docker_container_name(session_id: str) -> str:
     """Get Docker container name for a session"""
-    return f"cerb-{session_id}"
+    return f"orchestra-{session_id}"
 
 
 def ensure_docker_image() -> None:
     """Ensure Docker image exists, build if necessary"""
     # Check if image exists
     result = subprocess.run(
-        ["docker", "images", "-q", "cerb-image"],
+        ["docker", "images", "-q", "orchestra-image"],
         capture_output=True,
         text=True,
     )
@@ -103,13 +103,13 @@ def ensure_docker_image() -> None:
         if not dockerfile_path.exists():
             raise RuntimeError(f"Dockerfile not found at {dockerfile_path}")
 
-        logger.info(f"Building Docker image cerb-image...")
+        logger.info(f"Building Docker image orchestra-image...")
         build_result = subprocess.run(
             [
                 "docker",
                 "build",
                 "-t",
-                "cerb-image",
+                "orchestra-image",
                 "-f",
                 str(dockerfile_path),
                 str(dockerfile_path.parent),
@@ -176,7 +176,7 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
             *mounts,
             "-w",
             "/workspace",
-            "cerb-image",
+            "orchestra-image",
             "tail",
             "-f",
             "/dev/null",
@@ -239,7 +239,7 @@ def configure_mcp_in_container(container_name: str, mcp_port: int) -> None:
     if "mcpServers" not in config:
         config["mcpServers"] = {}
 
-    config["mcpServers"]["cerb-mcp"] = {"url": mcp_url, "type": "sse"}
+    config["mcpServers"]["orchestra-mcp"] = {"url": mcp_url, "type": "sse"}
 
     # Write modified config to temp file
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:

@@ -7,7 +7,7 @@ from textual.containers import Container
 from textual.widgets import RichLog
 from rich.markup import escape
 
-from cerb_code.lib.monitor import SessionMonitorWatcher
+from orchestra.lib.monitor import SessionMonitorWatcher
 
 
 class ModelMonitorTab(Container):

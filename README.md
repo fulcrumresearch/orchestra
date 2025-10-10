@@ -1,21 +1,22 @@
-# Cerberus
+# Orchestra
 
-Cerberus is an AI coding that allows you to quickly design good software. It allows you to iterate on specs for what you want to build, and then delegate work in parallel to agents building your software in an overseeable way..
+Orchestra is a multi-agent development environment that lets you coordinate swarms of AI agents to build software in parallel. You write specs defining what you want built, and Orchestra spawns isolated executor agents in separate git worktrees to handle implementation.
 
 The best coding experiences understand the tango of deference between human and AI thinking.
 
 Humans excel at:
+
 - Articulating vision and requirements
 - Making architectural decisions
 - Providing context and judgment
 
 AI agents excel at:
+
 - Implementing well-specified tasks
 - Exploring codebases
 - Handling repetitive transformations
 
-Cerberus is a multi-agent development environment that lets you focus on the creative work of software design while coordinating swarms of AI agents to handle implementation. You provide the vision, Cerberus manages the execution.
-
+Orchestra lets you focus on the creative work of software design while coordinating swarms of AI agents to handle implementation. You provide the vision, Orchestra manages the execution.
 
 ## How It Works
 
@@ -27,7 +28,7 @@ Cerberus is a multi-agent development environment that lets you focus on the cre
 
 ### The Orchestrator UI
 
-Cerberus provides a unified interface to manage your agent swarm:
+Orchestra provides a unified interface to manage your agent swarm:
 
 - **Session List:** View all active designer and executor sessions
 - **Diff View:** See changes in real-time as agents work
@@ -117,16 +118,18 @@ Executor sends: send_message_to_session(
 
 ### Git Worktrees + Docker Isolation
 
-Cerberus combines git worktrees with Docker containerization:
+Orchestra combines git worktrees with Docker containerization:
 
 **Worktrees (Visible on Host)**:
-- Each executor gets its own branch and working directory at `~/.kerberos/worktrees/`
+
+- Each executor gets its own branch and working directory at `~/.orchestra/worktrees/`
 - Changes are tracked independently
 - No conflicts between concurrent agent work
 - Easy to review, test, and merge completed tasks
 - Worktrees are visible and editable in your editor
 
 **Docker Containers (Isolated Execution)**:
+
 - Each session runs in its own Docker container
 - Agent commands execute in isolation with mounted worktree
 - Two modes:
@@ -137,6 +140,7 @@ Cerberus combines git worktrees with Docker containerization:
 See [DOCKER.md](DOCKER.md) for detailed Docker architecture.
 
 **Communication (MCP)**:
+
 - Designers spawn executors with detailed instructions
 - Executors can message back with questions or completion status
 - Automated monitoring tracks agent activity
@@ -144,8 +148,8 @@ See [DOCKER.md](DOCKER.md) for detailed Docker architecture.
 ## Getting Started
 
 ```bash
-# Launch the Cerberus orchestrator
-cerb
+# Launch the Orchestra orchestrator
+orchestra
 
 # The UI will open with a main designer session
 # Press 's' to open the spec editor and start planning

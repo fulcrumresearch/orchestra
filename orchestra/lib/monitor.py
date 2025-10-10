@@ -13,7 +13,7 @@ import time
 
 logger = get_logger(__name__)
 
-ALLOWED_TOOLS = ["Read", "Write", "Edit", "mcp__cerb-subagent__send_message_to_session"]
+ALLOWED_TOOLS = ["Read", "Write", "Edit", "mcp__orchestra-mcp__send_message_to_session"]
 PERMISSION_MODE = "acceptEdits"
 
 # Batch processing configuration
@@ -89,7 +89,7 @@ class SessionMonitor:
         )
 
         # MCP config to give monitor access to send_message_to_session
-        mcp_config = {"cerb-subagent": {"command": "cerb-mcp", "args": [], "env": {}}}
+        mcp_config = {"orchestra-mcp": {"command": "orchestra-mcp", "args": [], "env": {}}}
 
         options = ClaudeAgentOptions(
             cwd=self.session.work_path,
