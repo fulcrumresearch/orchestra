@@ -270,14 +270,14 @@ class UnifiedApp(App):
         if not root:
             return
 
-        paired_marker = "[P] " if self.state.paired_session_id == root.session_id else ""
-        label_text = f"[D] {paired_marker}{root.session_id}"
-        self.session_list.append(ListItem(Label(label_text)))
+        paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_id == root.session_id else ""
+        label_text = f"{paired_marker}{root.session_id} [dim][#00ff9f](designer)[/#00ff9f][/dim]"
+        self.session_list.append(ListItem(Label(label_text, markup=True)))
 
         for child in root.children:
-            paired_marker = "[P] " if self.state.paired_session_id == child.session_id else ""
-            label_text = f"[E] {paired_marker}{child.session_id}"
-            self.session_list.append(ListItem(Label(label_text)))
+            paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_id == child.session_id else ""
+            label_text = f"{paired_marker}  {child.session_id} [dim][#00d4ff](executor)[/#00d4ff][/dim]"
+            self.session_list.append(ListItem(Label(label_text, markup=True)))
 
         if selected_id:
             new_index = self.state.get_index_by_session_id(selected_id)
