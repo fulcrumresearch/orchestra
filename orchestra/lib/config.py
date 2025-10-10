@@ -14,6 +14,7 @@ CONFIG_FILE = ORCHESTRA_HOME / "config.json"
 DEFAULT_CONFIG = {
     "use_docker": True,
     "mcp_port": 8765,
+    "theme": "textual-dark",  # Options: textual-dark, textual-light, nord, gruvbox, catppuccin, dracula, tokyo-night, monokai, solarized-light, solarized-dark
 }
 
 

@@ -192,6 +192,10 @@ class UnifiedApp(App):
         project_dir = Path.cwd().resolve()
         self.state = AppState(project_dir)
 
+        # Load and apply theme from config
+        config = load_config()
+        self.theme = config.get("theme", "textual-dark")
+
     def compose(self) -> ComposeResult:
         if not shutil.which("tmux"):
             yield Static("tmux not found. Install tmux first (apt/brew).", id="error")
