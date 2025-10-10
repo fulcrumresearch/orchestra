@@ -16,7 +16,7 @@ dependencies = [
 
 [project.scripts]
 orchestra = "orchestra.runners.launcher:main"
-orchestra-ui = "orchestra.runners.kerberos:main"
+orchestra-ui = "orchestra.runners.maestro:main"
 orchestra-monitor-server = "orchestra.backend.monitor:main"
 orchestra-mcp = "orchestra.backend.mcp_server:main"
 orchestra-hook = "orchestra.runners.hook_monitor:main"

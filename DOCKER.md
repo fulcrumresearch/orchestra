@@ -85,7 +85,7 @@ Each Orchestra session runs in its own Docker container:
 For development or troubleshooting, Orchestra can run without Docker:
 
 ```python
-# In orchestra/runners/kerberos.py
+# In orchestra/runners/maestro.py
 agent = TmuxProtocol(default_command="claude", use_docker=False)
 ```
 
@@ -203,4 +203,4 @@ ls ~/.orchestra/worktrees/
 - `Dockerfile`: Container image definition
 - `orchestra/lib/tmux_agent.py`: Docker integration in TmuxProtocol
 - `orchestra/lib/sessions.py`: Session management
-- `orchestra/runners/kerberos.py`: UI and orchestration
+- `orchestra/runners/maestro.py`: UI and orchestration
