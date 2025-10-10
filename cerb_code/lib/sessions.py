@@ -56,7 +56,7 @@ class Session:
         for child in self.children:
             child.delete()
         # Then delete self
-        return self.protocol.delete(self.session_id, self.use_docker)
+        return self.protocol.delete(self)
 
     def add_instructions(self) -> None:
         """Add agent-specific instructions to CLAUDE.md"""
@@ -257,7 +257,7 @@ class Session:
 
     def send_message(self, message: str) -> None:
         """Send a message to the session"""
-        self.protocol.send_message(self.session_id, message, self.use_docker)
+        self.protocol.send_message(self, message)
 
     def toggle_pairing(self) -> tuple[bool, str]:
         """

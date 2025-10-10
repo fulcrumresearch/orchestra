@@ -22,12 +22,12 @@ class AgentProtocol(ABC):
         pass
 
     @abstractmethod
-    def get_status(self, session_id: str) -> dict:
+    def get_status(self, session: "Session") -> dict:
         """
         Get status information for a session.
 
         Args:
-            session_id: ID of the session
+            session: Session object containing session_id and configuration
 
         Returns:
             dict: Status information (backend-specific)
@@ -35,12 +35,12 @@ class AgentProtocol(ABC):
         pass
 
     @abstractmethod
-    def send_message(self, session_id: str, message: str) -> bool:
+    def send_message(self, session: "Session", message: str) -> bool:
         """
         Send a message to the agent for the given session.
 
         Args:
-            session_id: ID of the session
+            session: Session object containing session_id and configuration
             message: Message to send
 
         Returns:

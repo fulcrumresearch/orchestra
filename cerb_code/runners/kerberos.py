@@ -273,9 +273,7 @@ class UnifiedApp(App):
         """Load sessions and refresh list"""
         # Detect current git branch and store as fixed root
         branch_name = get_current_branch()
-        # Use dirname-branchname format to avoid collisions across different orchestra instances
-        dir_name = Path.cwd().name
-        self.root_session_id = f"{dir_name}-{branch_name}"
+        self.root_session_id = branch_name
 
         # Load sessions for current branch only
         self.sessions = load_sessions(protocol=self.agent, root=self.root_session_id, project_dir=self.project_dir)
@@ -290,12 +288,9 @@ class UnifiedApp(App):
                 await asyncio.to_thread(ensure_stable_git_location, Path.cwd())
 
                 # Create designer session for this branch
-                # Use dirname-branchname format to avoid collisions across different orchestra instances
-                dir_name = Path.cwd().name
-                session_id = f"{dir_name}-{branch_name}"
-                logger.info(f"Creating designer session: {session_id}")
+                logger.info(f"Creating designer session for branch: {branch_name}")
                 new_session = Session(
-                    session_id=session_id,
+                    session_id=branch_name,
                     agent_type=AgentType.DESIGNER,
                     protocol=self.agent,
                     source_path=str(Path.cwd()),
@@ -351,7 +346,7 @@ class UnifiedApp(App):
         # Add sessions to list with hierarchy
         def add_session_tree(session, indent=0):
             # Update status for this session
-            status = self.agent.get_status(session.session_id, session.use_docker)
+            status = self.agent.get_status(session)
             session.active = status.get("attached", False)
 
             # Keep track in flat list for selection
@@ -686,7 +681,7 @@ class UnifiedApp(App):
         session.active = True
 
         # Check session status using the protocol
-        status = self.agent.get_status(session.session_id, session.use_docker)
+        status = self.agent.get_status(session)
 
         if not status.get("exists", False):
             # Session doesn't exist, create it
@@ -716,9 +711,7 @@ class UnifiedApp(App):
                 return
 
         # At this point, session exists - attach to it in pane 2
-        self.agent.attach(
-            session.session_id, target_pane="2", use_docker=session.use_docker
-        )
+        self.agent.attach(session, target_pane="2")
 
         # Don't auto-focus pane 2 - let user stay in the UI
 
