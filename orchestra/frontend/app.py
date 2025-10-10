@@ -26,6 +26,7 @@ from textual.binding import Binding
 from orchestra.frontend.widgets.hud import HUD
 from orchestra.frontend.widgets.diff_tab import DiffTab
 from orchestra.frontend.widgets.monitor_tab import ModelMonitorTab
+from orchestra.frontend.widgets.help_screen import HelpScreen
 from orchestra.frontend.state import AppState
 
 # Import from lib
@@ -168,6 +169,7 @@ class UnifiedApp(App):
         Binding("p", "toggle_pairing", "Toggle Pairing", priority=True, show=True),
         Binding("s", "open_spec", "Open Spec", priority=True),
         Binding("t", "open_terminal", "Open Terminal", priority=True),
+        Binding("?", "show_help", "Help", priority=True),
         Binding("enter", "select_session", "Select", show=False),
         Binding("up", "cursor_up", show=False),
         Binding("down", "cursor_down", show=False),
@@ -191,7 +193,7 @@ class UnifiedApp(App):
 
         with Container(id="header"):
             self.hud = HUD(
-                "⌃D delete • ⌃R refresh • P pair • S spec • T terminal • ⌃Q quit",
+                "⌃D delete • ⌃R refresh • P pair • S spec • T terminal • ? help • ⌃Q quit",
                 id="hud",
             )
             yield self.hud
@@ -444,3 +446,7 @@ class UnifiedApp(App):
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle session selection from list when clicked"""
         self.action_select_session()
+
+    def action_show_help(self) -> None:
+        """Show the help modal"""
+        self.push_screen(HelpScreen())
