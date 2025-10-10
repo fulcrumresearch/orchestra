@@ -48,26 +48,34 @@ from orchestra.lib.helpers import (
 
 logger = get_logger(__name__)
 
+# Orchestra semantic colors (used in both CSS and Rich markup)
+DESIGNER_COLOR = "#00ff9f"
+EXECUTOR_COLOR = "#00d4ff"
+
 
 class UnifiedApp(App):
     """Unified app combining session picker and monitor"""
 
     CSS = """
+    /* Custom Orchestra colors */
+    $designer-color: DESIGNER_COLOR;
+    $executor-color: EXECUTOR_COLOR;
+    
     Screen {
-        background: #0a0a0a;
+        background: $background;
     }
 
     #header {
         height: 2;
-        background: #111111;
-        border-bottom: solid #333333;
+        background: $surface;
+        border-bottom: solid $border;
         dock: top;
     }
 
     #hud {
         height: 2;
         padding: 0 1;
-        color: #C0FFFD;
+        color: $accent;
         text-align: center;
     }
 
@@ -77,13 +85,13 @@ class UnifiedApp(App):
 
     #left-pane {
         width: 30%;
-        background: #0a0a0a;
-        border-right: solid #333333;
+        background: $background;
+        border-right: solid $border;
     }
 
     #right-pane {
         width: 70%;
-        background: #000000;
+        background: $background;
     }
 
     TabbedContent {
@@ -91,7 +99,7 @@ class UnifiedApp(App):
     }
 
     Tabs {
-        background: #1a1a1a;
+        background: $panel;
     }
 
     Tab {
@@ -104,26 +112,26 @@ class UnifiedApp(App):
 
     TabPane {
         padding: 1;
-        background: #000000;
+        background: $background;
         layout: vertical;
     }
 
     #sidebar-title {
-        color: #00ff9f;
+        color: $designer-color;
         text-style: bold;
         margin-bottom: 0;
         height: 1;
     }
 
     #branch-info {
-        color: #888888;
+        color: $text-muted;
         text-style: italic;
         margin-bottom: 0;
         height: 1;
     }
 
     #status-indicator {
-        color: #ffaa00;
+        color: $warning;
         text-style: italic;
         margin-bottom: 1;
         height: 1;
@@ -134,32 +142,32 @@ class UnifiedApp(App):
     }
 
     ListItem {
-        color: #cccccc;
+        color: $text;
         padding: 0 1;
     }
 
     ListItem:hover {
-        background: #222222;
-        color: #ffffff;
+        background: $panel;
+        color: $text;
     }
 
     ListView > ListItem.--highlight {
-        background: #1a1a1a;
-        color: #00ff9f;
+        background: $panel;
+        color: $designer-color;
         text-style: bold;
-        border-left: thick #00ff9f;
+        border-left: thick $designer-color;
     }
 
     RichLog {
-        background: #000000;
-        color: #ffffff;
+        background: $background;
+        color: $text;
         overflow-x: hidden;
         overflow-y: auto;
         width: 100%;
         height: 1fr;
         text-wrap: wrap;
     }
-"""
+""".replace("DESIGNER_COLOR", DESIGNER_COLOR).replace("EXECUTOR_COLOR", EXECUTOR_COLOR)
 
     BINDINGS = [
         Binding("ctrl+q", "quit", "Quit", priority=True),
@@ -270,12 +278,12 @@ class UnifiedApp(App):
             return
 
         paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_id == root.session_id else ""
-        label_text = f"{paired_marker}{root.session_id} [dim][#00ff9f](designer)[/#00ff9f][/dim]"
+        label_text = f"{paired_marker}{root.session_id} [dim][{DESIGNER_COLOR}](designer)[/{DESIGNER_COLOR}][/dim]"
         self.session_list.append(ListItem(Label(label_text, markup=True)))
 
         for child in root.children:
             paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_id == child.session_id else ""
-            label_text = f"{paired_marker}  {child.session_id} [dim][#00d4ff](executor)[/#00d4ff][/dim]"
+            label_text = f"{paired_marker}  {child.session_id} [dim][{EXECUTOR_COLOR}](executor)[/{EXECUTOR_COLOR}][/dim]"
             self.session_list.append(ListItem(Label(label_text, markup=True)))
 
         if selected_id:

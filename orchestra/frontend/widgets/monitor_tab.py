@@ -9,6 +9,10 @@ from rich.markup import escape
 
 from orchestra.lib.monitor import SessionMonitorWatcher
 
+# Orchestra semantic colors
+DESIGNER_COLOR = "#00ff9f"
+EXECUTOR_COLOR = "#00d4ff"
+
 
 class ModelMonitorTab(Container):
     """Tab for monitoring session and children monitor.md files."""
@@ -69,9 +73,9 @@ class ModelMonitorTab(Container):
             # Header for each session
             agent_type = monitor_data.get("agent_type", "unknown")
             if agent_type == "executor":
-                color = "#00d4ff"
+                color = EXECUTOR_COLOR
             else:
-                color = "#00ff9f"
+                color = DESIGNER_COLOR
             self.monitor_log.write("", expand=True)
             self.monitor_log.write(
                 f"[bold {color}]══════════════════════════════════════════════════[/bold {color}]",
