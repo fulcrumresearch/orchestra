@@ -9,6 +9,7 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 # Configure logging
 LOG_FILE = LOG_DIR / "kerberos.log"
 
+
 def get_logger(name: str) -> logging.Logger:
     """Get a logger instance with proper configuration"""
     logger = logging.getLogger(name)
@@ -22,14 +23,15 @@ def get_logger(name: str) -> logging.Logger:
 
         # Format
         formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
         file_handler.setFormatter(formatter)
 
         logger.addHandler(file_handler)
 
     return logger
+
 
 # Log startup
 logger = get_logger(__name__)

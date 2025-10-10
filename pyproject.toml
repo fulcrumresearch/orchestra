@@ -17,12 +17,12 @@ dependencies = [
 [project.scripts]
 cerb = "cerb_code.runners.cerb_launcher:main"
 cerb-ui = "cerb_code.runners.kerberos:main"
-cerb-monitor-server = "cerb_code.runners.monitor:main"
-cerb-mcp = "cerb_code.runners.mcp_server:main"
+cerb-monitor-server = "cerb_code.backend.monitor:main"
+cerb-mcp = "cerb_code.backend.mcp_server:main"
 cerb-hook = "cerb_code.runners.hook_monitor:main"
 
 [tool.setuptools]
-packages = ["cerb_code", "cerb_code.lib", "cerb_code.runners"]
+packages = ["cerb_code", "cerb_code.lib", "cerb_code.runners", "cerb_code.backend", "cerb_code.frontend", "cerb_code.frontend.widgets"]
 
 [tool.setuptools.package-data]
 cerb_code = ["launch.sh"]
@@ -30,3 +30,8 @@ cerb_code = ["launch.sh"]
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.0",
+]

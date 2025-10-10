@@ -17,12 +17,17 @@ class AgentType(Enum):
     EXECUTOR = "executor"
 
 
+AGENT_TEMPLATES = {
+    AgentType.DESIGNER: DESIGNER_PROMPT,
+    AgentType.EXECUTOR: EXECUTOR_PROMPT,
+}
+
+
 class Session:
     def __init__(
         self,
         session_id: str,
         agent_type: AgentType,
-        protocol=None,  # AgentProtocol instance
         source_path: str = "",
         work_path: Optional[str] = None,
         active: bool = False,
@@ -30,7 +35,6 @@ class Session:
     ):
         self.session_id = session_id
         self.agent_type = agent_type
-        self.protocol = protocol
         self.source_path = source_path
         self.work_path = work_path
         self.active = active
@@ -42,21 +46,23 @@ class Session:
         else:
             self.use_docker = use_docker
 
+        config = load_config()
+        self.protocol = TmuxProtocol(
+            default_command="claude",
+            mcp_port=config.get("mcp_port", 8765),
+            use_docker=self.use_docker,
+        )
+
     def start(self) -> bool:
         """Start the agent using the configured protocol"""
-        if not self.protocol:
-            return False
         return self.protocol.start(self)
 
     def delete(self) -> bool:
         """Delete the session using the configured protocol"""
-        if not self.protocol:
-            return False
         # Delete all children first
         for child in self.children:
             child.delete()
-        # Then delete self
-        return self.protocol.delete(self.session_id, self.use_docker)
+        return self.protocol.delete(self.session_id)
 
     def add_instructions(self) -> None:
         """Add agent-specific instructions to CLAUDE.md"""
@@ -66,20 +72,16 @@ class Session:
         claude_dir = Path(self.work_path) / ".claude"
         claude_dir.mkdir(parents=True, exist_ok=True)
 
-        # Select the appropriate prompt based on agent type
-        if self.agent_type == AgentType.DESIGNER:
-            prompt_template = DESIGNER_PROMPT
-        else:  # AgentType.EXECUTOR
-            prompt_template = EXECUTOR_PROMPT
+        prompt_template = AGENT_TEMPLATES[self.agent_type]
 
-        # Create/update kerberos.md with session-specific information
         kerberos_md_path = claude_dir / "kerberos.md"
         formatted_prompt = prompt_template.format(
-            session_id=self.session_id, work_path=self.work_path, source_path=self.source_path
+            session_id=self.session_id,
+            work_path=self.work_path,
+            source_path=self.source_path,
         )
         kerberos_md_path.write_text(formatted_prompt)
 
-        # Add import to CLAUDE.md if not already present
         claude_md_path = claude_dir / "CLAUDE.md"
         import_line = "@kerberos.md"
 
@@ -87,11 +89,9 @@ class Session:
         if claude_md_path.exists():
             existing_content = claude_md_path.read_text()
 
-        # Check if import is already present
         if import_line not in existing_content:
-            # Add import line at the beginning with a separator
             if existing_content:
-                new_content = f"# Kerberos Session Configuration\n{import_line}\n\n{existing_content}"
+                new_content = f"{existing_content}\n# Kerberos Session Configuration\n{import_line}\n"
             else:
                 new_content = f"# Kerberos Session Configuration\n{import_line}\n"
 
@@ -109,22 +109,18 @@ class Session:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], protocol=None) -> "Session":
+    def from_dict(cls, data: Dict[str, Any]) -> "Session":
         """Deserialize session from dictionary"""
         session = cls(
             session_id=data["session_id"],
             agent_type=AgentType(data["agent_type"]),
-            protocol=protocol,
             source_path=data.get("source_path", ""),
             work_path=data.get("work_path"),
             active=data.get("active", False),
-            use_docker=data.get("use_docker"),  # Will use default if None
+            use_docker=data.get("use_docker"),
         )
-        # Recursively load children (they inherit the same protocol)
-        session.children = [
-            cls.from_dict(child_data, protocol)
-            for child_data in data.get("children", [])
-        ]
+        # Recursively load children (each creates its own protocol)
+        session.children = [cls.from_dict(child_data) for child_data in data.get("children", [])]
         return session
 
     def prepare(self):
@@ -147,16 +143,13 @@ class Session:
         worktree_base = Path.home() / ".kerberos" / "worktrees" / source_dir_name
         self.work_path = str(worktree_base / self.session_id)
 
-        # Check if worktree already exists
         if Path(self.work_path).exists():
             return
 
-        # Ensure worktree base directory exists
         worktree_base.mkdir(parents=True, exist_ok=True)
 
         # Create new worktree on a new branch
         try:
-            # Check if branch exists
             result = subprocess.run(
                 ["git", "rev-parse", "--verify", f"refs/heads/{self.session_id}"],
                 cwd=self.source_path,
@@ -165,7 +158,6 @@ class Session:
             )
 
             if result.returncode == 0:
-                # Branch exists, use it
                 subprocess.run(
                     ["git", "worktree", "add", self.work_path, self.session_id],
                     cwd=self.source_path,
@@ -174,7 +166,6 @@ class Session:
                     text=True,
                 )
             else:
-                # Create new branch
                 subprocess.run(
                     ["git", "worktree", "add", "-b", self.session_id, self.work_path],
                     cwd=self.source_path,
@@ -183,14 +174,12 @@ class Session:
                     text=True,
                 )
 
-            # Create .claude/commands directory and add merge-child command
             claude_commands_dir = Path(self.work_path) / ".claude" / "commands"
             claude_commands_dir.mkdir(parents=True, exist_ok=True)
 
             merge_command_path = claude_commands_dir / "merge-child.md"
             merge_command_path.write_text(MERGE_CHILD_COMMAND)
 
-            # Add agent-specific instructions to CLAUDE.md
             self.add_instructions()
 
         except subprocess.CalledProcessError as e:
@@ -208,7 +197,6 @@ class Session:
         new_session = Session(
             session_id=session_id,
             agent_type=AgentType.EXECUTOR,
-            protocol=self.protocol,  # Inherit parent's protocol
             source_path=self.work_path,  # Child's source is parent's work directory
             use_docker=executor_use_docker,  # Use config value
         )
@@ -222,9 +210,7 @@ class Session:
 
         settings_path = claude_dir / "settings.json"
         # PROJECT_CONF is already a JSON string, just replace the placeholders
-        settings_json = PROJECT_CONF.replace("{session_id}", session_id).replace(
-            "{source_path}", self.source_path
-        )
+        settings_json = PROJECT_CONF.replace("{session_id}", session_id).replace("{source_path}", self.source_path)
         settings_path.write_text(settings_json)
 
         instructions_path = Path(new_session.work_path) / "instructions.md"
@@ -248,31 +234,23 @@ class Session:
 
         return new_session
 
-    @property
-    def display_name(self) -> str:
-        """Get display name for UI"""
-        status = "●" if self.active else "○"
-        paired_indicator = "[P] " if self.paired else ""
-        return f"{status} {paired_indicator}{self.session_id}"
+    def get_status(self) -> Dict[str, Any]:
+        """Get status information for this session"""
+        return self.protocol.get_status(self.session_id)
 
     def send_message(self, message: str) -> None:
         """Send a message to the session"""
-        self.protocol.send_message(self.session_id, message, self.use_docker)
+        self.protocol.send_message(self.session_id, message)
 
     def toggle_pairing(self) -> tuple[bool, str]:
         """
         Toggle pairing mode for this session.
         Returns: (success, error_message)
         """
-        if not self.protocol:
-            return False, "No protocol configured"
-
-        # Let protocol handle all the implementation details
         return self.protocol.toggle_pairing(self)
 
 
 def load_sessions(
-    protocol=TmuxProtocol(),
     flat=False,
     project_dir: Optional[Path] = None,
     root: Optional[str] = None,
@@ -280,7 +258,6 @@ def load_sessions(
     """Load sessions from JSON file for a specific project directory
 
     Args:
-        protocol: Protocol to use for sessions
         flat: If True, return flattened list of sessions (including children)
         project_dir: Specific project directory to load sessions for. If None, uses cwd.
         root: If specified, only return the session with this ID (+ children). Otherwise return all.
@@ -297,10 +274,7 @@ def load_sessions(
             with open(SESSIONS_FILE, "r") as f:
                 data = json.load(f)
                 project_sessions = data.get(project_dir_str, [])
-                sessions = [
-                    Session.from_dict(session_data, protocol)
-                    for session_data in project_sessions
-                ]
+                sessions = [Session.from_dict(session_data) for session_data in project_sessions]
         except (json.JSONDecodeError, KeyError):
             pass
 
@@ -338,8 +312,8 @@ def save_session(session: Session, project_dir: Optional[Path] = None) -> None:
     # Don't resolve - if project_dir is a symlink (from pairing), we want to keep the original path
     project_dir_str = str(project_dir)
 
-    # Load existing sessions (without protocol since we just need the structure)
-    existing_sessions = load_sessions(protocol=None, project_dir=project_dir)
+    # Load existing sessions
+    existing_sessions = load_sessions(project_dir=project_dir)
 
     # Find and update the session, or append if not found
     found = False
