@@ -43,6 +43,10 @@ class FileWatcher:
             self._watchers[file_path] = set()
 
         self._watchers[file_path].add(handler)
+        logger.debug(f"Registered watcher for {file_path}. Total watchers: {len(self._watchers)}")
+
+        # Trigger restart of awatch to pick up new file
+        self._stop_event.set()
 
     def unregister(self, file_path: Path) -> None:
         """
@@ -88,6 +92,7 @@ class FileWatcher:
 
     async def _run(self) -> None:
         """Main watching loop"""
+        logger.debug("File watcher started")
         while not self._should_stop:
             if not self._watchers:
                 # No files to watch, sleep briefly
@@ -102,6 +107,8 @@ class FileWatcher:
                     watch_paths.add(path.parent)
                 else:
                     watch_paths.add(path)
+
+            logger.debug(f"Watching {len(self._watchers)} files in {len(watch_paths)} directories")
 
             # Clear stop event for this iteration
             self._stop_event.clear()
@@ -121,6 +128,7 @@ class FileWatcher:
                     # Call handlers once per path
                     for path, change_type in changed_paths.items():
                         handlers = list(self._watchers[path])
+                        logger.debug(f"Triggering {len(handlers)} handlers for {path}")
                         for handler in handlers:
                             try:
                                 await handler(path, change_type)
@@ -146,7 +154,12 @@ class FileWatcher:
 
         async def on_designer_change(path: Path, change_type: Change) -> None:
             """Handler for designer.md changes"""
-            session.send_message("designer.md has been updated. Please review the changes")
+            logger.debug(f"designer.md changed for session {session.session_id}: {path} ({change_type})")
+            try:
+                session.send_message("designer.md has been updated. Please review the changes")
+                logger.debug(f"Sent message to session {session.session_id}")
+            except Exception as e:
+                logger.error(f"Failed to send message to session {session.session_id}: {e}")
 
         self.register(designer_md, on_designer_change)
-        logger.info(f"Registered designer.md watcher for session {session.session_id}: {designer_md}")
+        logger.debug(f"Registered designer.md watcher for session {session.session_id}: {designer_md}")

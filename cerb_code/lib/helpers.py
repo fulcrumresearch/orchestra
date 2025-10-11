@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import importlib.resources as resources
 import shutil
+import shlex
 
 from pathlib import Path
 from .logger import get_logger
@@ -101,7 +102,7 @@ def respawn_pane_with_vim(spec_file: Path) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    vim_cmd = f"bash -c '$EDITOR {spec_file}; clear; echo \"Press S to open spec editor\"; exec bash'"
+    vim_cmd = f"bash -c '$EDITOR {shlex.quote(str(spec_file))}; clear; echo \"Press S to open spec editor\"; exec bash'"
     return respawn_pane(PANE_EDITOR, vim_cmd)
 
 
@@ -114,7 +115,7 @@ def respawn_pane_with_terminal(work_path: Path) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    bash_cmd = f"bash -c 'cd {work_path} && exec bash'"
+    bash_cmd = f"bash -c 'cd {shlex.quote(str(work_path))} && exec bash'"
     return respawn_pane(PANE_EDITOR, bash_cmd)
 
 
