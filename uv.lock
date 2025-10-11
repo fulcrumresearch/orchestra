@@ -36,7 +36,7 @@ wheels = [
 
 [[package]]
 name = "cerb-code"
-version = "0.1.15"
+version = "0.1.16"
 source = { editable = "." }
 dependencies = [
     { name = "claude-agent-sdk" },
