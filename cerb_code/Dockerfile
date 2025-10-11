@@ -1,11 +1,16 @@
 FROM python:3.12-slim
 
+# Accept build arguments for user ID and group ID
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     tmux \
     git \
     curl \
     ca-certificates \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js for Claude CLI
@@ -20,7 +25,15 @@ RUN npm install -g @anthropic-ai/claude-code
 COPY runners/cerb-hook-forward.sh /usr/local/bin/cerb-hook
 RUN chmod +x /usr/local/bin/cerb-hook
 
+# Create user with matching UID/GID
+RUN groupadd -g ${GROUP_ID} executor || true && \
+    useradd -u ${USER_ID} -g ${GROUP_ID} -m -s /bin/bash executor && \
+    echo "executor ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
 # Set working directory
 WORKDIR /workspace
+
+# Switch to non-root user
+USER executor
 
 # Container will run tmux in foreground (CMD provided at runtime per session)

@@ -147,11 +147,19 @@ def ensure_docker_image() -> None:
         if not Path(dockerfile_path).exists():
             raise RuntimeError(f"Dockerfile not found at {dockerfile_path}")
 
-        logger.info(f"Building Docker image cerb-image...")
+        # Get host user's UID and GID to create matching user in container
+        uid = os.getuid()
+        gid = os.getgid()
+
+        logger.info(f"Building Docker image cerb-image with USER_ID={uid}, GROUP_ID={gid}...")
         build_result = subprocess.run(
             [
                 "docker",
                 "build",
+                "--build-arg",
+                f"USER_ID={uid}",
+                "--build-arg",
+                f"GROUP_ID={gid}",
                 "-t",
                 "cerb-image",
                 "-f",
@@ -207,6 +215,10 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
         if api_key:
             env_vars.extend(["-e", f"ANTHROPIC_API_KEY={api_key}"])
 
+        # Get host user's UID and GID to run container as matching user
+        uid = os.getuid()
+        gid = os.getgid()
+
         # Start container (keep alive with tail -f)
         cmd = [
             "docker",
@@ -214,6 +226,8 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
             "-d",
             "--name",
             container_name,
+            "--user",
+            f"{uid}:{gid}",  # Run as host user to match file permissions
             "--add-host",
             "host.docker.internal:host-gateway",  # Allow access to host
             *env_vars,
