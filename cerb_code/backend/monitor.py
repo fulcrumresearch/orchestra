@@ -1,26 +1,19 @@
 #!/usr/bin/env python3
 """
-Multi-agent Claude Code monitor (asyncio, single process).
+Cerb monitoring server - receives hook events and routes them to monitoring agents.
 
-- FastAPI app exposes POST /hook (no auth/signatures).
-- For each incoming event, we route by payload.session_id.
-- Each unique session_id gets its own:
-    * long-lived Claude Code SDK session
-    * asyncio.Queue of events
-    * forwarder task that feeds events to the agent
-- Idle _sessions auto-close after an inactivity timeout.
+- FastAPI app exposes POST /hook/{session_id} endpoint
+- Each session gets its own Claude SDK monitoring agent
+- Events are batched and sent to the monitoring agent
+- Monitor agent updates monitor.md in real-time
 
-ENV
-  ANTHROPIC_API_KEY=...            # required by Claude Code CLI/SDK
-  MONITOR_PROJECT_ROOT=/srv/mon    # optional: base dir for per-session subprojects
-  MONITOR_DEFAULT_PROJECT=.        # used if no per-session subdir is found
-  MONITOR_PROMPT="..."             # optional extra system guidance
-  MONITOR_ALLOWED_TOOLS="Read"     # comma-separated, e.g. "Read,Write"
-  MONITOR_PERMISSION_MODE=plan     # plan | ask | acceptEdits
-  MONITOR_IDLE_SECS=900            # idle timeout (seconds) to close a session (default 15m)
+Configuration is in cerb_code/lib/monitor.py (ALLOWED_TOOLS, PERMISSION_MODE, etc.)
 
-Run (example):
-  uvicorn monitor_multi:app --host 0.0.0.0 --port 8081
+Required environment:
+  ANTHROPIC_API_KEY=...  # Required by Claude SDK
+
+Run:
+  cerb-monitor-server [port]  # defaults to port 8081
 """
 
 from __future__ import annotations
@@ -41,14 +34,13 @@ from cerb_code.lib.sessions import Session, load_sessions
 
 import os
 
+# Prevent the monitor agent itself from triggering hooks (would create infinite loop)
 os.environ["CLAUDE_MONITOR_SKIP_FORWARD"] = "1"
 
 app = FastAPI(title="Claude Code Multi-Monitor", version="1.0")
 
 logger = logging.getLogger("multi_monitor")
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(message)s")
 
 # session_id -> SessionWorker
 _workers: Dict[str, SessionMonitor] = {}
@@ -62,14 +54,10 @@ def get_session(session_id: str, source_path: str) -> Session:
         if sess.session_id == session_id:
             return sess
 
-    raise HTTPException(
-        status_code=404, detail=f"Session '{session_id}' not found in {source_path}"
-    )
+    raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found in {source_path}")
 
 
-async def get_or_create_worker(
-    session_id: str, source_path: str, payload: Dict[str, Any]
-) -> SessionMonitor:
+async def get_or_create_worker(session_id: str, source_path: str, payload: Dict[str, Any]) -> SessionMonitor:
     worker = _workers.get(session_id)
 
     session = get_session(session_id, source_path)
@@ -80,11 +68,6 @@ async def get_or_create_worker(
         _workers[session_id] = worker
         logger.info("started worker for session_id=%s in %s", session_id, source_path)
     return worker
-
-
-@app.on_event("startup")
-async def _startup() -> None:
-    logger.info("multi-monitor starting")
 
 
 @app.on_event("shutdown")
@@ -106,6 +89,7 @@ async def hook(request: Request, session_id: str) -> Dict[str, str]:
         raise HTTPException(status_code=400, detail="session_id is required")
 
     source_path = data.get("source_path")
+
     if not source_path:
         raise HTTPException(status_code=400, detail="source_path is required")
 
@@ -116,21 +100,7 @@ async def hook(request: Request, session_id: str) -> Dict[str, str]:
     }
 
     event_type = evt.get("event", "UnknownEvent")
-    logger.info(
-        f"Received event {event_type} for session {session_id} in {source_path}"
-    )
-
-    if event_type == "Stop":
-        logger.info(f"Received stop event for session {session_id}")
-        session = get_session(session_id, source_path)
-        # Load sessions from this project to find parent
-        project_sessions = load_sessions(flat=False, project_dir=Path(source_path))
-        for parent in project_sessions:
-            if session.session_id in [s.session_id for s in parent.children]:
-                logger.info(
-                    f"Notifying parent {parent.session_id} about child {session.session_id} stopping"
-                )
-                parent.send_message(f"Child session {session.session_id} stopped.")
+    logger.info(f"Received event {event_type} for session {session_id} in {source_path}")
 
     worker = await get_or_create_worker(session_id, source_path, evt)
 

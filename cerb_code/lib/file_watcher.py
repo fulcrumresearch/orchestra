@@ -43,7 +43,10 @@ class FileWatcher:
             self._watchers[file_path] = set()
 
         self._watchers[file_path].add(handler)
-        logger.info(f"Registered watcher for {file_path}")
+        logger.debug(f"Registered watcher for {file_path}. Total watchers: {len(self._watchers)}")
+
+        # Trigger restart of awatch to pick up new file
+        self._stop_event.set()
 
     def unregister(self, file_path: Path) -> None:
         """
@@ -63,12 +66,10 @@ class FileWatcher:
     async def start(self) -> None:
         """Start the file watching task"""
         if self._task is not None:
-            logger.warning("FileWatcher already started")
             return
 
         self._stop_event.clear()
         self._task = asyncio.create_task(self._run())
-        logger.info("FileWatcher started")
 
     async def stop(self) -> None:
         """Stop the file watching task"""
@@ -88,10 +89,10 @@ class FileWatcher:
                 pass
 
         self._task = None
-        logger.info("FileWatcher stopped")
 
     async def _run(self) -> None:
         """Main watching loop"""
+        logger.debug("File watcher started")
         while not self._should_stop:
             if not self._watchers:
                 # No files to watch, sleep briefly
@@ -107,14 +108,14 @@ class FileWatcher:
                 else:
                     watch_paths.add(path)
 
+            logger.debug(f"Watching {len(self._watchers)} files in {len(watch_paths)} directories")
+
             # Clear stop event for this iteration
             self._stop_event.clear()
 
             try:
                 # Watch all registered paths (non-recursive)
-                async for changes in awatch(
-                    *watch_paths, stop_event=self._stop_event, recursive=False
-                ):
+                async for changes in awatch(*watch_paths, stop_event=self._stop_event, recursive=False):
                     # Group changes by path to avoid calling handlers multiple times
                     # awatch already debounces (1600ms), so changes is a batch
                     changed_paths = {}
@@ -127,55 +128,38 @@ class FileWatcher:
                     # Call handlers once per path
                     for path, change_type in changed_paths.items():
                         handlers = list(self._watchers[path])
+                        logger.debug(f"Triggering {len(handlers)} handlers for {path}")
                         for handler in handlers:
                             try:
                                 await handler(path, change_type)
                             except Exception as e:
-                                logger.error(
-                                    f"Error in file watcher handler for {path}: {e}"
-                                )
-                logger.info("File watcher stopped")
+                                logger.error(f"Error in file watcher handler for {path}: {e}")
 
             except Exception as e:
                 logger.error(f"Error in file watcher: {e}")
-                await asyncio.sleep(1)  # Brief pause before retrying
+                await asyncio.sleep(1)
 
-            # awatch exited - check if we're restarting or stopping
             if self._should_stop:
-                logger.info("File watcher stopped")
                 break
 
-            # Otherwise, loop continues and restarts awatch with updated file list
-            logger.info(f"Restarting file watcher with {len(self._watchers)} files")
+    def add_designer_watcher(self, designer_md: Path, session: "Session") -> None:
+        """
+        Register a watcher for designer.md that notifies the session when it changes.
 
+        Args:
+            designer_md: Path to the designer.md file
+            session: The session to notify
+        """
+        designer_md = Path(designer_md).resolve()
 
-def watch_designer_file(
-    file_watcher: FileWatcher,
-    designer_md: Path,
-    session: "Session",
-) -> None:
-    """
-    Register a watcher for designer.md that notifies the session when it changes.
+        async def on_designer_change(path: Path, change_type: Change) -> None:
+            """Handler for designer.md changes"""
+            logger.debug(f"designer.md changed for session {session.session_id}: {path} ({change_type})")
+            try:
+                session.send_message("designer.md has been updated. Please review the changes")
+                logger.debug(f"Sent message to session {session.session_id}")
+            except Exception as e:
+                logger.error(f"Failed to send message to session {session.session_id}: {e}")
 
-    Args:
-        file_watcher: The FileWatcher instance to register with
-        designer_md: Path to the designer.md file
-        session: The session to notify
-    """
-    designer_md = Path(designer_md).resolve()
-
-    async def on_designer_change(path: Path, change_type: Change) -> None:
-        """Handler for designer.md changes"""
-        logger.info(
-            f"designer.md changed ({change_type.name}) for session {session.session_id}"
-        )
-
-        # Send notification to the session
-        session.send_message("designer.md has been updated. Please review the changes")
-        logger.info(f"Notified session {session.session_id} about designer.md update")
-
-    # Register with file path - FileWatcher will watch parent directory internally
-    file_watcher.register(designer_md, on_designer_change)
-    logger.info(
-        f"Registered designer.md watcher for session {session.session_id}: {designer_md}"
-    )
+        self.register(designer_md, on_designer_change)
+        logger.debug(f"Registered designer.md watcher for session {session.session_id}: {designer_md}")

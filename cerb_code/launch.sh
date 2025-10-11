@@ -71,8 +71,8 @@ create_layout() {
     fi
 }
 
-# Get directory name for session naming
-REPO_NAME=$(basename "$(pwd)")
+# Get directory name for session naming (sanitize for tmux - no spaces/colons allowed)
+REPO_NAME=$(basename "$(pwd)" | tr ' :' '-')
 
 # Check if we're already in a tmux session
 if [[ -n "${TMUX:-}" ]]; then
