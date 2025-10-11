@@ -251,7 +251,7 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
         claude_dir = Path.home() / ".claude"
         if claude_dir.exists():
             copy_result = subprocess.run(
-                ["docker", "cp", f"{claude_dir}/.", f"{container_name}:/root/.claude/"],
+                ["docker", "cp", f"{claude_dir}/.", f"{container_name}:/home/executor/.claude/"],
                 capture_output=True,
                 text=True,
             )
@@ -305,7 +305,7 @@ def configure_mcp_in_container(container_name: str, mcp_port: int) -> None:
         tmp_path = tmp.name
 
     copy_result = subprocess.run(
-        ["docker", "cp", tmp_path, f"{container_name}:/root/.claude.json"],
+        ["docker", "cp", tmp_path, f"{container_name}:/home/executor/.claude.json"],
         capture_output=True,
         text=True,
     )

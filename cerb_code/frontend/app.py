@@ -194,9 +194,10 @@ class UnifiedApp(App):
         success, missing = check_dependencies(require_docker=require_docker)
 
         if not success:
-            error_msg = "Missing dependencies:\n" + "\n".join(f"  • {dep}" for dep in missing)
-            yield Static(error_msg, id="error")
-            return
+            print("\n❌ Missing dependencies:")
+            for dep in missing:
+                print(f"  • {dep}")
+            print()
 
         with Container(id="header"):
             self.hud = HUD(

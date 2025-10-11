@@ -28,7 +28,9 @@ RUN chmod +x /usr/local/bin/cerb-hook
 # Create user with matching UID/GID
 RUN groupadd -g ${GROUP_ID} executor || true && \
     useradd -u ${USER_ID} -g ${GROUP_ID} -m -s /bin/bash executor && \
-    echo "executor ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+    install -d -o executor -g ${GROUP_ID} /workspace && \
+    printf 'executor ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/executor && \
+    chmod 0440 /etc/sudoers.d/executor
 
 # Set working directory
 WORKDIR /workspace
