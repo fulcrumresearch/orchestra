@@ -15,44 +15,44 @@ mcp = FastMCP("cerb-subagent", port=port, host=host)
 
 
 @mcp.tool()
-def spawn_subagent(parent_session_id: str, child_session_id: str, instructions: str, source_path: str) -> str:
+def spawn_subagent(parent_session_name: str, child_session_name: str, instructions: str, source_path: str) -> str:
     """
     Spawn a child Claude session with specific instructions.
 
     Args:
-        parent_session_id: ID of the parent session
-        child_session_id: ID for the new child session
+        parent_session_name: Name of the parent session (user-facing identifier)
+        child_session_name: Name for the new child session (user-facing identifier)
         instructions: Instructions to give to the child session
         source_path: Source path of the parent session's project
 
     Returns:
-        Success message with child session ID, or error message
+        Success message with child session name, or error message
     """
     # Load sessions from source path
     sessions = load_sessions(project_dir=Path(source_path))
 
-    # Find parent session
-    parent = find_session(sessions, parent_session_id)
+    # Find parent session by name
+    parent = find_session(sessions, parent_session_name)
 
     if not parent:
-        return f"Error: Parent session '{parent_session_id}' not found"
+        return f"Error: Parent session '{parent_session_name}' not found"
 
     # Spawn the executor (this adds child to parent.children in memory)
-    child = parent.spawn_executor(child_session_id, instructions)
+    child = parent.spawn_executor(child_session_name, instructions)
 
     # Save updated parent session
     save_session(parent, project_dir=Path(source_path))
 
-    return f"Successfully spawned child session '{child_session_id}' under parent '{parent_session_id}'"
+    return f"Successfully spawned child session '{child_session_name}' under parent '{parent_session_name}'"
 
 
 @mcp.tool()
-def send_message_to_session(session_id: str, message: str, source_path: str) -> str:
+def send_message_to_session(session_name: str, message: str, source_path: str) -> str:
     """
     Send a message to a specific Claude session.
 
     Args:
-        session_id: ID of the session to send the message to
+        session_name: Name of the session to send the message to (user-facing identifier)
         message: Message to send to the session
         source_path: Source path of the project
 
@@ -62,14 +62,14 @@ def send_message_to_session(session_id: str, message: str, source_path: str) -> 
     # Load sessions from source path
     sessions = load_sessions(project_dir=Path(source_path))
 
-    # Find target session
-    target = find_session(sessions, session_id)
+    # Find target session by name
+    target = find_session(sessions, session_name)
 
     if not target:
-        return f"Error: Session '{session_id}' not found"
+        return f"Error: Session '{session_name}' not found"
 
     target.send_message(message)
-    return f"Successfully sent message to session '{session_id}'"
+    return f"Successfully sent message to session '{session_name}'"
 
 
 def main():
