@@ -240,7 +240,7 @@ class UnifiedApp(App):
                 logger.info(f"Creating designer session for branch: {branch_name}")
 
                 new_session = Session(
-                    session_id=branch_name,
+                    session_name=branch_name,
                     agent_type=AgentType.DESIGNER,
                     source_path=str(Path.cwd()),
                 )
@@ -285,12 +285,12 @@ class UnifiedApp(App):
             return
 
         paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_id == root.session_id else ""
-        label_text = f"{paired_marker}{root.session_id} [dim][#00ff9f](designer)[/#00ff9f][/dim]"
+        label_text = f"{paired_marker}{root.session_name} [dim][#00ff9f](designer)[/#00ff9f][/dim]"
         self.session_list.append(ListItem(Label(label_text, markup=True)))
 
         for child in root.children:
             paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_id == child.session_id else ""
-            label_text = f"{paired_marker}  {child.session_id} [dim][#00d4ff](executor)[/#00d4ff][/dim]"
+            label_text = f"{paired_marker}  {child.session_name} [dim][#00d4ff](executor)[/#00d4ff][/dim]"
             self.session_list.append(ListItem(Label(label_text, markup=True)))
 
         if selected_id:
@@ -383,7 +383,7 @@ class UnifiedApp(App):
             self.state.paired_session_id = session.session_id
             paired_indicator = "[P] "
 
-        self.hud.set_session(f"{paired_indicator}{session.session_id}")
+        self.hud.set_session(f"{paired_indicator}{session.session_name}")
         await self.action_refresh()
         self.status_indicator.update("")
 
@@ -453,7 +453,7 @@ class UnifiedApp(App):
                 return
 
         session.protocol.attach(session.session_id, target_pane=PANE_AGENT)
-        self.hud.set_session(session.session_id)
+        self.hud.set_session(session.session_name)
 
         monitor_tab = self.query_one(ModelMonitorTab)
         monitor_tab.refresh_monitor()
