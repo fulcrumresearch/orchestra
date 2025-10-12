@@ -2,8 +2,8 @@
 
 import json
 import os
+import platform
 import subprocess
-import tempfile
 import importlib.resources as resources
 import shutil
 import shlex
@@ -288,6 +288,7 @@ def ensure_shared_claude_config(shared_claude_dir: Path, shared_claude_json: Pat
         shared_claude_json: Path to shared .claude.json file
         mcp_port: Port for MCP server
     """
+
     # Ensure shared directory exists
     shared_claude_dir.mkdir(parents=True, exist_ok=True)
 
@@ -306,15 +307,24 @@ def ensure_shared_claude_config(shared_claude_dir: Path, shared_claude_json: Pat
             logger.warning(f"Failed to parse {shared_claude_json}, creating new config")
             config = {}
     else:
-        # Try to copy auth settings from host's .claude.json (if it exists)
-        host_claude_json = Path.home() / ".claude.json"
-        if host_claude_json.exists():
-            try:
-                with open(host_claude_json, "r") as f:
-                    config = json.load(f)
-                logger.info(f"Initialized shared config from host's .claude.json")
-            except json.JSONDecodeError:
-                logger.warning("Failed to parse host's .claude.json, using empty config")
+        # On macOS, subscription auth relies on Keychain which containers can't access
+        # So don't copy host's config - user must set ANTHROPIC_API_KEY instead
+        is_macos = platform.system() == "Darwin"
+
+        if is_macos:
+            logger.info("macOS detected: containers require ANTHROPIC_API_KEY for authentication")
+            logger.info("Subscription auth from host's Keychain cannot be used in containers")
+            config = {}
+        else:
+            # On Linux, try to copy auth settings from host's .claude.json (if it exists)
+            host_claude_json = Path.home() / ".claude.json"
+            if host_claude_json.exists():
+                try:
+                    with open(host_claude_json, "r") as f:
+                        config = json.load(f)
+                    logger.info(f"Initialized shared config from host's .claude.json")
+                except json.JSONDecodeError:
+                    logger.warning("Failed to parse host's .claude.json, using empty config")
 
     # Inject MCP server configuration
     if "mcpServers" not in config:
