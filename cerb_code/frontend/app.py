@@ -274,8 +274,10 @@ class UnifiedApp(App):
         self.state.file_watcher.register(SESSIONS_FILE, on_sessions_file_change)
         await self.state.file_watcher.start()
 
-        # Auto-open designer.md on startup (always in current directory)
-        designer_md = Path.cwd() / "designer.md"
+        # Auto-open designer.md on startup (always in .orchestra directory)
+        orchestra_dir = self.state.project_dir / ".orchestra"
+        orchestra_dir.mkdir(exist_ok=True)
+        designer_md = orchestra_dir / "designer.md"
 
         # Create designer.md with template if it doesn't exist
         if not designer_md.exists():
@@ -426,13 +428,14 @@ class UnifiedApp(App):
 
     def action_open_spec(self) -> None:
         """Open designer.md in vim in a split tmux pane"""
-        # Always open designer.md from current directory
-        orchestra_dir = work_path / ".orchestra"
+        # Always open designer.md from .orchestra directory
+        orchestra_dir = self.state.project_dir / ".orchestra"
         orchestra_dir.mkdir(exist_ok=True)
         designer_md = orchestra_dir / "designer.md"
 
         if not designer_md.exists():
-            designer_md.touch()
+            designer_md.write_text(DESIGNER_MD_TEMPLATE)
+            logger.info(f"Created designer.md with template at {designer_md}")
 
         if not respawn_pane_with_vim(designer_md):
             self.status_indicator.update("❌ No editor found. Install nano, vim, or VS Code")
