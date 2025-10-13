@@ -85,7 +85,7 @@ class Session:
         # Delete all children first
         for child in self.children:
             child.delete()
-        return self.protocol.delete(self.session_id)
+        return self.protocol.delete(self)
 
     def add_instructions(self) -> None:
         """Add agent-specific instructions to CLAUDE.md"""
