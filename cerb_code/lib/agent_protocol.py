@@ -22,12 +22,12 @@ class AgentProtocol(ABC):
         pass
 
     @abstractmethod
-    def get_status(self, session_id: str) -> dict:
+    def get_status(self, session: "Session") -> dict:
         """
         Get status information for a session.
 
         Args:
-            session_id: ID of the session
+            session: Session object
 
         Returns:
             dict: Status information (backend-specific)
@@ -35,15 +35,28 @@ class AgentProtocol(ABC):
         pass
 
     @abstractmethod
-    def send_message(self, session_id: str, message: str) -> bool:
+    def send_message(self, session: "Session", message: str) -> bool:
         """
         Send a message to the agent for the given session.
 
         Args:
-            session_id: ID of the session
+            session: Session object
             message: Message to send
 
         Returns:
             bool: True if message sent successfully, False otherwise
+        """
+        pass
+
+    @abstractmethod
+    def delete(self, session: "Session") -> bool:
+        """
+        Delete the agent session.
+
+        Args:
+            session: Session object
+
+        Returns:
+            bool: True if session deleted successfully, False otherwise
         """
         pass
