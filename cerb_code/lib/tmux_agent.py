@@ -238,11 +238,15 @@ class TmuxProtocol(AgentProtocol):
     def send_message(self, session: "Session", message: str) -> bool:
         """Send a message to a tmux session using paste buffer with retry logic (Docker or local mode)"""
         # Use retry logic for the buffer operations
-        success, _ = self._send_with_retry(session, message + "\r")
+        success, _ = self._send_with_retry(session, message + "\n")
 
         if not success:
             return False
 
+        # Send Enter to submit the message
+        target = f"{session.session_id}:0.0"
+        result = self._exec(session, build_send_keys_cmd(target, "C-m"))
+        logger.info(f"send-keys C-m: returncode={result.returncode}, stderr={result.stderr}")
 
         return True
 
