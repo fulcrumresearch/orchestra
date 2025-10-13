@@ -69,7 +69,17 @@ def get_log_files_in_category(log_dir: Path, category: str) -> list[dict]:
                         "session": session_dir.name
                     })
     elif category == "Conversation History":
-        # Handle JSON conversation files
+        # Handle JSONL transcript files
+        for log_file in category_path.glob("*.jsonl"):
+            stat = log_file.stat()
+            log_files.append({
+                "name": log_file.name,
+                "path": log_file,
+                "size": stat.st_size,
+                "modified": datetime.fromtimestamp(stat.st_mtime),
+                "file_type": "jsonl"
+            })
+        # Also support legacy JSON files
         for log_file in category_path.glob("*.json"):
             stat = log_file.stat()
             log_files.append({
@@ -120,8 +130,160 @@ def filter_log_lines(lines: list[str], search_term: str = "", log_level: str = "
     return filtered
 
 
+def parse_jsonl_transcript(file_path: Path) -> list[dict]:
+    """Parse JSONL transcript file and return a list of conversation items"""
+    items = []
+    try:
+        with open(file_path, 'r') as f:
+            for line in f:
+                if line.strip():
+                    items.append(json.loads(line))
+    except Exception as e:
+        st.error(f"Error parsing JSONL file: {e}")
+    return items
+
+
+def display_jsonl_transcript(file_path: Path, search_term: str = "", date_filter: tuple = None):
+    """Display JSONL transcript in a readable format"""
+    items = parse_jsonl_transcript(file_path)
+
+    if not items:
+        st.info("No conversation data found in this transcript")
+        return
+
+    # Collect statistics
+    user_messages = []
+    assistant_messages = []
+    tool_calls = []
+    total_tokens = 0
+
+    for item in items:
+        item_type = item.get("type")
+        if item_type == "user":
+            user_messages.append(item)
+        elif item_type == "assistant":
+            assistant_messages.append(item)
+            # Track token usage
+            usage = item.get("usage", {})
+            total_tokens += usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
+        elif item_type == "tool_use" or item_type == "tool_result":
+            tool_calls.append(item)
+
+    # Display statistics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("User Messages", len(user_messages))
+    with col2:
+        st.metric("Assistant Messages", len(assistant_messages))
+    with col3:
+        st.metric("Tool Calls", len(tool_calls))
+    with col4:
+        st.metric("Total Tokens", f"{total_tokens:,}")
+
+    st.divider()
+
+    # Display conversation
+    message_count = 0
+    for idx, item in enumerate(items):
+        item_type = item.get("type")
+        timestamp = item.get("timestamp", "")
+
+        # Apply search filter
+        item_text = json.dumps(item).lower()
+        if search_term and search_term.lower() not in item_text:
+            continue
+
+        # Display based on type
+        if item_type == "user":
+            message_count += 1
+            content = item.get("content", [])
+
+            # Extract text from content
+            text_parts = []
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text":
+                    text_parts.append(part.get("text", ""))
+                elif isinstance(part, str):
+                    text_parts.append(part)
+
+            user_text = "\n".join(text_parts)
+
+            with st.container():
+                st.markdown(f"### 👤 User Message {message_count}")
+                if timestamp:
+                    st.caption(f"🕐 {timestamp}")
+                st.markdown(user_text)
+                st.divider()
+
+        elif item_type == "assistant":
+            message_count += 1
+            content = item.get("content", [])
+            usage = item.get("usage", {})
+            model = item.get("model", "")
+
+            with st.container():
+                st.markdown(f"### 🤖 Assistant Message {message_count}")
+                if timestamp:
+                    st.caption(f"🕐 {timestamp} | Model: {model}")
+
+                # Display token usage
+                if usage:
+                    input_tokens = usage.get("input_tokens", 0)
+                    output_tokens = usage.get("output_tokens", 0)
+                    st.caption(f"📊 Tokens: {input_tokens:,} in / {output_tokens:,} out")
+
+                # Process content blocks
+                has_text = False
+                tool_uses = []
+
+                for block in content:
+                    if isinstance(block, dict):
+                        block_type = block.get("type")
+                        if block_type == "text":
+                            text = block.get("text", "")
+                            if text.strip():
+                                has_text = True
+                                st.markdown(text)
+                        elif block_type == "tool_use":
+                            tool_uses.append(block)
+
+                if not has_text and not tool_uses:
+                    st.info("_No text content_")
+
+                # Display tool uses
+                if tool_uses:
+                    with st.expander(f"🔧 Tool Calls ({len(tool_uses)})", expanded=False):
+                        for tool in tool_uses:
+                            tool_name = tool.get("name", "unknown")
+                            tool_input = tool.get("input", {})
+                            st.markdown(f"**{tool_name}**")
+                            st.json(tool_input, expanded=False)
+
+                st.divider()
+
+        elif item_type == "tool_result":
+            # Display tool results in a collapsible section
+            tool_use_id = item.get("tool_use_id", "")
+            content = item.get("content", [])
+
+            with st.expander(f"🔨 Tool Result", expanded=False):
+                if timestamp:
+                    st.caption(f"🕐 {timestamp}")
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        result_text = block.get("text", "")
+                        # Truncate long results
+                        if len(result_text) > 1000:
+                            st.text(result_text[:1000] + "\n... (truncated)")
+                        else:
+                            st.text(result_text)
+
+    if message_count == 0:
+        st.info("No messages match your search criteria")
+
+
 def display_conversation_history(conversation_data: dict, search_term: str = ""):
-    """Display conversation history in a readable format"""
+    """Display legacy JSON conversation history in a readable format"""
 
     # Extract projects from the conversation data
     projects = conversation_data.get("projects", {})
@@ -250,7 +412,8 @@ def run_app(log_dir: Path):
     search_term = st.sidebar.text_input("Search text", "")
 
     # Check if this is a conversation history file
-    is_conversation = selected_log.get("file_type") == "json"
+    file_type = selected_log.get("file_type")
+    is_conversation = file_type in ["json", "jsonl"]
 
     if not is_conversation:
         log_level = st.sidebar.selectbox("Log Level", ["All", "DEBUG", "INFO", "WARNING", "ERROR"])
@@ -260,8 +423,12 @@ def run_app(log_dir: Path):
 
     # Read and display log content
     try:
-        if is_conversation:
-            # Handle conversation history JSON files
+        if file_type == "jsonl":
+            # Handle JSONL transcript files
+            display_jsonl_transcript(selected_log["path"], search_term)
+
+        elif file_type == "json":
+            # Handle legacy JSON conversation history files
             with open(selected_log["path"], "r") as f:
                 conversation_data = json.load(f)
 
