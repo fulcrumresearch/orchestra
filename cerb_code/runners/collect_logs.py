@@ -102,22 +102,30 @@ def collect_logs(project_dir: Path, output_dir: Path) -> Dict[str, Any]:
             except Exception as e:
                 logger.error(f"  Failed to copy {log_file}: {e}")
 
-    # Collect conversation history from ~/.claude.json
-    main_claude_json = Path.home() / ".claude.json"
-    if main_claude_json.exists():
-        logger.info(f"Collecting main session conversation history from {main_claude_json}")
-        try:
-            dest = conversation_history_dir / "main_session.json"
-            shutil.copy2(main_claude_json, dest)
-            manifest["logs"]["conversation_history"].append({
-                "source": str(main_claude_json),
-                "destination": str(dest.relative_to(output_dir)),
-                "size_bytes": main_claude_json.stat().st_size,
-                "session_type": "main",
-            })
-            logger.info(f"  Copied main session conversation history")
-        except Exception as e:
-            logger.error(f"  Failed to copy {main_claude_json}: {e}")
+    # Collect JSONL transcript files from ~/.claude/projects/
+    # The project directory path gets encoded in the folder name
+    # For example: /home/ec2-user/orchestra becomes -home-ec2-user-orchestra
+    project_name_encoded = str(project_dir).replace("/", "-")
+    main_transcripts_dir = Path.home() / ".claude" / "projects" / project_name_encoded
+
+    if main_transcripts_dir.exists():
+        logger.info(f"Collecting main session JSONL transcripts from {main_transcripts_dir}")
+        for jsonl_file in main_transcripts_dir.glob("*.jsonl"):
+            try:
+                dest = conversation_history_dir / jsonl_file.name
+                shutil.copy2(jsonl_file, dest)
+                manifest["logs"]["conversation_history"].append({
+                    "source": str(jsonl_file),
+                    "destination": str(dest.relative_to(output_dir)),
+                    "size_bytes": jsonl_file.stat().st_size,
+                    "session_type": "main",
+                    "format": "jsonl",
+                })
+                logger.info(f"  Copied {jsonl_file.name}")
+            except Exception as e:
+                logger.error(f"  Failed to copy {jsonl_file}: {e}")
+    else:
+        logger.info(f"No JSONL transcripts found at {main_transcripts_dir}")
 
     # Load sessions and collect executor logs
     sessions = load_sessions(flat=True, project_dir=project_dir)
@@ -161,24 +169,28 @@ def collect_logs(project_dir: Path, output_dir: Path) -> Dict[str, Any]:
                 "logs": session_log_entries,
             })
 
-        # Collect conversation history for this executor session
-        claude_json = work_path / ".claude.json"
-        if claude_json.exists():
-            logger.info(f"  Collecting conversation history for session '{session.session_name}'")
-            try:
-                dest = conversation_history_dir / f"{session.session_id}.json"
-                shutil.copy2(claude_json, dest)
-                manifest["logs"]["conversation_history"].append({
-                    "source": str(claude_json),
-                    "destination": str(dest.relative_to(output_dir)),
-                    "size_bytes": claude_json.stat().st_size,
-                    "session_type": "executor",
-                    "session_name": session.session_name,
-                    "session_id": session.session_id,
-                })
-                logger.info(f"  Copied conversation history")
-            except Exception as e:
-                logger.error(f"  Failed to copy conversation history: {e}")
+        # Collect JSONL transcripts for this executor session
+        executor_projects_dir = work_path / ".claude" / "projects"
+        if executor_projects_dir.exists():
+            logger.info(f"  Collecting JSONL transcripts for session '{session.session_name}'")
+            for jsonl_file in executor_projects_dir.glob("**/*.jsonl"):
+                try:
+                    # Create a unique filename for executor transcripts
+                    dest_name = f"{session.session_id}_{jsonl_file.name}"
+                    dest = conversation_history_dir / dest_name
+                    shutil.copy2(jsonl_file, dest)
+                    manifest["logs"]["conversation_history"].append({
+                        "source": str(jsonl_file),
+                        "destination": str(dest.relative_to(output_dir)),
+                        "size_bytes": jsonl_file.stat().st_size,
+                        "session_type": "executor",
+                        "session_name": session.session_name,
+                        "session_id": session.session_id,
+                        "format": "jsonl",
+                    })
+                    logger.info(f"  Copied {jsonl_file.name} to {dest_name}")
+                except Exception as e:
+                    logger.error(f"  Failed to copy transcript {jsonl_file}: {e}")
 
     # Write manifest.json
     manifest_path = output_dir / "manifest.json"
