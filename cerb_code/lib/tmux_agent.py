@@ -13,15 +13,9 @@ from .helpers import (
 )
 from .logger import get_logger
 from .tmux import (
-    build_attach_session_cmd,
-    build_display_message_cmd,
-    build_has_session_cmd,
-    build_kill_session_cmd,
     build_new_session_cmd,
-    build_paste_buffer_cmd,
     build_respawn_pane_cmd,
-    build_send_keys_cmd,
-    build_set_buffer_cmd,
+    build_tmux_cmd,
     tmux_env,
 )
 
@@ -149,7 +143,7 @@ class TmuxProtocol(AgentProtocol):
         # Check if tmux session exists (same for both modes via _exec)
         check_result = self._exec(
             session,
-            build_has_session_cmd(session.session_id),
+            build_tmux_cmd("has-session", "-t", session.session_id),
         )
         if check_result.returncode != 0:
             return {"exists": False}
@@ -158,7 +152,7 @@ class TmuxProtocol(AgentProtocol):
         fmt = "#{session_windows}\t#{session_attached}"
         result = self._exec(
             session,
-            build_display_message_cmd(session.session_id, fmt),
+            build_tmux_cmd("display-message", "-t", session.session_id, "-p", fmt),
         )
 
         if result.returncode != 0:
@@ -207,13 +201,13 @@ class TmuxProtocol(AgentProtocol):
                 # Use paste buffer method
                 r1 = self._exec(
                     session,
-                    build_set_buffer_cmd(message),
+                    build_tmux_cmd("set-buffer", message),
                 )
                 logger.info(f"set-buffer: returncode={r1.returncode}, stderr={r1.stderr}")
 
                 r2 = self._exec(
                     session,
-                    build_paste_buffer_cmd(target),
+                    build_tmux_cmd("paste-buffer", "-t", target),
                 )
                 logger.info(f"paste-buffer: returncode={r2.returncode}, stderr={r2.stderr}")
 
@@ -223,10 +217,7 @@ class TmuxProtocol(AgentProtocol):
                     return True
             else:
                 # Use send-keys method
-                result = self._exec(
-                    session,
-                    build_send_keys_cmd(target, message),
-                )
+                result = self._exec(session, build_tmux_cmd("send-keys", "-t", target, "C-m"))
                 logger.info(f"send-keys: returncode={result.returncode}, stderr={result.stderr}")
 
                 if result.returncode == 0:
@@ -252,7 +243,6 @@ class TmuxProtocol(AgentProtocol):
         if not self._send_with_retry(session, message + "\n", use_buffer=True):
             return False
 
-        # Send Enter using send-keys with retry logic
         return self._send_with_retry(session, "C-m", use_buffer=False)
 
     def attach(self, session: "Session", target_pane: str = "2") -> bool:
@@ -271,7 +261,7 @@ class TmuxProtocol(AgentProtocol):
                         "tmux",
                         "-L",
                         "orchestra",
-                        *build_attach_session_cmd(session.session_id)[3:],
+                        *build_tmux_cmd("attach-session", "-t", session.session_id)[3:],
                     ],
                 ),
                 capture_output=True,
@@ -303,7 +293,7 @@ class TmuxProtocol(AgentProtocol):
         else:
             # Local mode: kill the tmux session
             subprocess.run(
-                build_kill_session_cmd(session.session_id),
+                build_tmux_cmd("kill-session", "-t", session.session_id),
                 capture_output=True,
                 text=True,
             )
