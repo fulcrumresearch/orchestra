@@ -97,7 +97,7 @@ class Session:
 
         kerberos_md_path = claude_dir / "kerberos.md"
         formatted_prompt = prompt_template.format(
-            session_id=self.session_id,
+            session_name=self.session_name,
             work_path=self.work_path,
             source_path=self.source_path,
         )

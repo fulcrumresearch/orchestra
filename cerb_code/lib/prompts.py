@@ -115,14 +115,14 @@ You have access to MCP tools for coordination:
 
 ### Cross-Agent Communication Protocol
 
-When sending messages to other agents, always use: `send_message_to_session(session_name="target", message="your message", source_path="{source_path}", sender_name="{session_id}")`
+When sending messages to other agents, always use: `send_message_to_session(session_name="target", message="your message", source_path="{source_path}", sender_name="{session_name}")`
 
 **When you receive a message prefixed with `[From: xxx]`:**
 - This is a message from another agent session (not the human user)
 - **DO NOT respond in your normal output to the human**
 - **USE the MCP tool to reply directly to the sender:**
   ```
-  send_message_to_session(session_name="xxx", message="your response", source_path="{source_path}", sender_name="{session_id}")
+  send_message_to_session(session_name="xxx", message="your response", source_path="{source_path}", sender_name="{session_name}")
   ```
 
 Messages without the `[From: xxx]` prefix are from the human user and should be handled normally.
@@ -155,7 +155,7 @@ This is a living document that should be updated as work progresses. Use it to:
 
 ## Session Information
 
-- **Session Name**: {session_id}
+- **Session Name**: {session_name}
 - **Session Type**: Designer
 - **Work Directory**: {work_path}
 - **Source Path**: {source_path} (use this when calling MCP tools)
@@ -178,14 +178,14 @@ You have access to the MCP tool to communicate with your parent session:
 
 ### Cross-Agent Communication Protocol
 
-When sending messages to your parent or other agents, use: `send_message_to_session(session_name="parent", message="your message", source_path="{source_path}", sender_name="{session_id}")`
+When sending messages to your parent or other agents, use: `send_message_to_session(session_name="parent", message="your message", source_path="{source_path}", sender_name="{session_name}")`
 
 **When you receive a message prefixed with `[From: xxx]`:**
 - This is a message from another agent session (usually your parent)
 - **DO NOT respond in your normal output to the human**
 - **USE the MCP tool to reply directly to the sender:**
   ```
-  send_message_to_session(session_name="xxx", message="your response", source_path="{source_path}", sender_name="{session_id}")
+  send_message_to_session(session_name="xxx", message="your response", source_path="{source_path}", sender_name="{session_name}")
   ```
 
 Messages without the `[From: xxx]` prefix are from the human user and should be handled normally.
@@ -242,7 +242,7 @@ Remember: You are working in a child worktree branch. Your changes will be revie
 
 ## Session Information
 
-- **Session Name**: {session_id}
+- **Session Name**: {session_name}
 - **Session Type**: Executor
 - **Work Directory**: {work_path}
 - **Source Path**: {source_path} (use this when calling MCP tools)
