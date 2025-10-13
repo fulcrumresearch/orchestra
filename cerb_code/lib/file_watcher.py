@@ -156,7 +156,7 @@ class FileWatcher:
             """Handler for designer.md changes"""
             logger.debug(f"designer.md changed for session {session.session_id}: {path} ({change_type})")
             try:
-                session.send_message("[System] designer.md has been updated. Please review the changes")
+                session.send_message("[System] .orchestra/designer.md has been updated. Please review the changes")
                 logger.debug(f"Sent message to session {session.session_id}")
             except Exception as e:
                 logger.error(f"Failed to send message to session {session.session_id}: {e}")
