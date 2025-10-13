@@ -12,6 +12,7 @@ dependencies = [
     "requests==2.30.0",
     "claude-agent-sdk>=0.1.0",
     "watchfiles>=0.24.0",
+    "streamlit>=1.28.0",
 ]
 
 [project.scripts]
@@ -20,6 +21,8 @@ cerb-ui = "cerb_code.runners.kerberos:main"
 cerb-monitor-server = "cerb_code.backend.monitor:main"
 cerb-mcp = "cerb_code.backend.mcp_server:main"
 cerb-hook = "cerb_code.runners.hook_monitor:main"
+cerb-collect-logs = "cerb_code.runners.collect_logs:main"
+cerb-view-collected-logs = "cerb_code.frontend.collected_logs_viewer:main"
 
 [tool.setuptools]
 packages = ["cerb_code", "cerb_code.lib", "cerb_code.runners", "cerb_code.backend", "cerb_code.frontend", "cerb_code.frontend.widgets"]
