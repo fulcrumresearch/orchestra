@@ -247,10 +247,10 @@ class Session:
         time.sleep(1)
 
         new_session.send_message(
-            f"Please review your task instructions in @instructions.md, and then start implementing the task. "
+            f"[System] Please review your task instructions in @instructions.md, and then start implementing the task. "
             f"Your parent session name is: {self.session_name}. "
             f"Your source path is: {self.source_path}. "
-            f'When you\'re done or need help, use: send_message_to_session(session_name="{self.session_name}", message="your summary/question here", source_path="{self.source_path}")'
+            f'When you\'re done or need help, use: send_message_to_session(session_name="{self.session_name}", message="your summary/question here", source_path="{self.source_path}", sender_name="{new_session.session_name}")'
         )
 
         return new_session
