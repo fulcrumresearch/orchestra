@@ -93,17 +93,55 @@ def respawn_pane(pane: str, command: str) -> bool:
     return result.returncode == 0
 
 
+def find_available_editor() -> str | None:
+    """Find the first available editor from the fallback chain.
+
+    Tries editors in this order:
+    1. $EDITOR environment variable (if set)
+    2. code (VS Code)
+    3. nano
+    4. vim
+
+    Returns:
+        The command for the first available editor, or None if none found
+    """
+    # Check $EDITOR environment variable first
+    editor_env = os.environ.get("EDITOR")
+    if editor_env:
+        # Check if the editor command exists
+        editor_cmd = editor_env.split()[0]  # Get just the command, not args
+        if shutil.which(editor_cmd):
+            return editor_env
+
+    # Try fallback editors in order
+    fallback_editors = ["code", "nano", "vim"]
+    for editor in fallback_editors:
+        if shutil.which(editor):
+            return editor
+
+    return None
+
+
 def respawn_pane_with_vim(spec_file: Path) -> bool:
-    """Open vim in editor pane.
+    """Open an editor in the editor pane.
 
     Args:
-        spec_file: Path to the file to open in vim
+        spec_file: Path to the file to open
 
     Returns:
         True if successful, False otherwise
     """
-    vim_cmd = f'bash -c "$EDITOR {shlex.quote(str(spec_file))}; clear; echo \\"Press s to open spec editor\\"; exec bash"'
-    return respawn_pane(PANE_EDITOR, vim_cmd)
+    editor = find_available_editor()
+
+    if not editor:
+        logger.error(
+            "No editor found. Please install nano, vim, or VS Code, "
+            "or set the $EDITOR environment variable."
+        )
+        return False
+
+    editor_cmd = f'bash -c "{editor} {shlex.quote(str(spec_file))}; clear; echo \\"Press s to open spec editor\\"; exec bash"'
+    return respawn_pane(PANE_EDITOR, editor_cmd)
 
 
 def respawn_pane_with_terminal(work_path: Path) -> bool:
