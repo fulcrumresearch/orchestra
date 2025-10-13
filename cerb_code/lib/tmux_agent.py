@@ -281,10 +281,9 @@ class TmuxProtocol(AgentProtocol):
         return True
 
     def _configure_mcp_for_local_session(self, session: "Session") -> None:
-        """Configure MCP for local (non-Docker) session using .mcp.json
+        """Configure MCP for local (non-Docker) session using .mcp.json and settings.json
 
-        Creates a project-specific .mcp.json file in the session's worktree.
-        Claude Code will prompt the user to approve this MCP server on first use.
+        Creates a project-specific .mcp.json and .claude/settings.json with pre-approved MCP permissions.
         """
         logger.info(f"Configuring MCP for local session {session.session_id}")
 
@@ -296,16 +295,36 @@ class TmuxProtocol(AgentProtocol):
         mcp_url = f"http://localhost:{self.mcp_port}/sse"
 
         # Create .mcp.json in the session's worktree
-        mcp_config = {"mcpServers": {"orchestra-mcp": {"url": mcp_url, "type": "sse"}}}
+        mcp_config = {"mcpServers": {"cerb-mcp": {"url": mcp_url, "type": "sse"}}}
 
         mcp_config_path = Path(session.work_path) / ".mcp.json"
         try:
             with open(mcp_config_path, "w") as f:
                 json.dump(mcp_config, f, indent=2)
             logger.info(f"Created .mcp.json at {mcp_config_path} (URL: {mcp_url})")
-            logger.info("Claude Code will prompt user to approve this MCP server on first use")
         except Exception as e:
             logger.error(f"Failed to create .mcp.json: {e}")
+
+        # Create .claude/settings.json with pre-approved MCP permissions
+        claude_dir = Path(session.work_path) / ".claude"
+        claude_dir.mkdir(parents=True, exist_ok=True)
+
+        settings_path = claude_dir / "settings.json"
+        settings_config = {
+            "permissions": {
+                "allow": [
+                    "mcp__cerb-mcp__spawn_subagent",
+                    "mcp__cerb-mcp__send_message_to_session"
+                ]
+            }
+        }
+
+        try:
+            with open(settings_path, "w") as f:
+                json.dump(settings_config, f, indent=2)
+            logger.info(f"Created settings.json with MCP permissions at {settings_path}")
+        except Exception as e:
+            logger.error(f"Failed to create settings.json: {e}")
 
     def toggle_pairing(self, session: "Session") -> tuple[bool, str]:
         """
