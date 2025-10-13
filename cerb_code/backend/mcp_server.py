@@ -50,7 +50,7 @@ def spawn_subagent(parent_session_name: str, child_session_name: str, instructio
 
 
 @mcp.tool()
-def send_message_to_session(session_name: str, message: str, source_path: str) -> str:
+def send_message_to_session(session_name: str, message: str, source_path: str, sender_name: str) -> str:
     """
     Send a message to a specific Claude session.
 
@@ -58,6 +58,7 @@ def send_message_to_session(session_name: str, message: str, source_path: str) -
         session_name: Name of the session to send the message to (user-facing identifier)
         message: Message to send to the session
         source_path: Source path of the project
+        sender_name: Name of the sender session (for prefixing)
 
     Returns:
         Success or error message
@@ -71,7 +72,10 @@ def send_message_to_session(session_name: str, message: str, source_path: str) -
     if not target:
         return f"Error: Session '{session_name}' not found"
 
-    target.send_message(message)
+    # Add prefix to message with sender name
+    prefixed_message = f"[From: {sender_name}] {message}"
+
+    target.send_message(prefixed_message)
     return f"Successfully sent message to session '{session_name}'"
 
 

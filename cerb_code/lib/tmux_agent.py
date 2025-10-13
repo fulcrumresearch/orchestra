@@ -2,7 +2,7 @@ import json
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict, Any, TYPE_CHECKING
+from typing import Dict, Any, List, Tuple, TYPE_CHECKING
 
 from .agent_protocol import AgentProtocol
 from .helpers import (
@@ -111,11 +111,17 @@ class TmuxProtocol(AgentProtocol):
         )
 
         if result.returncode == 0:
-            # Send Enter to accept the trust prompt
+            # For executors in bypass mode, send Down arrow then Enter to accept bypass warning
             time.sleep(2)  # Give Claude a moment to start
-            logger.info(f"Wait complete, now sending Enter to {session.session_id}")
+            logger.info(f"Wait complete, now accepting prompts for {session.session_id}")
+
+            # Send Down arrow to select "Yes, I accept" option
+            self._exec(session, ["tmux", "-L", "orchestra", "send-keys", "-t", f"{session.session_id}:0.0", "Down"])
+            time.sleep(0.2)
+
+            # Send Enter to accept
             session.send_message("")
-            logger.info(f"Sent Enter to session {session.session_id} to accept trust prompt")
+            logger.info(f"Sent acceptance keys to session {session.session_id}")
 
         return result.returncode == 0
 
@@ -168,36 +174,77 @@ class TmuxProtocol(AgentProtocol):
         except (ValueError, IndexError):
             return {"exists": True, "error": "Failed to parse tmux output"}
 
-    def send_message(self, session: "Session", message: str) -> bool:
-        """Send a message to a tmux session using paste buffer (Docker or local mode)"""
-        # Target pane 0 specifically (where Claude runs), not the active pane
+    def _send_with_retry(
+        self,
+        session: "Session",
+        message: str,
+        max_retries: int = 3,
+        backoff: List[float] = None,
+    ) -> Tuple[bool, str]:
+        """
+        Send a message to tmux session with retry logic and exponential backoff.
+
+        Args:
+            session: Session object
+            message: Message to send
+            max_retries: Maximum number of retries (default: 3)
+            backoff: List of backoff delays in seconds (default: [0.5, 1.0, 2.0])
+
+        Returns:
+            Tuple of (success: bool, error_message: str)
+        """
+        if backoff is None:
+            backoff = [0.5, 1.0, 2.0]
+
         target = f"{session.session_id}:0.0"
 
-        # Use tmux buffer for more reliable message passing
-        # 1. Set the paste buffer to our message + newline
-        r1 = self._exec(
-            session,
-            build_set_buffer_cmd(message + "\n"),
-        )
-        logger.info(f"set-buffer: returncode={r1.returncode}, stderr={r1.stderr}")
+        for attempt in range(max_retries + 1):
+            logger.info(f"Message send attempt {attempt + 1}/{max_retries + 1} to {session.session_id}")
 
-        # 2. Paste the buffer into the target pane
-        r2 = self._exec(
-            session,
-            build_paste_buffer_cmd(target),
-        )
-        logger.info(f"paste-buffer: returncode={r2.returncode}, stderr={r2.stderr}")
-
-        # 3. Send Enter multiple times with delays (janky but more reliable)
-        for i in range(3):
-            time.sleep(0.1)
-            r3 = self._exec(
+            r1 = self._exec(
                 session,
-                build_send_keys_cmd(target, "C-m"),
+                build_set_buffer_cmd(message),
             )
-            logger.info(f"send-keys C-m attempt {i + 1}: returncode={r3.returncode}, stderr={r3.stderr}")
+            logger.info(f"set-buffer: returncode={r1.returncode}, stderr={r1.stderr}")
 
-        return r1.returncode == 0 and r2.returncode == 0
+            # 2. Paste the buffer into the target pane
+            r2 = self._exec(
+                session,
+                build_paste_buffer_cmd(target),
+            )
+  
+            # Check if successful
+            if r1.returncode == 0 and r2.returncode == 0:
+                logger.info(f"Message sent successfully to {session.session_id} on attempt {attempt + 1}")
+                return True, ""
+
+            # If this wasn't the last attempt, wait before retrying
+            if attempt < max_retries:
+                delay = backoff[attempt] if attempt < len(backoff) else backoff[-1]
+                logger.warning(
+                    f"Message send failed (attempt {attempt + 1}/{max_retries + 1}), "
+                    f"retrying in {delay}s... (set-buffer: {r1.returncode}, paste-buffer: {r2.returncode})"
+                )
+                time.sleep(delay)
+
+        # All retries exhausted
+        error_msg = (
+            f"Failed to send message after {max_retries + 1} attempts. "
+            f"Last errors: set-buffer={r1.stderr}, paste-buffer={r2.stderr}"
+        )
+        logger.error(error_msg)
+        return False, error_msg
+
+    def send_message(self, session: "Session", message: str) -> bool:
+        """Send a message to a tmux session using paste buffer with retry logic (Docker or local mode)"""
+        # Use retry logic for the buffer operations
+        success, _ = self._send_with_retry(session, message + "\r")
+
+        if not success:
+            return False
+
+
+        return True
 
     def attach(self, session: "Session", target_pane: str = "2") -> bool:
         """Attach to a tmux session in the specified pane"""

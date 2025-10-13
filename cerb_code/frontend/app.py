@@ -48,6 +48,7 @@ from cerb_code.lib.helpers import (
     ensure_orchestra_in_gitignore,
     PANE_AGENT,
 )
+from cerb_code.lib.prompts import DESIGNER_MD_TEMPLATE
 
 logger = get_logger(__name__)
 
@@ -273,6 +274,24 @@ class UnifiedApp(App):
         self.state.file_watcher.register(SESSIONS_FILE, on_sessions_file_change)
         await self.state.file_watcher.start()
 
+        # Auto-open designer.md on startup (always in current directory)
+        designer_md = Path.cwd() / "designer.md"
+
+        # Create designer.md with template if it doesn't exist
+        if not designer_md.exists():
+            try:
+                designer_md.write_text(DESIGNER_MD_TEMPLATE)
+                logger.info(f"Created designer.md with template at {designer_md}")
+            except Exception as e:
+                logger.error(f"Failed to create designer.md: {e}")
+
+        # Add watcher for designer.md (once root session is ready)
+        if self.state.root_session:
+            self.state.file_watcher.add_designer_watcher(designer_md, self.state.root_session)
+
+        # Auto-open the designer.md file
+        respawn_pane_with_vim(designer_md)
+
     async def action_refresh(self) -> None:
         """Refresh the session list"""
         index = self.session_list.index if self.session_list.index is not None else 0
@@ -407,22 +426,13 @@ class UnifiedApp(App):
 
     def action_open_spec(self) -> None:
         """Open designer.md in vim in a split tmux pane"""
-        index = self.session_list.index
-        if index is None:
-            return
-
-        session = self.state.get_session_by_index(index)
-        if not session:
-            return
-        work_path = Path(session.work_path)
+        # Always open designer.md from current directory
         orchestra_dir = work_path / ".orchestra"
         orchestra_dir.mkdir(exist_ok=True)
         designer_md = orchestra_dir / "designer.md"
 
         if not designer_md.exists():
             designer_md.touch()
-
-        self.state.file_watcher.add_designer_watcher(designer_md, session)
 
         if not respawn_pane_with_vim(designer_md):
             self.status_indicator.update("❌ No editor found. Install nano, vim, or VS Code")
