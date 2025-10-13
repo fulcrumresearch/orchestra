@@ -60,10 +60,8 @@ class Session:
             self.use_docker = use_docker
 
         config = load_config()
-        # Executors skip permissions, designers use normal claude
-        default_command = "claude --dangerously-skip-permissions" if agent_type == AgentType.EXECUTOR else "claude"
         self.protocol = TmuxProtocol(
-            default_command=default_command,
+            default_command="claude",
             mcp_port=config.get("mcp_port", 8765),
             use_docker=self.use_docker,
         )
