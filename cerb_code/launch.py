@@ -10,29 +10,12 @@ from pathlib import Path
 from .lib.tmux import TMUX_SOCKET, build_tmux_cmd, run_local_tmux_command
 
 
-TMUX_BIN = shutil.which("tmux")
-
-
-class LaunchError(RuntimeError):
-    """Custom error for launch failures."""
-
-
-def ensure_tmux_available() -> None:
-    """Ensure tmux binary is available on PATH."""
-
-    if TMUX_BIN is None:
-        print(
-            "Error: tmux not found. Install tmux first (apt/brew install tmux).",
-            file=sys.stderr,
-        )
-        raise LaunchError("tmux command not found")
+TMUX_BIN = shutil.which("tmux") or "tmux"
 
 
 def main() -> int:
     """Launch Cerb tmux workspace."""
     try:
-        ensure_tmux_available()
-
         # Setup session names
         repo = Path.cwd().name.replace(" ", "-").replace(":", "-") or "workspace"
         session = f"cerb-{repo}"
@@ -110,8 +93,6 @@ def main() -> int:
 
         return subprocess.run(build_tmux_cmd("attach-session", "-t", session)).returncode
 
-    except LaunchError:
-        return 1
     except subprocess.CalledProcessError as e:
         print(f"tmux error: {e.stderr or e}", file=sys.stderr)
         return e.returncode or 1
