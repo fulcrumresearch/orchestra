@@ -339,3 +339,36 @@ def docker_exec(container_name: str, cmd: list[str]) -> subprocess.CompletedProc
         stderr=subprocess.PIPE,
         text=True,
     )
+
+
+def ensure_orchestra_in_gitignore(project_dir: Path) -> None:
+    """Ensure .orchestra/ is in the project's .gitignore file
+
+    Args:
+        project_dir: Path to the project directory
+    """
+    gitignore_path = project_dir / ".gitignore"
+    orchestra_entry = ".orchestra/"
+
+    # Read existing gitignore or create new content
+    if gitignore_path.exists():
+        content = gitignore_path.read_text()
+        lines = content.splitlines()
+    else:
+        content = ""
+        lines = []
+
+    # Check if .orchestra/ is already in gitignore
+    if any(line.strip() == orchestra_entry for line in lines):
+        logger.debug(f".orchestra/ already in {gitignore_path}")
+        return
+
+    # Add .orchestra/ to gitignore
+    if content and not content.endswith('\n'):
+        # Ensure there's a newline before adding new entry
+        new_content = content + '\n' + orchestra_entry + '\n'
+    else:
+        new_content = content + orchestra_entry + '\n'
+
+    gitignore_path.write_text(new_content)
+    logger.info(f"Added .orchestra/ to {gitignore_path}")
