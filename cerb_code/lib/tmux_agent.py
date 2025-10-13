@@ -128,11 +128,17 @@ class TmuxProtocol(AgentProtocol):
         )
 
         if result.returncode == 0:
-            # Send Enter to accept the trust prompt
+            # For executors in bypass mode, send Down arrow then Enter to accept bypass warning
             time.sleep(2)  # Give Claude a moment to start
-            logger.info(f"Wait complete, now sending Enter to {session.session_id}")
+            logger.info(f"Wait complete, now accepting prompts for {session.session_id}")
+
+            # Send Down arrow to select "Yes, I accept" option
+            self._exec(session, ["tmux", "-L", "orchestra", "send-keys", "-t", f"{session.session_id}:0.0", "Down"])
+            time.sleep(0.2)
+
+            # Send Enter to accept
             session.send_message("")
-            logger.info(f"Sent Enter to session {session.session_id} to accept trust prompt")
+            logger.info(f"Sent acceptance keys to session {session.session_id}")
 
         return result.returncode == 0
 
