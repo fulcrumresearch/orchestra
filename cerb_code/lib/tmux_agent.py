@@ -186,19 +186,34 @@ class TmuxProtocol(AgentProtocol):
             return {"exists": True, "error": "Failed to parse tmux output"}
 
     def send_message(self, session: "Session", message: str) -> bool:
-        """Send a message to a tmux session (Docker or local mode)"""
+        """Send a message to a tmux session using paste buffer (Docker or local mode)"""
         # Target pane 0 specifically (where Claude runs), not the active pane
         target = f"{session.session_id}:0.0"
-        # Send the literal bytes of the message (same for both modes via _exec)
+
+        # Use tmux buffer for more reliable message passing
+        # 1. Set the paste buffer to our message + newline
         r1 = self._exec(
             session,
-            ["tmux", "-L", "orchestra", "send-keys", "-t", target, "-l", "--", message],
+            ["tmux", "-L", "orchestra", "set-buffer", message + "\n"],
         )
-        # Then send a carriage return (equivalent to pressing Enter)
+        logger.info(f"set-buffer: returncode={r1.returncode}, stderr={r1.stderr}")
+
+        # 2. Paste the buffer into the target pane
         r2 = self._exec(
             session,
-            ["tmux", "-L", "orchestra", "send-keys", "-t", target, "C-m"],
+            ["tmux", "-L", "orchestra", "paste-buffer", "-t", target],
         )
+        logger.info(f"paste-buffer: returncode={r2.returncode}, stderr={r2.stderr}")
+
+        # 3. Send Enter multiple times with delays (janky but more reliable)
+        for i in range(3):
+            time.sleep(0.1)
+            r3 = self._exec(
+                session,
+                ["tmux", "-L", "orchestra", "send-keys", "-t", target, "C-m"],
+            )
+            logger.info(f"send-keys C-m attempt {i+1}: returncode={r3.returncode}, stderr={r3.stderr}")
+
         return r1.returncode == 0 and r2.returncode == 0
 
     def attach(self, session: "Session", target_pane: str = "2") -> bool:

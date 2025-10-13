@@ -302,13 +302,21 @@ def ensure_shared_claude_config(shared_claude_dir: Path, shared_claude_json: Pat
             config = json.load(f)
         return None
 
-    # On Linux, try to copy auth settings from host's .claude.json (if it exists)
+    # On Linux, copy auth settings from host's .claude directory and .claude.json
     if platform.system() == "Linux":
+        host_claude_dir = Path.home() / ".claude"
         host_claude_json = Path.home() / ".claude.json"
+
+        # Copy .claude directory if it exists
+        if host_claude_dir.exists():
+            shutil.copytree(host_claude_dir, shared_claude_dir, dirs_exist_ok=True)
+            logger.info(f"Copied .claude directory to {shared_claude_dir}")
+
+        # Load .claude.json if it exists
         if host_claude_json.exists():
             with open(host_claude_json, "r") as f:
                 config = json.load(f)
-            logger.info(f"Initialized shared config from host's .claude.json")
+            logger.info(f"Loaded config from host's .claude.json")
 
     # Inject MCP server configuration
     config.setdefault("mcpServers", {})["cerb-mcp"] = {"url": mcp_url, "type": "sse"}
