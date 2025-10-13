@@ -22,7 +22,6 @@ cerb-monitor-server = "cerb_code.backend.monitor:main"
 cerb-mcp = "cerb_code.backend.mcp_server:main"
 cerb-hook = "cerb_code.runners.hook_monitor:main"
 cerb-collect-logs = "cerb_code.runners.collect_logs:main"
-cerb-logs-web = "cerb_code.frontend.log_viewer_app:main"
 cerb-view-collected-logs = "cerb_code.frontend.collected_logs_viewer:main"
 
 [tool.setuptools]
