@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-cerb = "cerb_code.runners.cerb_launcher:main"
+cerb = "cerb_code.launch:main"
 cerb-ui = "cerb_code.runners.kerberos:main"
 cerb-monitor-server = "cerb_code.backend.monitor:main"
 cerb-mcp = "cerb_code.backend.mcp_server:main"
@@ -25,7 +25,7 @@ cerb-hook = "cerb_code.runners.hook_monitor:main"
 packages = ["cerb_code", "cerb_code.lib", "cerb_code.runners", "cerb_code.backend", "cerb_code.frontend", "cerb_code.frontend.widgets"]
 
 [tool.setuptools.package-data]
-cerb_code = ["launch.sh", "Dockerfile"]
+cerb_code = ["Dockerfile"]
 "cerb_code.runners" = ["cerb-hook-forward.sh"]
 
 [build-system]
