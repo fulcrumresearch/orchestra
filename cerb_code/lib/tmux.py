@@ -6,6 +6,8 @@ All tmux commands should be built using these builders to ensure consistency.
 
 import os
 import subprocess
+from collections.abc import Sequence
+from typing import Union
 
 
 # Constants
@@ -93,30 +95,37 @@ def build_paste_buffer_cmd(target: str) -> list[str]:
     return _build_tmux_cmd("paste-buffer", "-t", target)
 
 
-def build_send_keys_cmd(target: str, keys: str) -> list[str]:
+def build_send_keys_cmd(target: str, *keys: str) -> list[str]:
     """Build command to send keys to target.
 
     Args:
         target: Target pane (e.g., "session_id:0.0")
-        keys: Keys to send (e.g., "C-m" for Enter)
+        *keys: Keys to send (e.g., "C-m" for Enter)
 
     Returns:
         Command array ready for execution
     """
-    return _build_tmux_cmd("send-keys", "-t", target, keys)
+    if not keys:
+        raise ValueError("build_send_keys_cmd requires at least one key")
+    return _build_tmux_cmd("send-keys", "-t", target, *keys)
 
 
-def build_respawn_pane_cmd(pane: str, command: str) -> list[str]:
+def build_respawn_pane_cmd(pane: str, command: Union[str, Sequence[str]]) -> list[str]:
     """Build command to respawn pane with new command.
 
     Args:
         pane: Pane identifier
-        command: Command to run in the respawned pane
+        command: Command (string or argument sequence) to run in the respawned pane
 
     Returns:
         Command array ready for execution
     """
-    return _build_tmux_cmd("respawn-pane", "-t", pane, "-k", command)
+    args = ["respawn-pane", "-t", pane, "-k"]
+    if isinstance(command, str):
+        args.append(command)
+    else:
+        args.extend(command)
+    return _build_tmux_cmd(*args)
 
 
 def build_kill_session_cmd(session_id: str) -> list[str]:

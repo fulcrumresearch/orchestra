@@ -12,29 +12,23 @@ from .helpers import (
     docker_exec,
 )
 from .logger import get_logger
+from .tmux import (
+    build_attach_session_cmd,
+    build_display_message_cmd,
+    build_has_session_cmd,
+    build_kill_session_cmd,
+    build_new_session_cmd,
+    build_paste_buffer_cmd,
+    build_respawn_pane_cmd,
+    build_send_keys_cmd,
+    build_set_buffer_cmd,
+    tmux_env,
+)
 
 if TYPE_CHECKING:
     from .sessions import Session
 
 logger = get_logger(__name__)
-
-
-def tmux_env() -> dict:
-    """Get environment for tmux commands"""
-    import os
-
-    return dict(os.environ, TERM="xterm-256color")
-
-
-def tmux(args: list[str]) -> subprocess.CompletedProcess:
-    """Execute tmux command against the dedicated 'orchestra' server"""
-    return subprocess.run(
-        ["tmux", "-L", "orchestra", *args],
-        env=tmux_env(),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
 
 
 class TmuxProtocol(AgentProtocol):
@@ -109,18 +103,7 @@ class TmuxProtocol(AgentProtocol):
         # Create tmux session (works same way for both Docker and local)
         result = self._exec(
             session,
-            [
-                "tmux",
-                "-L",
-                "orchestra",
-                "new-session",
-                "-d",  # detached
-                "-s",
-                session.session_id,
-                "-c",
-                work_dir,
-                self.default_command,
-            ],
+            build_new_session_cmd(session.session_id, work_dir, self.default_command),
         )
 
         logger.info(
@@ -160,7 +143,7 @@ class TmuxProtocol(AgentProtocol):
         # Check if tmux session exists (same for both modes via _exec)
         check_result = self._exec(
             session,
-            ["tmux", "-L", "orchestra", "has-session", "-t", session.session_id],
+            build_has_session_cmd(session.session_id),
         )
         if check_result.returncode != 0:
             return {"exists": False}
@@ -169,7 +152,7 @@ class TmuxProtocol(AgentProtocol):
         fmt = "#{session_windows}\t#{session_attached}"
         result = self._exec(
             session,
-            ["tmux", "-L", "orchestra", "display-message", "-t", session.session_id, "-p", fmt],
+            build_display_message_cmd(session.session_id, fmt),
         )
 
         if result.returncode != 0:
@@ -194,14 +177,14 @@ class TmuxProtocol(AgentProtocol):
         # 1. Set the paste buffer to our message + newline
         r1 = self._exec(
             session,
-            ["tmux", "-L", "orchestra", "set-buffer", message + "\n"],
+            build_set_buffer_cmd(message + "\n"),
         )
         logger.info(f"set-buffer: returncode={r1.returncode}, stderr={r1.stderr}")
 
         # 2. Paste the buffer into the target pane
         r2 = self._exec(
             session,
-            ["tmux", "-L", "orchestra", "paste-buffer", "-t", target],
+            build_paste_buffer_cmd(target),
         )
         logger.info(f"paste-buffer: returncode={r2.returncode}, stderr={r2.stderr}")
 
@@ -210,9 +193,9 @@ class TmuxProtocol(AgentProtocol):
             time.sleep(0.1)
             r3 = self._exec(
                 session,
-                ["tmux", "-L", "orchestra", "send-keys", "-t", target, "C-m"],
+                build_send_keys_cmd(target, "C-m"),
             )
-            logger.info(f"send-keys C-m attempt {i+1}: returncode={r3.returncode}, stderr={r3.stderr}")
+            logger.info(f"send-keys C-m attempt {i + 1}: returncode={r3.returncode}, stderr={r3.stderr}")
 
         return r1.returncode == 0 and r2.returncode == 0
 
@@ -222,43 +205,33 @@ class TmuxProtocol(AgentProtocol):
             # Docker mode: spawn docker exec command in the pane
             container_name = get_docker_container_name(session.session_id)
             result = subprocess.run(
-                [
-                    "tmux",
-                    "-L",
-                    "orchestra",
-                    "respawn-pane",
-                    "-t",
+                build_respawn_pane_cmd(
                     target_pane,
-                    "-k",
-                    "docker",
-                    "exec",
-                    "-it",
-                    container_name,
-                    "tmux",
-                    "-L",
-                    "orchestra",
-                    "attach-session",
-                    "-t",
-                    session.session_id,
-                ],
+                    [
+                        "docker",
+                        "exec",
+                        "-it",
+                        container_name,
+                        "tmux",
+                        "-L",
+                        "orchestra",
+                        *build_attach_session_cmd(session.session_id)[3:],
+                    ],
+                ),
                 capture_output=True,
                 text=True,
             )
         else:
             # Local mode: attach to tmux on host
             result = subprocess.run(
-                [
-                    "tmux",
-                    "-L",
-                    "orchestra",
-                    "respawn-pane",
-                    "-t",
+                build_respawn_pane_cmd(
                     target_pane,
-                    "-k",
-                    "sh",
-                    "-c",
-                    f"TMUX= tmux -L orchestra attach-session -t {session.session_id}",
-                ],
+                    [
+                        "sh",
+                        "-c",
+                        f"TMUX= tmux -L orchestra attach-session -t {session.session_id}",
+                    ],
+                ),
                 capture_output=True,
                 text=True,
             )
@@ -274,7 +247,7 @@ class TmuxProtocol(AgentProtocol):
         else:
             # Local mode: kill the tmux session
             subprocess.run(
-                ["tmux", "-L", "orchestra", "kill-session", "-t", session.session_id],
+                build_kill_session_cmd(session.session_id),
                 capture_output=True,
                 text=True,
             )
@@ -311,12 +284,7 @@ class TmuxProtocol(AgentProtocol):
 
         settings_path = claude_dir / "settings.json"
         settings_config = {
-            "permissions": {
-                "allow": [
-                    "mcp__cerb-mcp__spawn_subagent",
-                    "mcp__cerb-mcp__send_message_to_session"
-                ]
-            }
+            "permissions": {"allow": ["mcp__cerb-mcp__spawn_subagent", "mcp__cerb-mcp__send_message_to_session"]}
         }
 
         try:
