@@ -240,7 +240,7 @@ class UnifiedApp(App):
                 logger.info(f"Creating designer session for branch: {branch_name}")
 
                 new_session = Session(
-                    session_id=branch_name,
+                    session_name=branch_name,
                     agent_type=AgentType.DESIGNER,
                     source_path=str(Path.cwd()),
                 )
@@ -284,13 +284,13 @@ class UnifiedApp(App):
         if not root:
             return
 
-        paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_id == root.session_id else ""
-        label_text = f"{paired_marker}{root.session_id} [dim][#00ff9f](designer)[/#00ff9f][/dim]"
+        paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_id == root.session_name else ""
+        label_text = f"{paired_marker}{root.session_name} [dim][#00ff9f](designer)[/#00ff9f][/dim]"
         self.session_list.append(ListItem(Label(label_text, markup=True)))
 
         for child in root.children:
-            paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_id == child.session_id else ""
-            label_text = f"{paired_marker}  {child.session_id} [dim][#00d4ff](executor)[/#00d4ff][/dim]"
+            paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_id == child.session_name else ""
+            label_text = f"{paired_marker}  {child.session_name} [dim][#00d4ff](executor)[/#00d4ff][/dim]"
             self.session_list.append(ListItem(Label(label_text, markup=True)))
 
         if selected_id:
@@ -359,7 +359,7 @@ class UnifiedApp(App):
             self.status_indicator.update("Cannot delete designer session")
             return
 
-        if self.state.active_session_id == session_to_delete.session_id:
+        if self.state.active_session_id == session_to_delete.session_name:
             self._attach_to_session(self.state.root_session)
 
         self.status_indicator.update("⏳ Deleting session...")
@@ -380,10 +380,10 @@ class UnifiedApp(App):
             self.state.paired_session_id = None
             paired_indicator = ""
         else:
-            self.state.paired_session_id = session.session_id
+            self.state.paired_session_id = session.session_name
             paired_indicator = "[P] "
 
-        self.hud.set_session(f"{paired_indicator}{session.session_id}")
+        self.hud.set_session(f"{paired_indicator}{session.session_name}")
         await self.action_refresh()
         self.status_indicator.update("")
 
@@ -397,7 +397,7 @@ class UnifiedApp(App):
         if not session:
             return
 
-        is_paired = self.state.paired_session_id == session.session_id
+        is_paired = self.state.paired_session_id == session.session_name
         pairing_mode = "paired" if not is_paired else "unpaired"
         self.status_indicator.update(f"⏳ Switching to {pairing_mode}...")
         self.hud.set_session(f"Switching to {pairing_mode} mode...")
@@ -440,7 +440,7 @@ class UnifiedApp(App):
 
     def _attach_to_session(self, session: Session) -> None:
         """Select a session and update monitors to show it"""
-        self.state.set_active_session(session.session_id)
+        self.state.set_active_session(session.session_name)
         status = session.get_status()
 
         if not status.get("exists", False):
@@ -452,8 +452,8 @@ class UnifiedApp(App):
                 respawn_pane(PANE_AGENT, error_cmd)
                 return
 
-        session.protocol.attach(session.session_id, target_pane=PANE_AGENT)
-        self.hud.set_session(session.session_id)
+        session.protocol.attach(session, target_pane=PANE_AGENT)
+        self.hud.set_session(session.session_name)
 
         monitor_tab = self.query_one(ModelMonitorTab)
         monitor_tab.refresh_monitor()

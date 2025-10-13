@@ -2,6 +2,7 @@ from enum import Enum
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 import json
+import re
 import subprocess
 import time
 
@@ -10,6 +11,18 @@ from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTO
 from .config import load_config
 
 SESSIONS_FILE = Path.home() / ".kerberos" / "sessions.json"
+
+
+def sanitize_session_name(name: str) -> str:
+    """Sanitize session name for use as tmux session name, git branch, etc.
+    Replaces any character that's not alphanumeric, dash, or underscore with a dash.
+    This handles spaces, apostrophes, colons, quotes, and other special characters."""
+    # Replace any character that's not alphanumeric, dash, or underscore with a dash
+    name = re.sub(r'[^a-zA-Z0-9_-]', '-', name)
+    # Replace multiple consecutive dashes with single dash
+    name = re.sub(r'-+', '-', name)
+    # Strip leading/trailing dashes
+    return name.strip('-')
 
 
 class AgentType(Enum):
@@ -26,14 +39,14 @@ AGENT_TEMPLATES = {
 class Session:
     def __init__(
         self,
-        session_id: str,
+        session_name: str,
         agent_type: AgentType,
         source_path: str = "",
         work_path: Optional[str] = None,
         active: bool = False,
         use_docker: Optional[bool] = None,
     ):
-        self.session_id = session_id
+        self.session_name = session_name
         self.agent_type = agent_type
         self.source_path = source_path
         self.work_path = work_path
@@ -52,6 +65,14 @@ class Session:
             mcp_port=config.get("mcp_port", 8765),
             use_docker=self.use_docker,
         )
+
+    @property
+    def session_id(self) -> str:
+        """Computed session ID from session_name (sanitized for tmux/git/docker)
+        Format: {dirname}-{session_name} to ensure uniqueness across projects"""
+        dir_name = Path(self.source_path).name if self.source_path else "unknown"
+        combined = f"{dir_name}-{self.session_name}"
+        return sanitize_session_name(combined)
 
     def start(self) -> bool:
         """Start the agent using the configured protocol"""
@@ -100,7 +121,7 @@ class Session:
     def to_dict(self) -> Dict[str, Any]:
         """Serialize session to dictionary for JSON storage"""
         return {
-            "session_id": self.session_id,
+            "session_name": self.session_name,
             "agent_type": self.agent_type.value,
             "source_path": self.source_path,
             "work_path": self.work_path,
@@ -112,7 +133,7 @@ class Session:
     def from_dict(cls, data: Dict[str, Any]) -> "Session":
         """Deserialize session from dictionary"""
         session = cls(
-            session_id=data["session_id"],
+            session_name=data["session_name"],
             agent_type=AgentType(data["agent_type"]),
             source_path=data.get("source_path", ""),
             work_path=data.get("work_path"),
@@ -185,7 +206,7 @@ class Session:
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed to create worktree: {e.stderr}")
 
-    def spawn_executor(self, session_id: str, instructions: str) -> "Session":
+    def spawn_executor(self, session_name: str, instructions: str) -> "Session":
         """Spawn an executor session as a child of this session"""
         if not self.work_path:
             raise ValueError("Work path is not set")
@@ -195,7 +216,7 @@ class Session:
         executor_use_docker = config.get("use_docker", True)
 
         new_session = Session(
-            session_id=session_id,
+            session_name=session_name,
             agent_type=AgentType.EXECUTOR,
             source_path=self.work_path,  # Child's source is parent's work directory
             use_docker=executor_use_docker,  # Use config value
@@ -210,7 +231,7 @@ class Session:
 
         settings_path = claude_dir / "settings.json"
         # PROJECT_CONF is already a JSON string, just replace the placeholders
-        settings_json = PROJECT_CONF.replace("{session_id}", session_id).replace("{source_path}", self.source_path)
+        settings_json = PROJECT_CONF.replace("{session_id}", new_session.session_name).replace("{source_path}", self.source_path)
         settings_path.write_text(settings_json)
 
         instructions_path = Path(new_session.work_path) / "instructions.md"
@@ -220,27 +241,27 @@ class Session:
         self.children.append(new_session)
 
         if not new_session.start():
-            raise RuntimeError(f"Failed to start child session {session_id}")
+            raise RuntimeError(f"Failed to start child session {session_name}")
 
         # Wait for Claude to be ready before sending instructions
         time.sleep(1)
 
         new_session.send_message(
             f"Please review your task instructions in @instructions.md, and then start implementing the task. "
-            f"Your parent session ID is: {self.session_id}. "
+            f"Your parent session name is: {self.session_name}. "
             f"Your source path is: {self.source_path}. "
-            f'When you\'re done or need help, use: send_message_to_session(session_id="{self.session_id}", message="your summary/question here", source_path="{self.source_path}")'
+            f'When you\'re done or need help, use: send_message_to_session(session_name="{self.session_name}", message="your summary/question here", source_path="{self.source_path}")'
         )
 
         return new_session
 
     def get_status(self) -> Dict[str, Any]:
         """Get status information for this session"""
-        return self.protocol.get_status(self.session_id)
+        return self.protocol.get_status(self)
 
     def send_message(self, message: str) -> None:
         """Send a message to the session"""
-        self.protocol.send_message(self.session_id, message)
+        self.protocol.send_message(self, message)
 
     def toggle_pairing(self) -> tuple[bool, str]:
         """
@@ -280,7 +301,7 @@ def load_sessions(
 
     # Filter by root if specified
     if root:
-        sessions = [s for s in sessions if s.session_id == root]
+        sessions = [s for s in sessions if s.session_name == root]
 
     if flat:
 
@@ -318,7 +339,7 @@ def save_session(session: Session, project_dir: Optional[Path] = None) -> None:
     # Find and update the session, or append if not found
     found = False
     for i, existing in enumerate(existing_sessions):
-        if existing.session_id == session.session_id:
+        if existing.session_name == session.session_name:
             existing_sessions[i] = session
             found = True
             break
@@ -348,13 +369,13 @@ def save_session(session: Session, project_dir: Optional[Path] = None) -> None:
         json.dump(sessions_dict, f, indent=2)
 
 
-def find_session(sessions: List[Session], session_id: str) -> Optional[Session]:
-    """Find a session by ID (searches recursively through children)"""
+def find_session(sessions: List[Session], session_name: str) -> Optional[Session]:
+    """Find a session by name (searches recursively through children)"""
     for session in sessions:
-        if session.session_id == session_id:
+        if session.session_name == session_name:
             return session
         # Search in children
-        child_result = find_session(session.children, session_id)
+        child_result = find_session(session.children, session_name)
         if child_result:
             return child_result
     return None

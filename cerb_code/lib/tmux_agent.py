@@ -58,10 +58,10 @@ class TmuxProtocol(AgentProtocol):
         self.mcp_port = mcp_port
         self.use_docker = use_docker
 
-    def _exec(self, session_id: str, cmd: list[str]) -> subprocess.CompletedProcess:
+    def _exec(self, session: "Session", cmd: list[str]) -> subprocess.CompletedProcess:
         """Execute command (Docker or local mode)"""
         if self.use_docker:
-            container_name = get_docker_container_name(session_id)
+            container_name = get_docker_container_name(session.session_id)
             return docker_exec(container_name, cmd)
         else:
             return subprocess.run(
@@ -108,7 +108,7 @@ class TmuxProtocol(AgentProtocol):
 
         # Create tmux session (works same way for both Docker and local)
         result = self._exec(
-            session.session_id,
+            session,
             [
                 "tmux",
                 "-L",
@@ -136,19 +136,19 @@ class TmuxProtocol(AgentProtocol):
 
         return result.returncode == 0
 
-    def get_status(self, session_id: str) -> Dict[str, Any]:
+    def get_status(self, session: "Session") -> Dict[str, Any]:
         """
         Get status information for a tmux session.
 
         Args:
-            session_id: ID of the session
+            session: Session object
 
         Returns:
             dict: Status information including windows count and attached state
         """
         # In Docker mode, first check if container is running
         if self.use_docker:
-            container_name = get_docker_container_name(session_id)
+            container_name = get_docker_container_name(session.session_id)
             container_check = subprocess.run(
                 ["docker", "ps", "-q", "-f", f"name=^{container_name}$"],
                 capture_output=True,
@@ -159,8 +159,8 @@ class TmuxProtocol(AgentProtocol):
 
         # Check if tmux session exists (same for both modes via _exec)
         check_result = self._exec(
-            session_id,
-            ["tmux", "-L", "orchestra", "has-session", "-t", session_id],
+            session,
+            ["tmux", "-L", "orchestra", "has-session", "-t", session.session_id],
         )
         if check_result.returncode != 0:
             return {"exists": False}
@@ -168,8 +168,8 @@ class TmuxProtocol(AgentProtocol):
         # Get session info (same for both modes via _exec)
         fmt = "#{session_windows}\t#{session_attached}"
         result = self._exec(
-            session_id,
-            ["tmux", "-L", "orchestra", "display-message", "-t", session_id, "-p", fmt],
+            session,
+            ["tmux", "-L", "orchestra", "display-message", "-t", session.session_id, "-p", fmt],
         )
 
         if result.returncode != 0:
@@ -185,27 +185,27 @@ class TmuxProtocol(AgentProtocol):
         except (ValueError, IndexError):
             return {"exists": True, "error": "Failed to parse tmux output"}
 
-    def send_message(self, session_id: str, message: str) -> bool:
+    def send_message(self, session: "Session", message: str) -> bool:
         """Send a message to a tmux session (Docker or local mode)"""
         # Target pane 0 specifically (where Claude runs), not the active pane
-        target = f"{session_id}:0.0"
+        target = f"{session.session_id}:0.0"
         # Send the literal bytes of the message (same for both modes via _exec)
         r1 = self._exec(
-            session_id,
+            session,
             ["tmux", "-L", "orchestra", "send-keys", "-t", target, "-l", "--", message],
         )
         # Then send a carriage return (equivalent to pressing Enter)
         r2 = self._exec(
-            session_id,
+            session,
             ["tmux", "-L", "orchestra", "send-keys", "-t", target, "C-m"],
         )
         return r1.returncode == 0 and r2.returncode == 0
 
-    def attach(self, session_id: str, target_pane: str = "2") -> bool:
+    def attach(self, session: "Session", target_pane: str = "2") -> bool:
         """Attach to a tmux session in the specified pane"""
         if self.use_docker:
             # Docker mode: spawn docker exec command in the pane
-            container_name = get_docker_container_name(session_id)
+            container_name = get_docker_container_name(session.session_id)
             result = subprocess.run(
                 [
                     "tmux",
@@ -224,7 +224,7 @@ class TmuxProtocol(AgentProtocol):
                     "orchestra",
                     "attach-session",
                     "-t",
-                    session_id,
+                    session.session_id,
                 ],
                 capture_output=True,
                 text=True,
@@ -242,7 +242,7 @@ class TmuxProtocol(AgentProtocol):
                     "-k",
                     "sh",
                     "-c",
-                    f"TMUX= tmux -L orchestra attach-session -t {session_id}",
+                    f"TMUX= tmux -L orchestra attach-session -t {session.session_id}",
                 ],
                 capture_output=True,
                 text=True,
@@ -250,16 +250,16 @@ class TmuxProtocol(AgentProtocol):
 
         return result.returncode == 0
 
-    def delete(self, session_id: str) -> bool:
+    def delete(self, session: "Session") -> bool:
         """Delete a tmux session and cleanup (Docker container or local)"""
         if self.use_docker:
             # Docker mode: stop and remove container (also kills tmux inside)
-            container_name = get_docker_container_name(session_id)
+            container_name = get_docker_container_name(session.session_id)
             stop_docker_container(container_name)
         else:
             # Local mode: kill the tmux session
             subprocess.run(
-                ["tmux", "-L", "orchestra", "kill-session", "-t", session_id],
+                ["tmux", "-L", "orchestra", "kill-session", "-t", session.session_id],
                 capture_output=True,
                 text=True,
             )

@@ -1,6 +1,6 @@
 [project]
 name = "cerb-code"
-version = "0.1.16"
+version = "0.1.18"
 description = "Terminal UI for managing multiple Claude sessions with tmux"
 readme = "README.md"
 requires-python = ">=3.11"
