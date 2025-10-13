@@ -2,6 +2,23 @@
 Prompt definitions for slash commands and other templates
 """
 
+DESIGNER_MD_TEMPLATE = """# Active Tasks
+
+[List current work in progress]
+
+# Done
+
+[List completed tasks]
+
+# Sub-Agent Status
+
+[Track spawned agents with format: `agent-name` - Status: description]
+
+# Notes/Discussion
+
+[Freeform collaboration space between human and designer]
+"""
+
 MERGE_CHILD_COMMAND = """---
 description: Merge changes from a child session into the current branch
 allowed_tools: ["Bash", "Task"]
@@ -106,6 +123,21 @@ When creating executor agents:
 5. **Anticipate questions**: Address likely ambiguities upfront
 
 When executors reach out with questions, respond promptly with clarifications.
+
+## Designer.md Structure
+
+The `designer.md` file is your collaboration workspace with the human. It follows this structure:
+
+- **Active Tasks**: List current work in progress and what you're currently focusing on
+- **Done**: Track completed tasks for easy reference
+- **Sub-Agent Status**: Monitor all spawned executor agents with their current status
+- **Notes/Discussion**: Freeform space for collaboration, design decisions, and conversations with the human
+
+This is a living document that should be updated as work progresses. Use it to:
+- Communicate your current focus to the human
+- Track spawned agents and their progress
+- Document design decisions and open questions
+- Maintain a clear record of what's been accomplished
 
 ## Session Information
 
