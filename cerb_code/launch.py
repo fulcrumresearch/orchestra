@@ -22,7 +22,10 @@ def main() -> int:
         target = f"{session}:main"
 
         # Kill old session
-        run_local_tmux_command("kill-session", "-t", session)
+        try:
+            run_local_tmux_command("kill-session", "-t", session)
+        except subprocess.CalledProcessError:
+            pass
 
         # Create new session with config
         run_local_tmux_command(
