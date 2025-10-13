@@ -200,10 +200,7 @@ class UnifiedApp(App):
             print()
 
         with Container(id="header"):
-            self.hud = HUD(
-                "⌃D delete • ⌃R refresh • P pair • S spec • T terminal • ⌃Q quit",
-                id="hud",
-            )
+            self.hud = HUD(id="hud")
             yield self.hud
 
         with Horizontal(id="main-content"):

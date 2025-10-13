@@ -55,7 +55,7 @@ create_layout() {
                 tmux -L orchestra send-keys -t "$pane_target" "cerb-ui" C-m
                 ;;
             1) # Editor placeholder
-                tmux -L orchestra send-keys -t "$pane_target" "clear; echo 'Press S to open spec editor'; echo ''" C-m
+                tmux -L orchestra send-keys -t "$pane_target" "clear; echo 'Press s to open spec editor'; echo ''" C-m
                 ;;
             2) # Claude sessions
                 tmux -L orchestra send-keys -t "$pane_target" "echo 'Claude sessions will appear here'; echo 'Use the left panel to create or select a session'" C-m

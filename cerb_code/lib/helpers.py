@@ -102,7 +102,7 @@ def respawn_pane_with_vim(spec_file: Path) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    vim_cmd = f'bash -c "$EDITOR {shlex.quote(str(spec_file))}; clear; echo \\"Press S to open spec editor\\"; exec bash"'
+    vim_cmd = f'bash -c "$EDITOR {shlex.quote(str(spec_file))}; clear; echo \\"Press s to open spec editor\\"; exec bash"'
     return respawn_pane(PANE_EDITOR, vim_cmd)
 
 
