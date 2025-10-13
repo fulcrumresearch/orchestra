@@ -257,7 +257,7 @@ PROJECT_CONF = """
         "hooks": [
           {
             "type": "command",
-            "command": "cerb-hook {session_id} {source_path}"
+            "command": "orchestra-hook {session_id} {source_path}"
           }
         ]
       }
@@ -267,7 +267,7 @@ PROJECT_CONF = """
         "hooks": [
           {
             "type": "command",
-            "command": "cerb-hook {session_id} {source_path}"
+            "command": "orchestra-hook {session_id} {source_path}"
           }
         ]
       }
@@ -292,7 +292,7 @@ PROJECT_CONF = """
       "Bash(rg:*)",
       "Bash(tail:*)",
       "Bash(tree:*)",
-      "mcp__cerb-subagent"
+      "mcp__orchestra-subagent"
     ]
   }
 }

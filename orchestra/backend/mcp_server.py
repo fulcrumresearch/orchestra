@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""MCP server for spawning sub-agents in Cerb/Kerberos system."""
+"""MCP server for spawning sub-agents in Orchestra system."""
 
 import sys
 from pathlib import Path
 
 from mcp.server import FastMCP
 
-from cerb_code.lib.sessions import load_sessions, save_session, find_session
-from cerb_code.lib.config import load_config
+from orchestra.lib.sessions import load_sessions, save_session, find_session
+from orchestra.lib.config import load_config
 
 # Create FastMCP server instance
 config = load_config()
 default_port = config.get("mcp_port", 8765)
 port = int(sys.argv[1]) if len(sys.argv) > 1 else default_port
 host = "0.0.0.0"
-mcp = FastMCP("cerb-subagent", port=port, host=host)
+mcp = FastMCP("orchestra-subagent", port=port, host=host)
 
 
 @mcp.tool()

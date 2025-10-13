@@ -14,7 +14,7 @@ import time
 
 logger = get_logger(__name__)
 
-ALLOWED_TOOLS = ["Read", "Write", "Edit", "mcp__cerb-subagent__send_message_to_session"]
+ALLOWED_TOOLS = ["Read", "Write", "Edit", "mcp__orchestra-subagent__send_message_to_session"]
 PERMISSION_MODE = "acceptEdits"
 
 # Batch processing configuration
@@ -93,7 +93,7 @@ class SessionMonitor:
         config = load_config()
         mcp_port = config.get("mcp_port", 8765)
         mcp_config = {
-            "cerb-subagent": {
+            "orchestra-subagent": {
                 "type": "http",
                 "url": f"http://127.0.0.1:{mcp_port}/mcp",
             }

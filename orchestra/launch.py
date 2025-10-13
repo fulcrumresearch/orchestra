@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launcher for Cerb's tmux workspace."""
+"""Launcher for Orchestra's tmux workspace."""
 
 import os
 import shutil
@@ -14,11 +14,11 @@ TMUX_BIN = shutil.which("tmux") or "tmux"
 
 
 def main() -> int:
-    """Launch Cerb tmux workspace."""
+    """Launch Orchestra tmux workspace."""
     try:
         # Setup session names
         repo = Path.cwd().name.replace(" ", "-").replace(":", "-") or "workspace"
-        session = f"cerb-{repo}"
+        session = f"orchestra-{repo}"
         target = f"{session}:main"
 
         # Kill old session
@@ -64,7 +64,7 @@ def main() -> int:
         run_local_tmux_command("split-window", "-t", f"{target}.0", "-v", "-l", "8")
 
         # Initialize panes
-        run_local_tmux_command("send-keys", "-t", f"{target}.0", "cerb-ui", "C-m")
+        run_local_tmux_command("send-keys", "-t", f"{target}.0", "orchestra-ui", "C-m")
         run_local_tmux_command("send-keys", "-t", f"{target}.1", "clear; echo 'Press s to open spec editor'; echo ''", "C-m")
         run_local_tmux_command(
             "send-keys",
@@ -77,13 +77,13 @@ def main() -> int:
 
         # Attach (nested if inside tmux already)
         if os.environ.get("TMUX"):
-            subprocess.run([TMUX_BIN, "new-window", "-n", f"cerb-{repo}"], check=True)
+            subprocess.run([TMUX_BIN, "new-window", "-n", f"orchestra-{repo}"], check=True)
             subprocess.run(
                 [
                     TMUX_BIN,
                     "send-keys",
                     "-t",
-                    f"cerb-{repo}",
+                    f"orchestra-{repo}",
                     f"TMUX= tmux -L {TMUX_SOCKET} attach-session -t {session}",
                     "C-m",
                 ],
