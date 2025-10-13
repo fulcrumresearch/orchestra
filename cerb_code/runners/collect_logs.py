@@ -33,6 +33,7 @@ def collect_logs(project_dir: Path, output_dir: Path) -> Dict[str, Any]:
             "shared_logs": [],
             "system_logs": [],
             "executor_logs": [],
+            "conversation_history": [],
         }
     }
 
@@ -42,11 +43,13 @@ def collect_logs(project_dir: Path, output_dir: Path) -> Dict[str, Any]:
     shared_logs_dir = output_dir / "shared_logs"
     system_logs_dir = output_dir / "system_logs"
     executor_logs_dir = output_dir / "executor_logs"
+    conversation_history_dir = output_dir / "conversation_history"
 
     main_logs_dir.mkdir(exist_ok=True)
     shared_logs_dir.mkdir(exist_ok=True)
     system_logs_dir.mkdir(exist_ok=True)
     executor_logs_dir.mkdir(exist_ok=True)
+    conversation_history_dir.mkdir(exist_ok=True)
 
     # Collect main session logs from ~/.claude/debug/*.txt
     main_claude_debug = Path.home() / ".claude" / "debug"
@@ -99,6 +102,23 @@ def collect_logs(project_dir: Path, output_dir: Path) -> Dict[str, Any]:
             except Exception as e:
                 logger.error(f"  Failed to copy {log_file}: {e}")
 
+    # Collect conversation history from ~/.claude.json
+    main_claude_json = Path.home() / ".claude.json"
+    if main_claude_json.exists():
+        logger.info(f"Collecting main session conversation history from {main_claude_json}")
+        try:
+            dest = conversation_history_dir / "main_session.json"
+            shutil.copy2(main_claude_json, dest)
+            manifest["logs"]["conversation_history"].append({
+                "source": str(main_claude_json),
+                "destination": str(dest.relative_to(output_dir)),
+                "size_bytes": main_claude_json.stat().st_size,
+                "session_type": "main",
+            })
+            logger.info(f"  Copied main session conversation history")
+        except Exception as e:
+            logger.error(f"  Failed to copy {main_claude_json}: {e}")
+
     # Load sessions and collect executor logs
     sessions = load_sessions(flat=True, project_dir=project_dir)
     logger.info(f"Found {len(sessions)} sessions for project {project_dir}")
@@ -140,6 +160,25 @@ def collect_logs(project_dir: Path, output_dir: Path) -> Dict[str, Any]:
                 "work_path": session.work_path,
                 "logs": session_log_entries,
             })
+
+        # Collect conversation history for this executor session
+        claude_json = work_path / ".claude.json"
+        if claude_json.exists():
+            logger.info(f"  Collecting conversation history for session '{session.session_name}'")
+            try:
+                dest = conversation_history_dir / f"{session.session_id}.json"
+                shutil.copy2(claude_json, dest)
+                manifest["logs"]["conversation_history"].append({
+                    "source": str(claude_json),
+                    "destination": str(dest.relative_to(output_dir)),
+                    "size_bytes": claude_json.stat().st_size,
+                    "session_type": "executor",
+                    "session_name": session.session_name,
+                    "session_id": session.session_id,
+                })
+                logger.info(f"  Copied conversation history")
+            except Exception as e:
+                logger.error(f"  Failed to copy conversation history: {e}")
 
     # Write manifest.json
     manifest_path = output_dir / "manifest.json"
@@ -217,6 +256,7 @@ Examples:
         print(f"  Shared logs: {len(manifest['logs']['shared_logs'])} files")
         print(f"  System logs: {len(manifest['logs']['system_logs'])} files")
         print(f"  Executor sessions: {len(manifest['logs']['executor_logs'])} sessions")
+        print(f"  Conversation history: {len(manifest['logs']['conversation_history'])} files")
         print()
         print(f"Logs saved to: {output_dir}")
         print(f"Manifest: {output_dir / 'manifest.json'}")

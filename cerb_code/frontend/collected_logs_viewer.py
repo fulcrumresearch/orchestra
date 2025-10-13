@@ -45,7 +45,8 @@ def get_log_files_in_category(log_dir: Path, category: str) -> list[dict]:
         "Main Session": "main_session_logs",
         "Shared Logs": "shared_logs",
         "System Logs": "system_logs",
-        "Executor Logs": "executor_logs"
+        "Executor Logs": "executor_logs",
+        "Conversation History": "conversation_history"
     }
 
     category_path = log_dir / category_map.get(category, category)
@@ -67,6 +68,17 @@ def get_log_files_in_category(log_dir: Path, category: str) -> list[dict]:
                         "modified": datetime.fromtimestamp(stat.st_mtime),
                         "session": session_dir.name
                     })
+    elif category == "Conversation History":
+        # Handle JSON conversation files
+        for log_file in category_path.glob("*.json"):
+            stat = log_file.stat()
+            log_files.append({
+                "name": log_file.name,
+                "path": log_file,
+                "size": stat.st_size,
+                "modified": datetime.fromtimestamp(stat.st_mtime),
+                "file_type": "json"
+            })
     else:
         for log_file in category_path.glob("*.txt"):
             stat = log_file.stat()
@@ -108,6 +120,50 @@ def filter_log_lines(lines: list[str], search_term: str = "", log_level: str = "
     return filtered
 
 
+def display_conversation_history(conversation_data: dict, search_term: str = ""):
+    """Display conversation history in a readable format"""
+
+    # Extract projects from the conversation data
+    projects = conversation_data.get("projects", {})
+
+    if not projects:
+        st.info("No conversation history found in this file")
+        return
+
+    # Display each project's conversation
+    for project_path, project_data in projects.items():
+        with st.expander(f"📁 {project_path}", expanded=True):
+            history = project_data.get("history", [])
+
+            if not history:
+                st.info("No conversation history")
+                continue
+
+            st.caption(f"{len(history)} prompts in history")
+
+            # Display each prompt in the history
+            for idx, prompt_entry in enumerate(history):
+                prompt = prompt_entry.get("prompt", "")
+
+                # Apply search filter if provided
+                if search_term and search_term.lower() not in prompt.lower():
+                    continue
+
+                # Display the user prompt
+                st.markdown(f"**Prompt {idx + 1}:**")
+
+                # Truncate long prompts for display
+                if len(prompt) > 500:
+                    with st.expander(f"View prompt (first 500 chars)"):
+                        st.text(prompt[:500] + "...")
+                        if st.button(f"Show full prompt {idx + 1}", key=f"show_full_{idx}"):
+                            st.text(prompt)
+                else:
+                    st.text(prompt)
+
+                st.divider()
+
+
 def run_app(log_dir: Path):
     """Main streamlit app function"""
     st.set_page_config(
@@ -143,7 +199,7 @@ def run_app(log_dir: Path):
     # Sidebar for category selection
     st.sidebar.header("Log Categories")
 
-    categories = ["Main Session", "Shared Logs", "System Logs", "Executor Logs"]
+    categories = ["Main Session", "Shared Logs", "System Logs", "Executor Logs", "Conversation History"]
     selected_category = st.sidebar.radio("Select Category", categories)
 
     # Get log files in selected category
@@ -187,32 +243,46 @@ def run_app(log_dir: Path):
     # Filter options
     st.sidebar.header("Filter Options")
     search_term = st.sidebar.text_input("Search text", "")
-    log_level = st.sidebar.selectbox("Log Level", ["All", "DEBUG", "INFO", "WARNING", "ERROR"])
-    tail_lines = st.sidebar.number_input("Tail lines (0 = all)", min_value=0, max_value=50000, value=1000)
+
+    # Check if this is a conversation history file
+    is_conversation = selected_log.get("file_type") == "json"
+
+    if not is_conversation:
+        log_level = st.sidebar.selectbox("Log Level", ["All", "DEBUG", "INFO", "WARNING", "ERROR"])
+        tail_lines = st.sidebar.number_input("Tail lines (0 = all)", min_value=0, max_value=50000, value=1000)
 
     st.divider()
 
     # Read and display log content
     try:
-        with open(selected_log["path"], "r") as f:
-            content = f.read()
+        if is_conversation:
+            # Handle conversation history JSON files
+            with open(selected_log["path"], "r") as f:
+                conversation_data = json.load(f)
 
-        lines = content.split('\n')
+            display_conversation_history(conversation_data, search_term)
 
-        # Apply filters
-        filtered_lines = filter_log_lines(lines, search_term, log_level)
+        else:
+            # Handle regular log files
+            with open(selected_log["path"], "r") as f:
+                content = f.read()
 
-        # Apply tail limit
-        if tail_lines > 0:
-            filtered_lines = filtered_lines[-tail_lines:]
+            lines = content.split('\n')
 
-        filtered_content = '\n'.join(filtered_lines)
+            # Apply filters
+            filtered_lines = filter_log_lines(lines, search_term, log_level)
 
-        # Display in a code block
-        st.code(filtered_content, language="log", line_numbers=False)
+            # Apply tail limit
+            if tail_lines > 0:
+                filtered_lines = filtered_lines[-tail_lines:]
 
-        # Show stats
-        st.caption(f"Showing {len(filtered_lines)} of {len(lines)} total lines")
+            filtered_content = '\n'.join(filtered_lines)
+
+            # Display in a code block
+            st.code(filtered_content, language="log", line_numbers=False)
+
+            # Show stats
+            st.caption(f"Showing {len(filtered_lines)} of {len(lines)} total lines")
 
     except Exception as e:
         st.error(f"Error reading log file: {e}")
