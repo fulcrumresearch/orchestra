@@ -143,7 +143,12 @@ def display_conversation_history(conversation_data: dict, search_term: str = "")
 
             # Display each prompt in the history
             for idx, prompt_entry in enumerate(history):
-                prompt = prompt_entry.get("prompt", "")
+                # Try both "display" and "prompt" fields (different Claude versions may use different fields)
+                prompt = prompt_entry.get("display", prompt_entry.get("prompt", ""))
+
+                # Skip empty prompts
+                if not prompt or not prompt.strip():
+                    continue
 
                 # Apply search filter if provided
                 if search_term and search_term.lower() not in prompt.lower():

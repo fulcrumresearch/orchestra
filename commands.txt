@@ -1,0 +1,26 @@
+# Viewing Orchestra Logs with Conversation History
+
+## 1. Collect logs (run this on EC2):
+uv run cerb-collect-logs
+
+## 2. View logs via web interface:
+
+# On your LOCAL machine, set up SSH port forwarding:
+ssh -L 8501:localhost:8501 fulcrum
+
+# Then open this URL in your browser:
+http://localhost:8501
+
+# The viewer now includes a "Conversation History" category that shows
+# your actual Claude conversations, not just debug logs!
+
+## Alternative commands:
+
+# Using the IP address instead of alias:
+ssh -L 8501:localhost:8501 ec2-user@35.166.219.241
+
+# View a specific log collection:
+uv run cerb-view-collected-logs --log-dir /home/ec2-user/orchestra/.orchestra/logs/20251013_215356
+
+# View latest collection (default):
+uv run cerb-view-collected-logs
