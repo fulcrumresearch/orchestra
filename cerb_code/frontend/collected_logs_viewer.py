@@ -39,79 +39,56 @@ def load_manifest(log_dir: Path) -> dict | None:
         return None
 
 
-def get_log_files_in_category(log_dir: Path, category: str) -> list[dict]:
-    """Get all log files in a specific category"""
-    category_map = {
-        "Main Session": "main_session_logs",
-        "Shared Logs": "shared_logs",
-        "System Logs": "system_logs",
-        "Executor Logs": "executor_logs",
-        "Conversation History": "conversation_history"
-    }
-
-    category_path = log_dir / category_map.get(category, category)
-    if not category_path.exists():
-        return []
-
+def get_transcripts(log_dir: Path) -> list[dict]:
+    """Get all JSONL transcript files"""
     log_files = []
 
-    # For executor logs, we need to go one level deeper (session subdirectories)
-    if category == "Executor Logs":
-        for session_dir in category_path.iterdir():
-            if session_dir.is_dir():
-                for log_file in session_dir.glob("*.txt"):
-                    stat = log_file.stat()
-                    log_files.append({
-                        "name": f"{session_dir.name}/{log_file.name}",
-                        "path": log_file,
-                        "size": stat.st_size,
-                        "modified": datetime.fromtimestamp(stat.st_mtime),
-                        "session": session_dir.name
-                    })
-    elif category == "Conversation History":
-        # Handle JSONL transcript files
-        for log_file in category_path.glob("*.jsonl"):
-            stat = log_file.stat()
-            log_files.append({
-                "name": log_file.name,
-                "path": log_file,
-                "size": stat.st_size,
-                "modified": datetime.fromtimestamp(stat.st_mtime),
-                "file_type": "jsonl"
-            })
-        # Also support legacy JSON files
-        for log_file in category_path.glob("*.json"):
-            stat = log_file.stat()
-            log_files.append({
-                "name": log_file.name,
-                "path": log_file,
-                "size": stat.st_size,
-                "modified": datetime.fromtimestamp(stat.st_mtime),
-                "file_type": "json"
-            })
-    else:
-        for log_file in category_path.glob("*.txt"):
-            stat = log_file.stat()
-            log_files.append({
-                "name": log_file.name,
-                "path": log_file,
-                "size": stat.st_size,
-                "modified": datetime.fromtimestamp(stat.st_mtime)
-            })
+    # Get all JSONL files directly in log_dir
+    for log_file in log_dir.glob("*.jsonl"):
+        stat = log_file.stat()
 
-        # Also check for .log files in system logs
-        if category == "System Logs":
-            for log_file in category_path.glob("*.log"):
-                stat = log_file.stat()
-                log_files.append({
-                    "name": log_file.name,
-                    "path": log_file,
-                    "size": stat.st_size,
-                    "modified": datetime.fromtimestamp(stat.st_mtime)
-                })
+        # Try to extract summary and branch from first few lines
+        display_name = log_file.name
+        try:
+            with open(log_file, 'r') as f:
+                # Check first line for summary
+                first_line = f.readline()
+                if first_line.strip():
+                    first_item = json.loads(first_line)
+                    summary = first_item.get("summary")
+                    if summary:
+                        display_name = summary
 
-    # Sort by name
-    log_files.sort(key=lambda x: x["name"])
+                # Check next few lines for git branch
+                git_branch = None
+                for _ in range(5):
+                    line = f.readline()
+                    if not line:
+                        break
+                    if line.strip():
+                        item = json.loads(line)
+                        branch = item.get("gitBranch")
+                        if branch:
+                            git_branch = branch
+                            break
+
+                if git_branch and summary:
+                    display_name = f"{summary} [{git_branch}]"
+                elif git_branch:
+                    display_name = f"{log_file.stem} [{git_branch}]"
+        except:
+            pass
+
+        log_files.append({
+            "name": log_file.name,
+            "display_name": display_name,
+            "path": log_file,
+            "size": stat.st_size,
+            "modified": datetime.fromtimestamp(stat.st_mtime),
+        })
+
+    # Sort by modification time, newest first
+    log_files.sort(key=lambda x: x["modified"], reverse=True)
     return log_files
 
 
@@ -196,17 +173,23 @@ def display_jsonl_transcript(file_path: Path, search_term: str = "", date_filter
         # Display based on type
         if item_type == "user":
             message_count += 1
-            content = item.get("content", [])
 
-            # Extract text from content
-            text_parts = []
-            for part in content:
-                if isinstance(part, dict) and part.get("type") == "text":
-                    text_parts.append(part.get("text", ""))
-                elif isinstance(part, str):
-                    text_parts.append(part)
+            # User messages have content in message.content as a string
+            message_obj = item.get("message", {})
+            content = message_obj.get("content", "")
 
-            user_text = "\n".join(text_parts)
+            # Handle if content is a string (user messages) or array
+            if isinstance(content, str):
+                user_text = content
+            else:
+                # Fallback for array format
+                text_parts = []
+                for part in content:
+                    if isinstance(part, dict) and part.get("type") == "text":
+                        text_parts.append(part.get("text", ""))
+                    elif isinstance(part, str):
+                        text_parts.append(part)
+                user_text = "\n".join(text_parts)
 
             with st.container():
                 st.markdown(f"### 👤 User Message {message_count}")
@@ -217,9 +200,12 @@ def display_jsonl_transcript(file_path: Path, search_term: str = "", date_filter
 
         elif item_type == "assistant":
             message_count += 1
-            content = item.get("content", [])
-            usage = item.get("usage", {})
-            model = item.get("model", "")
+
+            # Assistant messages have content in message.content as an array
+            message_obj = item.get("message", {})
+            content = message_obj.get("content", [])
+            usage = message_obj.get("usage", {})
+            model = message_obj.get("model", "")
 
             with st.container():
                 st.markdown(f"### 🤖 Assistant Message {message_count}")
@@ -389,7 +375,13 @@ def run_app(log_dir: Path):
     # File selection
     st.sidebar.header("Select Log File")
 
-    log_options = [f"{log['name']} ({log['size'] / 1024:.1f} KB)" for log in log_files]
+    # Use display_name if available, otherwise fall back to name
+    log_options = []
+    for log in log_files:
+        display = log.get('display_name', log['name'])
+        size_kb = log['size'] / 1024
+        log_options.append(f"{display} ({size_kb:.1f} KB)")
+
     selected_index = st.sidebar.selectbox(
         "Log file",
         range(len(log_options)),

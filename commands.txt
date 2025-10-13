@@ -1,4 +1,4 @@
-# Viewing Orchestra Logs with Conversation History
+# Viewing Orchestra Logs with Full Conversation Transcripts
 
 ## 1. Collect logs (run this on EC2):
 uv run cerb-collect-logs
@@ -11,8 +11,16 @@ ssh -L 8501:localhost:8501 fulcrum
 # Then open this URL in your browser:
 http://localhost:8501
 
-# The viewer now includes a "Conversation History" category that shows
-# your actual Claude conversations, not just debug logs!
+## What You'll See:
+
+The viewer now includes a "Conversation History" category with FULL JSONL transcripts:
+- Complete user prompts AND assistant responses
+- Tool calls and their results
+- Timestamps and model info
+- Token usage statistics
+- Searchable conversation content
+
+Much more detailed than just debug logs!
 
 ## Alternative commands:
 
@@ -20,7 +28,7 @@ http://localhost:8501
 ssh -L 8501:localhost:8501 ec2-user@35.166.219.241
 
 # View a specific log collection:
-uv run cerb-view-collected-logs --log-dir /home/ec2-user/orchestra/.orchestra/logs/20251013_215356
+uv run cerb-view-collected-logs --log-dir /home/ec2-user/orchestra/.orchestra/logs/20251013_222126
 
 # View latest collection (default):
 uv run cerb-view-collected-logs

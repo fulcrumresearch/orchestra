@@ -28,79 +28,11 @@ def collect_logs(project_dir: Path, output_dir: Path) -> Dict[str, Any]:
     manifest: Dict[str, Any] = {
         "timestamp": datetime.now().isoformat(),
         "project_dir": str(project_dir),
-        "logs": {
-            "main_session_logs": [],
-            "shared_logs": [],
-            "system_logs": [],
-            "executor_logs": [],
-            "conversation_history": [],
-        }
+        "transcripts": []
     }
 
-    # Create output directory structure
+    # Create output directory structure - only transcripts now
     output_dir.mkdir(parents=True, exist_ok=True)
-    main_logs_dir = output_dir / "main_session_logs"
-    shared_logs_dir = output_dir / "shared_logs"
-    system_logs_dir = output_dir / "system_logs"
-    executor_logs_dir = output_dir / "executor_logs"
-    conversation_history_dir = output_dir / "conversation_history"
-
-    main_logs_dir.mkdir(exist_ok=True)
-    shared_logs_dir.mkdir(exist_ok=True)
-    system_logs_dir.mkdir(exist_ok=True)
-    executor_logs_dir.mkdir(exist_ok=True)
-    conversation_history_dir.mkdir(exist_ok=True)
-
-    # Collect main session logs from ~/.claude/debug/*.txt
-    main_claude_debug = Path.home() / ".claude" / "debug"
-    if main_claude_debug.exists():
-        logger.info(f"Collecting main session logs from {main_claude_debug}")
-        for log_file in main_claude_debug.glob("*.txt"):
-            try:
-                dest = main_logs_dir / log_file.name
-                shutil.copy2(log_file, dest)
-                manifest["logs"]["main_session_logs"].append({
-                    "source": str(log_file),
-                    "destination": str(dest.relative_to(output_dir)),
-                    "size_bytes": log_file.stat().st_size,
-                })
-                logger.info(f"  Copied {log_file.name}")
-            except Exception as e:
-                logger.error(f"  Failed to copy {log_file}: {e}")
-
-    # Collect shared logs from ~/.kerberos/shared-claude/debug/*.txt
-    shared_claude_debug = Path.home() / ".kerberos" / "shared-claude" / "debug"
-    if shared_claude_debug.exists():
-        logger.info(f"Collecting shared logs from {shared_claude_debug}")
-        for log_file in shared_claude_debug.glob("*.txt"):
-            try:
-                dest = shared_logs_dir / log_file.name
-                shutil.copy2(log_file, dest)
-                manifest["logs"]["shared_logs"].append({
-                    "source": str(log_file),
-                    "destination": str(dest.relative_to(output_dir)),
-                    "size_bytes": log_file.stat().st_size,
-                })
-                logger.info(f"  Copied {log_file.name}")
-            except Exception as e:
-                logger.error(f"  Failed to copy {log_file}: {e}")
-
-    # Collect system logs from ~/.kerberos/*.log
-    kerberos_dir = Path.home() / ".kerberos"
-    if kerberos_dir.exists():
-        logger.info(f"Collecting system logs from {kerberos_dir}")
-        for log_file in kerberos_dir.glob("*.log"):
-            try:
-                dest = system_logs_dir / log_file.name
-                shutil.copy2(log_file, dest)
-                manifest["logs"]["system_logs"].append({
-                    "source": str(log_file),
-                    "destination": str(dest.relative_to(output_dir)),
-                    "size_bytes": log_file.stat().st_size,
-                })
-                logger.info(f"  Copied {log_file.name}")
-            except Exception as e:
-                logger.error(f"  Failed to copy {log_file}: {e}")
 
     # Collect JSONL transcript files from ~/.claude/projects/
     # The project directory path gets encoded in the folder name
@@ -109,25 +41,24 @@ def collect_logs(project_dir: Path, output_dir: Path) -> Dict[str, Any]:
     main_transcripts_dir = Path.home() / ".claude" / "projects" / project_name_encoded
 
     if main_transcripts_dir.exists():
-        logger.info(f"Collecting main session JSONL transcripts from {main_transcripts_dir}")
+        logger.info(f"Collecting transcripts from {main_transcripts_dir}")
         for jsonl_file in main_transcripts_dir.glob("*.jsonl"):
             try:
-                dest = conversation_history_dir / jsonl_file.name
+                dest = output_dir / jsonl_file.name
                 shutil.copy2(jsonl_file, dest)
-                manifest["logs"]["conversation_history"].append({
+                manifest["transcripts"].append({
                     "source": str(jsonl_file),
-                    "destination": str(dest.relative_to(output_dir)),
+                    "filename": jsonl_file.name,
                     "size_bytes": jsonl_file.stat().st_size,
                     "session_type": "main",
-                    "format": "jsonl",
                 })
                 logger.info(f"  Copied {jsonl_file.name}")
             except Exception as e:
                 logger.error(f"  Failed to copy {jsonl_file}: {e}")
     else:
-        logger.info(f"No JSONL transcripts found at {main_transcripts_dir}")
+        logger.info(f"No transcripts found at {main_transcripts_dir}")
 
-    # Load sessions and collect executor logs
+    # Load sessions and collect executor transcripts
     sessions = load_sessions(flat=True, project_dir=project_dir)
     logger.info(f"Found {len(sessions)} sessions for project {project_dir}")
 
@@ -137,58 +68,26 @@ def collect_logs(project_dir: Path, output_dir: Path) -> Dict[str, Any]:
             continue
 
         work_path = Path(session.work_path)
-        claude_debug_dir = work_path / ".claude" / "debug"
-
-        if not claude_debug_dir.exists():
-            logger.info(f"  No debug logs found for executor session '{session.session_name}'")
-            continue
-
-        logger.info(f"Collecting executor logs from session '{session.session_name}'")
-        session_logs_dir = executor_logs_dir / session.session_id
-        session_logs_dir.mkdir(exist_ok=True)
-
-        session_log_entries = []
-        for log_file in claude_debug_dir.glob("*.txt"):
-            try:
-                dest = session_logs_dir / log_file.name
-                shutil.copy2(log_file, dest)
-                session_log_entries.append({
-                    "source": str(log_file),
-                    "destination": str(dest.relative_to(output_dir)),
-                    "size_bytes": log_file.stat().st_size,
-                })
-                logger.info(f"  Copied {log_file.name}")
-            except Exception as e:
-                logger.error(f"  Failed to copy {log_file}: {e}")
-
-        if session_log_entries:
-            manifest["logs"]["executor_logs"].append({
-                "session_name": session.session_name,
-                "session_id": session.session_id,
-                "work_path": session.work_path,
-                "logs": session_log_entries,
-            })
 
         # Collect JSONL transcripts for this executor session
         executor_projects_dir = work_path / ".claude" / "projects"
         if executor_projects_dir.exists():
-            logger.info(f"  Collecting JSONL transcripts for session '{session.session_name}'")
+            logger.info(f"Collecting transcripts from executor '{session.session_name}'")
             for jsonl_file in executor_projects_dir.glob("**/*.jsonl"):
                 try:
                     # Create a unique filename for executor transcripts
                     dest_name = f"{session.session_id}_{jsonl_file.name}"
-                    dest = conversation_history_dir / dest_name
+                    dest = output_dir / dest_name
                     shutil.copy2(jsonl_file, dest)
-                    manifest["logs"]["conversation_history"].append({
+                    manifest["transcripts"].append({
                         "source": str(jsonl_file),
-                        "destination": str(dest.relative_to(output_dir)),
+                        "filename": dest_name,
                         "size_bytes": jsonl_file.stat().st_size,
                         "session_type": "executor",
                         "session_name": session.session_name,
                         "session_id": session.session_id,
-                        "format": "jsonl",
                     })
-                    logger.info(f"  Copied {jsonl_file.name} to {dest_name}")
+                    logger.info(f"  Copied {jsonl_file.name}")
                 except Exception as e:
                     logger.error(f"  Failed to copy transcript {jsonl_file}: {e}")
 
@@ -261,16 +160,11 @@ Examples:
         manifest = collect_logs(project_dir, output_dir)
 
         # Print summary
-        print("Log collection complete!")
+        print("Transcript collection complete!")
         print()
-        print("Summary:")
-        print(f"  Main session logs: {len(manifest['logs']['main_session_logs'])} files")
-        print(f"  Shared logs: {len(manifest['logs']['shared_logs'])} files")
-        print(f"  System logs: {len(manifest['logs']['system_logs'])} files")
-        print(f"  Executor sessions: {len(manifest['logs']['executor_logs'])} sessions")
-        print(f"  Conversation history: {len(manifest['logs']['conversation_history'])} files")
+        print(f"Collected {len(manifest['transcripts'])} conversation transcripts")
         print()
-        print(f"Logs saved to: {output_dir}")
+        print(f"Transcripts saved to: {output_dir}")
         print(f"Manifest: {output_dir / 'manifest.json'}")
 
         return 0
