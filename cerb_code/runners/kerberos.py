@@ -9,6 +9,7 @@ from pathlib import Path
 from cerb_code.frontend.app import UnifiedApp
 from cerb_code.lib.logger import get_logger
 from cerb_code.lib.config import load_config
+from cerb_code.lib.tmux import build_kill_server_cmd, execute_local
 
 logger = get_logger(__name__)
 
@@ -88,12 +89,8 @@ def main():
 
         # kill the tmux server
         try:
-            subprocess.run(
-                ["tmux", "-L", "orchestra", "kill-server"],
-                capture_output=True,
-                text=True,
-            )
-        except:
+            execute_local(build_kill_server_cmd())
+        except Exception:
             pass
 
 
