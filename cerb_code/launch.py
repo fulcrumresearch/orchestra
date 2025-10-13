@@ -159,6 +159,7 @@ def configure_orchestra_session(session_name: str, window_name: str) -> None:
 
     run_orchestra_tmux(["new-session", "-d", "-s", session_name, "-n", window_name])
     run_orchestra_tmux(["set", "-t", session_name, "-g", "mouse", "on"])
+    run_orchestra_tmux(["set", "-t", session_name, "status", "off"])
     run_orchestra_tmux(["bind-key", "-n", "C-s", "select-pane", "-t", ":.+"])
 
 

@@ -33,7 +33,7 @@ def _build_tmux_cmd(*args: str) -> list[str]:
 
 
 def build_new_session_cmd(session_id: str, work_dir: str, command: str) -> list[str]:
-    """Build command to create new tmux session.
+    """Build command to create new tmux session with status bar disabled.
 
     Args:
         session_id: Unique identifier for the session
@@ -43,7 +43,9 @@ def build_new_session_cmd(session_id: str, work_dir: str, command: str) -> list[
     Returns:
         Command array ready for execution
     """
-    return _build_tmux_cmd("new-session", "-d", "-s", session_id, "-c", work_dir, command)
+    return _build_tmux_cmd(
+        "new-session", "-d", "-s", session_id, "-c", work_dir, command, ";", "set-option", "-t", session_id, "status", "off"
+    )
 
 
 def build_has_session_cmd(session_id: str) -> list[str]:
@@ -159,6 +161,117 @@ def build_attach_session_cmd(session_id: str) -> list[str]:
         Command array ready for execution
     """
     return _build_tmux_cmd("attach-session", "-t", session_id)
+
+
+def build_set_option_cmd(option: str, value: str, global_option: bool = False, target: str = None) -> list[str]:
+    """Build command to set tmux option.
+
+    Args:
+        option: Option name (e.g., "status")
+        value: Option value (e.g., "off")
+        global_option: If True, sets global option (-g flag)
+        target: Target session (ignored if global_option is True)
+
+    Returns:
+        Command array ready for execution
+    """
+    args = ["set-option"]
+    if global_option:
+        args.append("-g")
+    elif target:
+        args.extend(["-t", target])
+    args.extend([option, value])
+    return _build_tmux_cmd(*args)
+
+
+def build_new_session_with_window_cmd(session_id: str, window_name: str) -> list[str]:
+    """Build command to create new tmux session with named window and status off.
+
+    Args:
+        session_id: Unique identifier for the session
+        window_name: Name for the first window
+
+    Returns:
+        Command array ready for execution
+    """
+    return _build_tmux_cmd(
+        "new-session", "-d", "-s", session_id, "-n", window_name, ";",
+        "set-option", "-t", session_id, "status", "off"
+    )
+
+
+def build_bind_key_cmd(key: str, *command_args: str, prefix: bool = True) -> list[str]:
+    """Build command to bind a key.
+
+    Args:
+        key: Key to bind (e.g., "C-s")
+        *command_args: Command arguments to execute when key is pressed
+        prefix: If False, use -n flag for no prefix required
+
+    Returns:
+        Command array ready for execution
+    """
+    args = ["bind-key"]
+    if not prefix:
+        args.append("-n")
+    args.append(key)
+    args.extend(command_args)
+    return _build_tmux_cmd(*args)
+
+
+def build_split_window_cmd(
+    target: str = None,
+    horizontal: bool = False,
+    before: bool = False,
+    size: int = None
+) -> list[str]:
+    """Build command to split a window.
+
+    Args:
+        target: Target pane to split
+        horizontal: If True, split horizontally (side by side)
+        before: If True, create new pane before target
+        size: Size of new pane in lines/columns
+
+    Returns:
+        Command array ready for execution
+    """
+    args = ["split-window"]
+    if horizontal:
+        args.append("-h")
+    else:
+        args.append("-v")
+    if before:
+        args.append("-b")
+    if size is not None:
+        args.extend(["-l", str(size)])
+    if target:
+        args.extend(["-t", target])
+    return _build_tmux_cmd(*args)
+
+
+def build_select_pane_cmd(target: str) -> list[str]:
+    """Build command to select a pane.
+
+    Args:
+        target: Pane target to select
+
+    Returns:
+        Command array ready for execution
+    """
+    return _build_tmux_cmd("select-pane", "-t", target)
+
+
+def build_new_window_cmd(window_name: str) -> list[str]:
+    """Build command to create a new window.
+
+    Args:
+        window_name: Name for the new window
+
+    Returns:
+        Command array ready for execution
+    """
+    return _build_tmux_cmd("new-window", "-n", window_name)
 
 
 # Local Executor
