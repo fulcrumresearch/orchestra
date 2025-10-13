@@ -45,6 +45,7 @@ from cerb_code.lib.helpers import (
     respawn_pane_with_vim,
     respawn_pane_with_terminal,
     ensure_docker_image,
+    ensure_orchestra_in_gitignore,
     PANE_AGENT,
 )
 
@@ -220,6 +221,9 @@ class UnifiedApp(App):
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
+        # Ensure .orchestra/ is in .gitignore
+        ensure_orchestra_in_gitignore(self.state.project_dir)
+
         # Build docker image in background if needed
         config = load_config()
         if config.get("use_docker", True):
@@ -411,7 +415,9 @@ class UnifiedApp(App):
         if not session:
             return
         work_path = Path(session.work_path)
-        designer_md = work_path / "designer.md"
+        orchestra_dir = work_path / ".orchestra"
+        orchestra_dir.mkdir(exist_ok=True)
+        designer_md = orchestra_dir / "designer.md"
 
         if not designer_md.exists():
             designer_md.touch()
