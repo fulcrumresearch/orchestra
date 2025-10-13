@@ -260,8 +260,6 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
             raise RuntimeError(f"Failed to start container: {result.stderr}")
 
         logger.info(f"Container {container_name} started successfully")
-        # Note: Both .claude directory and .claude.json are mounted as volumes,
-        # no need to copy files into the container
 
         return True
 
@@ -300,37 +298,20 @@ def ensure_shared_claude_config(shared_claude_dir: Path, shared_claude_json: Pat
 
     # Load existing config if it exists
     if shared_claude_json.exists():
-        try:
-            with open(shared_claude_json, "r") as f:
-                config = json.load(f)
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse {shared_claude_json}, creating new config")
-            config = {}
-    else:
-        # On macOS, subscription auth relies on Keychain which containers can't access
-        # So don't copy host's config - user must set ANTHROPIC_API_KEY instead
-        is_macos = platform.system() == "Darwin"
+        with open(shared_claude_json, "r") as f:
+            config = json.load(f)
+        return None
 
-        if is_macos:
-            logger.info("macOS detected: containers require ANTHROPIC_API_KEY for authentication")
-            logger.info("Subscription auth from host's Keychain cannot be used in containers")
-            config = {}
-        else:
-            # On Linux, try to copy auth settings from host's .claude.json (if it exists)
-            host_claude_json = Path.home() / ".claude.json"
-            if host_claude_json.exists():
-                try:
-                    with open(host_claude_json, "r") as f:
-                        config = json.load(f)
-                    logger.info(f"Initialized shared config from host's .claude.json")
-                except json.JSONDecodeError:
-                    logger.warning("Failed to parse host's .claude.json, using empty config")
+    # On Linux, try to copy auth settings from host's .claude.json (if it exists)
+    if platform.system() == "Linux":
+        host_claude_json = Path.home() / ".claude.json"
+        if host_claude_json.exists():
+            with open(host_claude_json, "r") as f:
+                config = json.load(f)
+            logger.info(f"Initialized shared config from host's .claude.json")
 
     # Inject MCP server configuration
-    if "mcpServers" not in config:
-        config["mcpServers"] = {}
-
-    config["mcpServers"]["cerb-mcp"] = {"url": mcp_url, "type": "sse"}
+    config.setdefault("mcpServers", {})["cerb-mcp"] = {"url": mcp_url, "type": "sse"}
 
     # Write config
     with open(shared_claude_json, "w") as f:
