@@ -2,8 +2,8 @@
 
 import json
 import os
+import platform
 import subprocess
-import tempfile
 import importlib.resources as resources
 import shutil
 import shlex
@@ -140,7 +140,7 @@ def ensure_docker_image() -> None:
         # Image doesn't exist, build it
         # Find Dockerfile in the cerb_code package
         try:
-            dockerfile_path = resources.files('cerb_code') / 'Dockerfile'
+            dockerfile_path = resources.files("cerb_code") / "Dockerfile"
         except (ImportError, AttributeError):
             # Fallback for older Python or development mode
             dockerfile_path = Path(__file__).parent.parent / "Dockerfile"
@@ -207,8 +207,21 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
         # Always mount worktree at /workspace
         mounts = ["-v", f"{work_path}:/workspace"]
 
+        # Ensure shared Claude Code directory and config file exist
+        shared_claude_dir = Path.home() / ".kerberos" / "shared-claude"
+        shared_claude_json = Path.home() / ".kerberos" / "shared-claude.json"
+        ensure_shared_claude_config(shared_claude_dir, shared_claude_json, mcp_port)
+
+        # Mount shared .claude directory and .claude.json for all executor agents
+        # This is separate from host's ~/.claude to avoid conflicts
+        mounts.extend(
+            ["-v", f"{shared_claude_dir}:/home/executor/.claude", "-v", f"{shared_claude_json}:/home/executor/.claude.json"]
+        )
+
         mode = "PAIRED (source symlinked)" if paired else "UNPAIRED"
-        logger.info(f"Starting container in {mode} mode: worktree at /workspace")
+        logger.info(
+            f"Starting container in {mode} mode: worktree at /workspace, shared Claude config at {shared_claude_dir}"
+        )
 
         # Get API key from environment
         api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -248,22 +261,6 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
 
         logger.info(f"Container {container_name} started successfully")
 
-        # Copy user's .claude directory into container (if it exists)
-        claude_dir = Path.home() / ".claude"
-        if claude_dir.exists():
-            copy_result = subprocess.run(
-                ["docker", "cp", f"{claude_dir}/.", f"{container_name}:/home/executor/.claude/"],
-                capture_output=True,
-                text=True,
-            )
-            if copy_result.returncode == 0:
-                logger.info(f"Copied .claude directory into container")
-            else:
-                logger.warning(f"Failed to copy .claude directory: {copy_result.stderr}")
-
-        # Copy user's .claude.json config file into container and inject MCP config
-        configure_mcp_in_container(container_name, mcp_port)
-
         return True
 
     except Exception as e:
@@ -278,43 +275,49 @@ def stop_docker_container(container_name: str) -> None:
     subprocess.run(["docker", "rm", container_name], capture_output=True)
 
 
-def configure_mcp_in_container(container_name: str, mcp_port: int) -> None:
-    """Copy .claude.json and inject MCP configuration into container"""
+def ensure_shared_claude_config(shared_claude_dir: Path, shared_claude_json: Path, mcp_port: int) -> None:
+    """Ensure shared Claude Code directory and config file exist with proper MCP configuration
 
-    # MCP URL for Docker container (always uses host.docker.internal)
+    This is called once per container start to ensure the shared config is properly initialized.
+    All executor containers will mount these same files.
+
+    Args:
+        shared_claude_dir: Path to shared .claude directory
+        shared_claude_json: Path to shared .claude.json file
+        mcp_port: Port for MCP server
+    """
+
+    # Ensure shared directory exists
+    shared_claude_dir.mkdir(parents=True, exist_ok=True)
+
+    # MCP URL for Docker containers (always uses host.docker.internal)
     mcp_url = f"http://host.docker.internal:{mcp_port}/sse"
 
-    # Load user's .claude.json if it exists
-    claude_json_path = Path.home() / ".claude.json"
+    # Initialize or update shared .claude.json
     config = {}
-    if claude_json_path.exists():
-        try:
-            with open(claude_json_path, "r") as f:
+
+    # Load existing config if it exists
+    if shared_claude_json.exists():
+        with open(shared_claude_json, "r") as f:
+            config = json.load(f)
+        return None
+
+    # On Linux, try to copy auth settings from host's .claude.json (if it exists)
+    if platform.system() == "Linux":
+        host_claude_json = Path.home() / ".claude.json"
+        if host_claude_json.exists():
+            with open(host_claude_json, "r") as f:
                 config = json.load(f)
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse .claude.json, using empty config")
+            logger.info(f"Initialized shared config from host's .claude.json")
 
     # Inject MCP server configuration
-    if "mcpServers" not in config:
-        config["mcpServers"] = {}
+    config.setdefault("mcpServers", {})["cerb-mcp"] = {"url": mcp_url, "type": "sse"}
 
-    config["mcpServers"]["cerb-mcp"] = {"url": mcp_url, "type": "sse"}
+    # Write config
+    with open(shared_claude_json, "w") as f:
+        json.dump(config, f, indent=2)
 
-    # Write modified config to temp file
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
-        json.dump(config, tmp, indent=2)
-        tmp_path = tmp.name
-
-    copy_result = subprocess.run(
-        ["docker", "cp", tmp_path, f"{container_name}:/home/executor/.claude.json"],
-        capture_output=True,
-        text=True,
-    )
-    if copy_result.returncode == 0:
-        logger.info(f"Configured MCP in container .claude.json (URL: {mcp_url})")
-    else:
-        logger.warning(f"Failed to copy .claude.json to container: {copy_result.stderr}")
-    Path(tmp_path).unlink(missing_ok=True)
+    logger.info(f"Shared Claude config ready at {shared_claude_json} (MCP URL: {mcp_url})")
 
 
 def docker_exec(container_name: str, cmd: list[str]) -> subprocess.CompletedProcess:
