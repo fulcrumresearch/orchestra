@@ -10,6 +10,7 @@ import shlex
 
 from pathlib import Path
 from .logger import get_logger
+from .tmux import build_respawn_pane_cmd
 
 logger = get_logger(__name__)
 
@@ -86,7 +87,7 @@ def respawn_pane(pane: str, command: str) -> bool:
         True if successful, False otherwise
     """
     result = subprocess.run(
-        ["tmux", "-L", "orchestra", "respawn-pane", "-t", pane, "-k", command],
+        build_respawn_pane_cmd(pane, command),
         capture_output=True,
         text=True,
     )
@@ -134,13 +135,12 @@ def respawn_pane_with_vim(spec_file: Path) -> bool:
     editor = find_available_editor()
 
     if not editor:
-        logger.error(
-            "No editor found. Please install nano, vim, or VS Code, "
-            "or set the $EDITOR environment variable."
-        )
+        logger.error("No editor found. Please install nano, vim, or VS Code, or set the $EDITOR environment variable.")
         return False
 
-    editor_cmd = f'bash -c "{editor} {shlex.quote(str(spec_file))}; clear; echo \\"Press s to open spec editor\\"; exec bash"'
+    editor_cmd = (
+        f'bash -c "{editor} {shlex.quote(str(spec_file))}; clear; echo \\"Press s to open spec editor\\"; exec bash"'
+    )
     return respawn_pane(PANE_EDITOR, editor_cmd)
 
 
@@ -402,11 +402,11 @@ def ensure_orchestra_in_gitignore(project_dir: Path) -> None:
         return
 
     # Add .orchestra/ to gitignore
-    if content and not content.endswith('\n'):
+    if content and not content.endswith("\n"):
         # Ensure there's a newline before adding new entry
-        new_content = content + '\n' + orchestra_entry + '\n'
+        new_content = content + "\n" + orchestra_entry + "\n"
     else:
-        new_content = content + orchestra_entry + '\n'
+        new_content = content + orchestra_entry + "\n"
 
     gitignore_path.write_text(new_content)
     logger.info(f"Added .orchestra/ to {gitignore_path}")
