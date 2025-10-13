@@ -291,7 +291,7 @@ def ensure_shared_claude_config(shared_claude_dir: Path, shared_claude_json: Pat
     shared_claude_dir.mkdir(parents=True, exist_ok=True)
 
     # MCP URL for Docker containers (always uses host.docker.internal)
-    mcp_url = f"http://host.docker.internal:{mcp_port}/sse"
+    mcp_url = f"http://host.docker.internal:{mcp_port}/mcp"
 
     # Initialize or update shared .claude.json
     config = {}
@@ -318,8 +318,11 @@ def ensure_shared_claude_config(shared_claude_dir: Path, shared_claude_json: Pat
                 config = json.load(f)
             logger.info(f"Loaded config from host's .claude.json")
 
-    # Inject MCP server configuration
-    config.setdefault("mcpServers", {})["cerb-mcp"] = {"url": mcp_url, "type": "sse"}
+    # Inject MCP server configuration (HTTP transport)
+    config.setdefault("mcpServers", {})["cerb-mcp"] = {
+        "url": mcp_url,
+        "type": "http",
+    }
 
     # Write config
     with open(shared_claude_json, "w") as f:
