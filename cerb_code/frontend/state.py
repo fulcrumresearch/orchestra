@@ -45,12 +45,12 @@ class AppState:
             return None
 
         # Check root
-        if self.root_session.session_id == self.active_session_id:
+        if self.root_session.session_name == self.active_session_id:
             return self.root_session
 
         # Check children
         for child in self.root_session.children:
-            if child.session_id == self.active_session_id:
+            if child.session_name == self.active_session_id:
                 return child
 
         return None
@@ -96,7 +96,7 @@ class AppState:
             return False
 
         for i, child in enumerate(self.root_session.children):
-            if child.session_id == session_id:
+            if child.session_name == session_id:
                 self.root_session.children.pop(i)
                 return True
         return False
@@ -113,11 +113,11 @@ class AppState:
         if not self.root_session:
             return None
 
-        if self.root_session.session_id == session_id:
+        if self.root_session.session_name == session_id:
             return 0
 
         for i, child in enumerate(self.root_session.children):
-            if child.session_id == session_id:
+            if child.session_name == session_id:
                 return i + 1
 
         return None

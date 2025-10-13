@@ -2,6 +2,7 @@ from enum import Enum
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 import json
+import re
 import subprocess
 import time
 
@@ -14,14 +15,10 @@ SESSIONS_FILE = Path.home() / ".kerberos" / "sessions.json"
 
 def sanitize_session_name(name: str) -> str:
     """Sanitize session name for use as tmux session name, git branch, etc.
-    Removes quotes and other problematic characters, replaces spaces/colons with dashes."""
-    import re
-    # Remove quotes, parentheses, brackets, and other special chars
-    name = name.replace('"', '').replace("'", '').replace('(', '').replace(')', '')
-    name = name.replace('[', '').replace(']', '').replace('{', '').replace('}', '')
-    name = name.replace('/', '-').replace('\\', '-')
-    # Replace spaces and colons with dashes
-    name = name.replace(' ', '-').replace(':', '-')
+    Replaces any character that's not alphanumeric, dash, or underscore with a dash.
+    This handles spaces, apostrophes, colons, quotes, and other special characters."""
+    # Replace any character that's not alphanumeric, dash, or underscore with a dash
+    name = re.sub(r'[^a-zA-Z0-9_-]', '-', name)
     # Replace multiple consecutive dashes with single dash
     name = re.sub(r'-+', '-', name)
     # Strip leading/trailing dashes
@@ -71,8 +68,11 @@ class Session:
 
     @property
     def session_id(self) -> str:
-        """Computed session ID from session_name (sanitized for tmux/git/docker)"""
-        return sanitize_session_name(self.session_name)
+        """Computed session ID from session_name (sanitized for tmux/git/docker)
+        Format: {dirname}-{session_name} to ensure uniqueness across projects"""
+        dir_name = Path(self.source_path).name if self.source_path else "unknown"
+        combined = f"{dir_name}-{self.session_name}"
+        return sanitize_session_name(combined)
 
     def start(self) -> bool:
         """Start the agent using the configured protocol"""
@@ -257,11 +257,11 @@ class Session:
 
     def get_status(self) -> Dict[str, Any]:
         """Get status information for this session"""
-        return self.protocol.get_status(self.session_id)
+        return self.protocol.get_status(self)
 
     def send_message(self, message: str) -> None:
         """Send a message to the session"""
-        self.protocol.send_message(self.session_id, message)
+        self.protocol.send_message(self, message)
 
     def toggle_pairing(self) -> tuple[bool, str]:
         """
@@ -301,7 +301,7 @@ def load_sessions(
 
     # Filter by root if specified
     if root:
-        sessions = [s for s in sessions if s.session_id == root]
+        sessions = [s for s in sessions if s.session_name == root]
 
     if flat:
 
@@ -339,7 +339,7 @@ def save_session(session: Session, project_dir: Optional[Path] = None) -> None:
     # Find and update the session, or append if not found
     found = False
     for i, existing in enumerate(existing_sessions):
-        if existing.session_id == session.session_id:
+        if existing.session_name == session.session_name:
             existing_sessions[i] = session
             found = True
             break
