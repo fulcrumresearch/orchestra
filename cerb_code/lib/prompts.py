@@ -150,7 +150,7 @@ PROJECT_CONF = """
     ]
   },
   "permissions": {
-    "defaultMode": "acceptEdits",
+    "defaultMode": "bypassPermissions",
     "allow": [
       "Edit",
       "Glob",

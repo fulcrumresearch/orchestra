@@ -20,19 +20,19 @@ class AppState:
             project_dir: The project directory path
         """
         self.root_session: Optional[Session] = None
-        self.root_session_id: Optional[str] = None
-        self.active_session_id: Optional[str] = None
-        self.paired_session_id: Optional[str] = None
+        self.root_session_name: Optional[str] = None
+        self.active_session_name: Optional[str] = None
+        self.paired_session_name: Optional[str] = None
         self.project_dir = project_dir
         self.file_watcher = FileWatcher()
 
-    def load(self, root_session_id: str) -> None:
+    def load(self, root_session_name: str) -> None:
         """Load sessions from disk.
 
         Args:
-            root_session_id: The root session ID to load
+            root_session_name: The root session name to load
         """
-        sessions = load_sessions(root=root_session_id, project_dir=self.project_dir)
+        sessions = load_sessions(root=root_session_name, project_dir=self.project_dir)
         self.root_session = sessions[0] if sessions else None
 
     def get_active_session(self) -> Optional[Session]:
@@ -41,27 +41,27 @@ class AppState:
         Returns:
             The active Session object or None
         """
-        if not self.active_session_id or not self.root_session:
+        if not self.active_session_name or not self.root_session:
             return None
 
         # Check root
-        if self.root_session.session_name == self.active_session_id:
+        if self.root_session.session_name == self.active_session_name:
             return self.root_session
 
         # Check children
         for child in self.root_session.children:
-            if child.session_name == self.active_session_id:
+            if child.session_name == self.active_session_name:
                 return child
 
         return None
 
-    def set_active_session(self, session_id: str) -> None:
-        """Set the active session ID.
+    def set_active_session(self, session_name: str) -> None:
+        """Set the active session by name.
 
         Args:
-            session_id: The session ID to set as active
+            session_name: The session name to set as active
         """
-        self.active_session_id = session_id
+        self.active_session_name = session_name
 
     def get_session_by_index(self, index: int) -> Optional[Session]:
         """Get session by list index (0 = root, 1+ = children).
@@ -83,11 +83,11 @@ class AppState:
                 return self.root_session.children[child_index]
         return None
 
-    def remove_child(self, session_id: str) -> bool:
-        """Remove a child session by ID.
+    def remove_child(self, session_name: str) -> bool:
+        """Remove a child session by name.
 
         Args:
-            session_id: The session ID to remove
+            session_name: The session name to remove
 
         Returns:
             True if removed, False if not found
@@ -96,16 +96,16 @@ class AppState:
             return False
 
         for i, child in enumerate(self.root_session.children):
-            if child.session_name == session_id:
+            if child.session_name == session_name:
                 self.root_session.children.pop(i)
                 return True
         return False
 
-    def get_index_by_session_id(self, session_id: str) -> Optional[int]:
-        """Get list index for a session ID (0 = root, 1+ = children).
+    def get_index_by_session_name(self, session_name: str) -> Optional[int]:
+        """Get list index for a session name (0 = root, 1+ = children).
 
         Args:
-            session_id: The session ID to find
+            session_name: The session name to find
 
         Returns:
             List index, or None if not found
@@ -113,11 +113,11 @@ class AppState:
         if not self.root_session:
             return None
 
-        if self.root_session.session_name == session_id:
+        if self.root_session.session_name == session_name:
             return 0
 
         for i, child in enumerate(self.root_session.children):
-            if child.session_name == session_id:
+            if child.session_name == session_name:
                 return i + 1
 
         return None

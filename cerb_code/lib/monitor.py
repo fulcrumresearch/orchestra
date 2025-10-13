@@ -129,8 +129,12 @@ class SessionMonitor:
         self.queue.put_nowait(evt)
 
     async def _run(self) -> None:
+        # Ensure .orchestra directory exists
+        orchestra_dir = Path(self.session.work_path) / ".orchestra"
+        orchestra_dir.mkdir(exist_ok=True)
+
         await self.client.query(
-            f"Session online. Understand and update the monitor.md in the given format. Do NOT log every event, the whole point is to make this easier for the a human to understand what is going on."
+            f"Session online. Understand and update the .orchestra/monitor.md in the given format. Do NOT log every event, the whole point is to make this easier for the a human to understand what is going on."
         )
 
         async for chunk in self.client.receive_response():
@@ -194,7 +198,7 @@ class SessionMonitorWatcher:
         if not sess.work_path:
             return
 
-        monitor_file = Path(sess.work_path) / "monitor.md"
+        monitor_file = Path(sess.work_path) / ".orchestra" / "monitor.md"
 
         if monitor_file.exists():
             try:

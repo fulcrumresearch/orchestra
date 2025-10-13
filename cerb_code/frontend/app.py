@@ -45,6 +45,7 @@ from cerb_code.lib.helpers import (
     respawn_pane_with_vim,
     respawn_pane_with_terminal,
     ensure_docker_image,
+    ensure_orchestra_in_gitignore,
     PANE_AGENT,
 )
 
@@ -220,6 +221,9 @@ class UnifiedApp(App):
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
+        # Ensure .orchestra/ is in .gitignore
+        ensure_orchestra_in_gitignore(self.state.project_dir)
+
         # Build docker image in background if needed
         config = load_config()
         if config.get("use_docker", True):
@@ -227,8 +231,8 @@ class UnifiedApp(App):
 
         # Detect current git branch and store as fixed root
         branch_name = get_current_branch()
-        self.state.root_session_id = branch_name
-        self.state.load(root_session_id=self.state.root_session_id)
+        self.state.root_session_name = branch_name
+        self.state.load(root_session_name=self.state.root_session_name)
 
         if not self.state.root_session:
             try:
@@ -263,7 +267,7 @@ class UnifiedApp(App):
 
         # Watch sessions.json for changes
         async def on_sessions_file_change(path, change_type):
-            self.state.load(root_session_id=self.state.root_session_id)
+            self.state.load(root_session_name=self.state.root_session_name)
             await self.action_refresh()
 
         self.state.file_watcher.register(SESSIONS_FILE, on_sessions_file_change)
@@ -273,7 +277,7 @@ class UnifiedApp(App):
         """Refresh the session list"""
         index = self.session_list.index if self.session_list.index is not None else 0
         current_session = self.state.get_session_by_index(index)
-        selected_id = current_session.session_id if current_session else None
+        selected_name = current_session.session_name if current_session else None
 
         self.session_list.clear()
 
@@ -281,17 +285,17 @@ class UnifiedApp(App):
         if not root:
             return
 
-        paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_id == root.session_name else ""
+        paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_name == root.session_name else ""
         label_text = f"{paired_marker}{root.session_name} [dim][#00ff9f](designer)[/#00ff9f][/dim]"
         self.session_list.append(ListItem(Label(label_text, markup=True)))
 
         for child in root.children:
-            paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_id == child.session_name else ""
+            paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_name == child.session_name else ""
             label_text = f"{paired_marker}  {child.session_name} [dim][#00d4ff](executor)[/#00d4ff][/dim]"
             self.session_list.append(ListItem(Label(label_text, markup=True)))
 
-        if selected_id:
-            new_index = self.state.get_index_by_session_id(selected_id)
+        if selected_name:
+            new_index = self.state.get_index_by_session_name(selected_name)
             self.session_list.index = new_index if new_index is not None else 0
 
     def action_cursor_up(self) -> None:
@@ -337,7 +341,7 @@ class UnifiedApp(App):
     async def _delete_session_task(self, session_to_delete: Session) -> None:
         """Background task for deleting a session"""
         await asyncio.to_thread(session_to_delete.delete)
-        self.state.remove_child(session_to_delete.session_id)
+        self.state.remove_child(session_to_delete.session_name)
         save_session(self.state.root_session, self.state.project_dir)
         await self.action_refresh()
         self.status_indicator.update("")
@@ -356,7 +360,7 @@ class UnifiedApp(App):
             self.status_indicator.update("Cannot delete designer session")
             return
 
-        if self.state.active_session_id == session_to_delete.session_name:
+        if self.state.active_session_name == session_to_delete.session_name:
             self._attach_to_session(self.state.root_session)
 
         self.status_indicator.update("⏳ Deleting session...")
@@ -374,10 +378,10 @@ class UnifiedApp(App):
             return
 
         if is_paired:
-            self.state.paired_session_id = None
+            self.state.paired_session_name = None
             paired_indicator = ""
         else:
-            self.state.paired_session_id = session.session_name
+            self.state.paired_session_name = session.session_name
             paired_indicator = "[P] "
 
         self.hud.set_session(f"{paired_indicator}{session.session_name}")
@@ -394,7 +398,7 @@ class UnifiedApp(App):
         if not session:
             return
 
-        is_paired = self.state.paired_session_id == session.session_name
+        is_paired = self.state.paired_session_name == session.session_name
         pairing_mode = "paired" if not is_paired else "unpaired"
         self.status_indicator.update(f"⏳ Switching to {pairing_mode}...")
         self.hud.set_session(f"Switching to {pairing_mode} mode...")
@@ -411,7 +415,9 @@ class UnifiedApp(App):
         if not session:
             return
         work_path = Path(session.work_path)
-        designer_md = work_path / "designer.md"
+        orchestra_dir = work_path / ".orchestra"
+        orchestra_dir.mkdir(exist_ok=True)
+        designer_md = orchestra_dir / "designer.md"
 
         if not designer_md.exists():
             designer_md.touch()
