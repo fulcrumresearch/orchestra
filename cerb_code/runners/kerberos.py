@@ -27,7 +27,7 @@ def main():
     config = load_config()
     mcp_port = config.get("mcp_port", 8765)
 
-    # Start the MCP server in the background
+    # Start the MCP server in the background (HTTP transport)
     mcp_log = Path.home() / ".kerberos" / "mcp-server.log"
     mcp_log.parent.mkdir(parents=True, exist_ok=True)
 

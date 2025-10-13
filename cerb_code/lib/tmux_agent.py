@@ -292,10 +292,10 @@ class TmuxProtocol(AgentProtocol):
             return
 
         # MCP URL for local sessions (localhost, not host.docker.internal)
-        mcp_url = f"http://localhost:{self.mcp_port}/sse"
+        mcp_url = f"http://localhost:{self.mcp_port}/mcp"
 
         # Create .mcp.json in the session's worktree
-        mcp_config = {"mcpServers": {"cerb-mcp": {"url": mcp_url, "type": "sse"}}}
+        mcp_config = {"mcpServers": {"cerb-mcp": {"url": mcp_url, "type": "http"}}}
 
         mcp_config_path = Path(session.work_path) / ".mcp.json"
         try:

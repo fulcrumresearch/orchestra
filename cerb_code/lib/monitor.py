@@ -1,5 +1,6 @@
 from .sessions import Session
 from .logger import get_logger
+from .config import load_config
 
 from dataclasses import dataclass, field
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
@@ -88,8 +89,15 @@ class SessionMonitor:
             agent_type=self.session.agent_type.value if self.session.agent_type else "unknown",
         )
 
-        # MCP config to give monitor access to send_message_to_session
-        mcp_config = {"cerb-subagent": {"command": "cerb-mcp", "args": [], "env": {}}}
+        # MCP config to give monitor access to send_message_to_session via HTTP transport
+        config = load_config()
+        mcp_port = config.get("mcp_port", 8765)
+        mcp_config = {
+            "cerb-subagent": {
+                "type": "http",
+                "url": f"http://127.0.0.1:{mcp_port}/mcp",
+            }
+        }
 
         options = ClaudeAgentOptions(
             cwd=self.session.work_path,
