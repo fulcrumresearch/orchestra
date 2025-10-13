@@ -422,6 +422,7 @@ class UnifiedApp(App):
         self.state.file_watcher.add_designer_watcher(designer_md, session)
 
         if not respawn_pane_with_vim(designer_md):
+            self.status_indicator.update("❌ No editor found. Install nano, vim, or VS Code")
             logger.error(f"Failed to open spec: {designer_md}")
 
     def action_open_terminal(self) -> None:
