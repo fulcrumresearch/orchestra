@@ -92,21 +92,6 @@ def get_transcripts(log_dir: Path) -> list[dict]:
     return log_files
 
 
-def filter_log_lines(lines: list[str], search_term: str = "", log_level: str = "All") -> list[str]:
-    """Filter log lines based on search term and log level"""
-    filtered = lines
-
-    # Filter by log level
-    if log_level != "All":
-        filtered = [line for line in filtered if f"[{log_level}]" in line]
-
-    # Filter by search term
-    if search_term:
-        filtered = [line for line in filtered if search_term.lower() in line.lower()]
-
-    return filtered
-
-
 def parse_jsonl_transcript(file_path: Path) -> list[dict]:
     """Parse JSONL transcript file and return a list of conversation items"""
     items = []
@@ -268,55 +253,6 @@ def display_jsonl_transcript(file_path: Path, search_term: str = "", date_filter
         st.info("No messages match your search criteria")
 
 
-def display_conversation_history(conversation_data: dict, search_term: str = ""):
-    """Display legacy JSON conversation history in a readable format"""
-
-    # Extract projects from the conversation data
-    projects = conversation_data.get("projects", {})
-
-    if not projects:
-        st.info("No conversation history found in this file")
-        return
-
-    # Display each project's conversation
-    for project_path, project_data in projects.items():
-        with st.expander(f"📁 {project_path}", expanded=True):
-            history = project_data.get("history", [])
-
-            if not history:
-                st.info("No conversation history")
-                continue
-
-            st.caption(f"{len(history)} prompts in history")
-
-            # Display each prompt in the history
-            for idx, prompt_entry in enumerate(history):
-                # Try both "display" and "prompt" fields (different Claude versions may use different fields)
-                prompt = prompt_entry.get("display", prompt_entry.get("prompt", ""))
-
-                # Skip empty prompts
-                if not prompt or not prompt.strip():
-                    continue
-
-                # Apply search filter if provided
-                if search_term and search_term.lower() not in prompt.lower():
-                    continue
-
-                # Display the user prompt
-                st.markdown(f"**Prompt {idx + 1}:**")
-
-                # Truncate long prompts for display
-                if len(prompt) > 500:
-                    with st.expander(f"View prompt (first 500 chars)"):
-                        st.text(prompt[:500] + "...")
-                        if st.button(f"Show full prompt {idx + 1}", key=f"show_full_{idx}"):
-                            st.text(prompt)
-                else:
-                    st.text(prompt)
-
-                st.divider()
-
-
 def run_app(log_dir: Path):
     """Main streamlit app function"""
     st.set_page_config(
@@ -333,123 +269,64 @@ def run_app(log_dir: Path):
     # Display manifest info at the top
     if manifest:
         st.subheader("Collection Info")
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Timestamp", manifest.get("timestamp", "Unknown"))
         with col2:
             st.metric("Project", manifest.get("project_name", "Unknown"))
         with col3:
-            total_files = manifest.get("summary", {}).get("total_files", 0)
-            st.metric("Total Files", total_files)
-        with col4:
-            total_size = manifest.get("summary", {}).get("total_size_mb", 0)
-            st.metric("Total Size", f"{total_size:.2f} MB")
+            transcripts = manifest.get("transcripts", [])
+            st.metric("Transcripts", len(transcripts))
 
         st.divider()
     else:
         st.warning("No manifest.json found in log directory")
 
-    # Sidebar for category selection
-    st.sidebar.header("Log Categories")
+    # Get all transcripts
+    transcripts = get_transcripts(log_dir)
 
-    categories = ["Main Session", "Shared Logs", "System Logs", "Executor Logs", "Conversation History"]
-    selected_category = st.sidebar.radio("Select Category", categories)
-
-    # Get log files in selected category
-    log_files = get_log_files_in_category(log_dir, selected_category)
-
-    if not log_files:
-        st.info(f"No log files found in {selected_category}")
+    if not transcripts:
+        st.info("No transcripts found in this log directory")
         return
 
-    # Show executor session info if viewing executor logs
-    if selected_category == "Executor Logs" and manifest:
-        executors = manifest.get("executors", {})
-        if executors:
-            st.sidebar.subheader("Executor Sessions")
-            for session_id, info in executors.items():
-                with st.sidebar.expander(f"📋 {session_id}"):
-                    st.text(f"Task: {info.get('task', 'Unknown')}")
-                    st.text(f"Files: {info.get('file_count', 0)}")
+    # Sidebar for transcript selection
+    st.sidebar.header("Select Transcript")
 
-    # File selection
-    st.sidebar.header("Select Log File")
-
-    # Use display_name if available, otherwise fall back to name
-    log_options = []
-    for log in log_files:
-        display = log.get('display_name', log['name'])
-        size_kb = log['size'] / 1024
-        log_options.append(f"{display} ({size_kb:.1f} KB)")
+    # Build transcript options for the dropdown
+    transcript_options = []
+    for t in transcripts:
+        display = t.get('display_name', t['name'])
+        size_kb = t['size'] / 1024
+        transcript_options.append(f"{display} ({size_kb:.1f} KB)")
 
     selected_index = st.sidebar.selectbox(
-        "Log file",
-        range(len(log_options)),
-        format_func=lambda x: log_options[x]
+        "Transcript",
+        range(len(transcript_options)),
+        format_func=lambda x: transcript_options[x]
     )
 
-    selected_log = log_files[selected_index]
+    selected_transcript = transcripts[selected_index]
 
-    # Display log file info
+    # Display transcript info
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("File", selected_log["name"])
+        st.metric("File", selected_transcript["name"])
     with col2:
-        st.metric("Size", f"{selected_log['size'] / 1024:.1f} KB")
+        st.metric("Size", f"{selected_transcript['size'] / 1024:.1f} KB")
     with col3:
-        st.metric("Modified", selected_log["modified"].strftime("%Y-%m-%d %H:%M:%S"))
+        st.metric("Modified", selected_transcript["modified"].strftime("%Y-%m-%d %H:%M:%S"))
 
-    # Filter options
+    # Search filter
     st.sidebar.header("Filter Options")
     search_term = st.sidebar.text_input("Search text", "")
 
-    # Check if this is a conversation history file
-    file_type = selected_log.get("file_type")
-    is_conversation = file_type in ["json", "jsonl"]
-
-    if not is_conversation:
-        log_level = st.sidebar.selectbox("Log Level", ["All", "DEBUG", "INFO", "WARNING", "ERROR"])
-        tail_lines = st.sidebar.number_input("Tail lines (0 = all)", min_value=0, max_value=50000, value=1000)
-
     st.divider()
 
-    # Read and display log content
+    # Display the transcript
     try:
-        if file_type == "jsonl":
-            # Handle JSONL transcript files
-            display_jsonl_transcript(selected_log["path"], search_term)
-
-        elif file_type == "json":
-            # Handle legacy JSON conversation history files
-            with open(selected_log["path"], "r") as f:
-                conversation_data = json.load(f)
-
-            display_conversation_history(conversation_data, search_term)
-
-        else:
-            # Handle regular log files
-            with open(selected_log["path"], "r") as f:
-                content = f.read()
-
-            lines = content.split('\n')
-
-            # Apply filters
-            filtered_lines = filter_log_lines(lines, search_term, log_level)
-
-            # Apply tail limit
-            if tail_lines > 0:
-                filtered_lines = filtered_lines[-tail_lines:]
-
-            filtered_content = '\n'.join(filtered_lines)
-
-            # Display in a code block
-            st.code(filtered_content, language="log", line_numbers=False)
-
-            # Show stats
-            st.caption(f"Showing {len(filtered_lines)} of {len(lines)} total lines")
-
+        display_jsonl_transcript(selected_transcript["path"], search_term)
     except Exception as e:
-        st.error(f"Error reading log file: {e}")
+        st.error(f"Error reading transcript: {e}")
 
 
 def main():
