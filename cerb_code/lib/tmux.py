@@ -195,8 +195,7 @@ def build_new_session_with_window_cmd(session_id: str, window_name: str) -> list
         Command array ready for execution
     """
     return _build_tmux_cmd(
-        "new-session", "-d", "-s", session_id, "-n", window_name, ";",
-        "set-option", "-t", session_id, "status", "off"
+        "new-session", "-d", "-s", session_id, "-n", window_name, ";", "set-option", "-t", session_id, "status", "off"
     )
 
 
@@ -220,10 +219,7 @@ def build_bind_key_cmd(key: str, *command_args: str, prefix: bool = True) -> lis
 
 
 def build_split_window_cmd(
-    target: str = None,
-    horizontal: bool = False,
-    before: bool = False,
-    size: int = None
+    target: str = None, horizontal: bool = False, before: bool = False, size: int = None
 ) -> list[str]:
     """Build command to split a window.
 
