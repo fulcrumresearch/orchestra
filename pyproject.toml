@@ -1,5 +1,5 @@
 [project]
-name = "orchestra"
+name = "orchestra-code"
 version = "0.1.19"
 description = "Terminal UI for managing multiple Claude sessions with tmux"
 readme = "README.md"
@@ -15,8 +15,8 @@ dependencies = [
 ]
 
 [project.scripts]
-orchestra-setup = "cerb_code.runners.setup:main"
-orchestra = "orchestra.launch:main"
+orchestra-setup = "orchestra.runners.setup:main"
+orchestra = "orchestra.runners.launch:main"
 orchestra-ui = "orchestra.runners.maestro:main"
 maestro = "orchestra.runners.maestro:main"
 orchestra-monitor-server = "orchestra.backend.monitor:main"
