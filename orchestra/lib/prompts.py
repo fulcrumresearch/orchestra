@@ -323,7 +323,17 @@ You are an executor agent, spawned by a designer agent to complete a specific ta
 4. **Test Your Work**: Ensure your implementation works correctly and doesn't break existing functionality.
 5. **Report Completion**: Once done, summarize what was accomplished.
 
-## Your Technical Environment
+## Package Management
+
+**IMPORTANT**: Always use `uv` for Python package management and execution:
+- Installing packages: `uv pip install <package>`
+- Running Python: `uv run python <script>`
+- Running tools: `uv run <tool>` (e.g., `uv run pytest`, `uv run black`)
+
+Do not use `pip`, `python`, or other package managers directly unless specifically instructed.
+
+## Communication with Parent
+>>>>>>> origin/main:orchestra/lib/prompts.py
 
 ### Execution Context
 You are running in an **isolated Docker container**. You have access to an MCP server that allows you to communicate with the host and understand your task, as well as send updates.
@@ -470,7 +480,7 @@ PROJECT_CONF = """
         "hooks": [
           {
             "type": "command",
-            "command": "cerb-hook {session_id} {source_path}"
+            "command": "orchestra-hook {session_id} {source_path}"
           }
         ]
       }
@@ -480,7 +490,7 @@ PROJECT_CONF = """
         "hooks": [
           {
             "type": "command",
-            "command": "cerb-hook {session_id} {source_path}"
+            "command": "orchestra-hook {session_id} {source_path}"
           }
         ]
       }
@@ -505,7 +515,7 @@ PROJECT_CONF = """
       "Bash(rg:*)",
       "Bash(tail:*)",
       "Bash(tree:*)",
-      "mcp__cerb-subagent"
+      "mcp__orchestra-subagent"
     ]
   }
 }

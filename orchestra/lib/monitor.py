@@ -14,7 +14,7 @@ import time
 
 logger = get_logger(__name__)
 
-ALLOWED_TOOLS = ["Read", "Write", "Edit", "mcp__cerb-subagent__send_message_to_session"]
+ALLOWED_TOOLS = ["Read", "Write", "Edit", "mcp__orchestra-subagent__send_message_to_session"]
 PERMISSION_MODE = "acceptEdits"
 
 # Batch processing configuration
@@ -24,36 +24,40 @@ MAX_BATCH_WAIT = 20  # Never wait more than 5 seconds total
 
 SYSTEM_PROMPT_TEMPLATE = dedent(
     """
-    You are a monitoring subagent receiving structured HOOK events from Claude Code instances.
+    You are a monitoring subagent watching an executor agent's activity through hook events.
 
     **Session Being Monitored**: {session_id}
     **Agent Type**: {agent_type}
+    **Designer Session**: {parent_session_id}
 
-    Your job:
+    ## Your Role
 
-    - Understand the instructions given to the agent in instructions.md and how they interact with the codebase.
-    - Output information in realtime about the agent's progress, given the various hooks and codebase access.
-    - Do not execute commands. Do not run Bash or WebFetch unless explicitly asked. Only write to the monitor.md file.
-    - **IMPORTANT**: You can communicate with the session you're monitoring using the MCP tool `send_message_to_session`
+    ### 1. Coach the Executor (send_message_to_session to executor)
 
-    ## When to Send Messages
+    Send coaching messages for common mistakes:
+    - Running `python` instead of `uv run python`
+    - Running `pytest` instead of `uv run pytest`
+    - Forgetting to run tests after code changes
+    - Using wrong tool for the job
 
-    Use `send_message_to_session(session_id="{session_id}", message="...")` when you observe:
+    Example: `send_message_to_session(session_name="{session_id}", message="Remember to use 'uv run pytest' instead of 'pytest' to ensure correct dependency resolution.", source_path="{source_path}", sender_name="monitor")`
 
-    - **Spec violations**: Agent is deviating significantly from instructions.md
-    - **Confusion or incorrect approach**: Agent appears to be implementing something incorrectly
-    - **Critical issues**: Agent is about to or has made changes that could be problematic
-    - **Stuck or spinning**: Agent seems to be going in circles or not making progress
+    ### 2. Alert the Designer (send_message_to_session to designer)
 
-    Be direct but helpful in your messages. Don't send messages for minor issues or normal progress.
+    Send alerts about strategic issues:
+    - Executor changed approach significantly (started with A, switched to B)
+    - Executor is stuck or confused (repeated failures, going in circles)
+    - Spec violations or going off-track
+    - Critical issues that need designer attention
 
-    ## Structure of monitor.md Report
+    Example: `send_message_to_session(session_name="{parent_session_id}", message="Alert: {session_id} changed approach from REST API to GraphQL. Originally spec'd for REST.", source_path="{source_path}", sender_name="monitor")`
 
-    - **Current Status**: Describe what the agent is currently trying to do.
-    - **Summary of changes**: For each file, what did the agent do, what choices were made, how did they do it, how does the whole thing get structured.
-    - **Deviations from spec**: Detail potential choices the agent made that were not defined or were deviations from the spec given by the designer in the instructions file.
+    ## Key Principles
 
-    Don't make it too verbose, it should be definitely less than a page. Think of this as a realtime dashboard, not a log. We do not want to be constantly adding new info, keep it lean, useful and informative.
+    - **State lives in your head**: Use your conversation context to track what's happening
+    - **No file writing**: You communicate only via send_message_to_session
+
+    Read `@instructions.md` to understand what the executor is supposed to be doing.
     """
 ).strip()
 
@@ -83,17 +87,22 @@ class SessionMonitor:
         if self.client is not None:
             return
 
+        # Get parent session name if available
+        parent_session_id = getattr(self.session, 'parent_session_name', 'unknown')
+
         # Format system prompt with session info
         system_prompt = self.system_prompt_template.format(
             session_id=self.session.session_id,
             agent_type=self.session.agent_type.value if self.session.agent_type else "unknown",
+            parent_session_id=parent_session_id,
+            source_path=self.session.source_path,
         )
 
         # MCP config to give monitor access to send_message_to_session via HTTP transport
         config = load_config()
         mcp_port = config.get("mcp_port", 8765)
         mcp_config = {
-            "cerb-subagent": {
+            "orchestra-subagent": {
                 "type": "http",
                 "url": f"http://127.0.0.1:{mcp_port}/mcp",
             }
@@ -129,12 +138,8 @@ class SessionMonitor:
         self.queue.put_nowait(evt)
 
     async def _run(self) -> None:
-        # Ensure .orchestra directory exists
-        orchestra_dir = Path(self.session.work_path) / ".orchestra"
-        orchestra_dir.mkdir(exist_ok=True)
-
         await self.client.query(
-            f"Session online. Understand and update the .orchestra/monitor.md in the given format. Do NOT log every event, the whole point is to make this easier for the a human to understand what is going on."
+            "Monitor session started. Watch the executor's events and intervene only when necessary by coaching the executor or alerting the designer. Build understanding in your head."
         )
 
         async for chunk in self.client.receive_response():

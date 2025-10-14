@@ -1,4 +1,4 @@
-"""Global configuration for Cerberus"""
+"""Global configuration for Orchestra"""
 
 # Test pairing: Added comment to test pairing functionality
 
@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
-CONFIG_FILE = Path.home() / ".kerberos" / "config.json"
+CONFIG_FILE = Path.home() / ".orchestra" / "config.json"
 
 DEFAULT_CONFIG = {
     "use_docker": True,

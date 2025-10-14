@@ -328,7 +328,7 @@ class TmuxProtocol(AgentProtocol):
         mcp_url = f"http://localhost:{self.mcp_port}/mcp"
 
         # Create .mcp.json in the session's worktree
-        mcp_config = {"mcpServers": {"cerb-mcp": {"url": mcp_url, "type": "http"}}}
+        mcp_config = {"mcpServers": {"orchestra-mcp": {"url": mcp_url, "type": "http"}}}
 
         mcp_config_path = Path(session.work_path) / ".mcp.json"
         try:
@@ -344,7 +344,7 @@ class TmuxProtocol(AgentProtocol):
 
         settings_path = claude_dir / "settings.json"
         settings_config = {
-            "permissions": {"allow": ["mcp__cerb-mcp__spawn_subagent", "mcp__cerb-mcp__send_message_to_session"]}
+            "permissions": {"allow": ["mcp__orchestra-mcp__spawn_subagent", "mcp__orchestra-mcp__send_message_to_session"]}
         }
 
         try:

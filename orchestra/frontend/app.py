@@ -20,23 +20,22 @@ from textual.containers import Container, Horizontal
 from textual.binding import Binding
 
 # Import widgets from new locations
-from cerb_code.frontend.widgets.hud import HUD
-from cerb_code.frontend.widgets.diff_tab import DiffTab
-from cerb_code.frontend.widgets.monitor_tab import ModelMonitorTab
-from cerb_code.frontend.state import AppState
+from orchestra.frontend.widgets.hud import HUD
+from orchestra.frontend.widgets.diff_tab import DiffTab
+from orchestra.frontend.state import AppState
 
 # Import from lib
-from cerb_code.lib.sessions import (
+from orchestra.lib.sessions import (
     Session,
     AgentType,
     save_session,
     is_first_run,
     SESSIONS_FILE,
 )
-from cerb_code.lib.tmux_agent import TmuxProtocol
-from cerb_code.lib.logger import get_logger
-from cerb_code.lib.config import load_config
-from cerb_code.lib.helpers import (
+from orchestra.lib.tmux_agent import TmuxProtocol
+from orchestra.lib.logger import get_logger
+from orchestra.lib.config import load_config
+from orchestra.lib.helpers import (
     check_dependencies,
     get_current_branch,
     respawn_pane,
@@ -46,6 +45,7 @@ from cerb_code.lib.helpers import (
     ensure_orchestra_directory,
     PANE_AGENT,
 )
+from orchestra.lib.prompts import DESIGNER_MD_TEMPLATE
 
 logger = get_logger(__name__)
 
@@ -214,8 +214,6 @@ class UnifiedApp(App):
                 with TabbedContent(initial="diff-tab"):
                     with TabPane("Diff", id="diff-tab"):
                         yield DiffTab()
-                    with TabPane("Monitor", id="monitor-tab"):
-                        yield ModelMonitorTab()
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
@@ -460,9 +458,6 @@ class UnifiedApp(App):
 
         session.protocol.attach(session, target_pane=PANE_AGENT)
         self.hud.set_session(session.session_name)
-
-        monitor_tab = self.query_one(ModelMonitorTab)
-        monitor_tab.refresh_monitor()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle session selection from list when clicked"""

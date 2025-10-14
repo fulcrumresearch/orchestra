@@ -6,11 +6,11 @@ import re
 import subprocess
 import time
 
-from cerb_code.lib.tmux_agent import TmuxProtocol
+from orchestra.lib.tmux_agent import TmuxProtocol
 from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
 from .config import load_config
 
-SESSIONS_FILE = Path.home() / ".kerberos" / "sessions.json"
+SESSIONS_FILE = Path.home() / ".orchestra" / "sessions.json"
 
 
 def sanitize_session_name(name: str) -> str:
@@ -18,11 +18,11 @@ def sanitize_session_name(name: str) -> str:
     Replaces any character that's not alphanumeric, dash, or underscore with a dash.
     This handles spaces, apostrophes, colons, quotes, and other special characters."""
     # Replace any character that's not alphanumeric, dash, or underscore with a dash
-    name = re.sub(r'[^a-zA-Z0-9_-]', '-', name)
+    name = re.sub(r"[^a-zA-Z0-9_-]", "-", name)
     # Replace multiple consecutive dashes with single dash
-    name = re.sub(r'-+', '-', name)
+    name = re.sub(r"-+", "-", name)
     # Strip leading/trailing dashes
-    return name.strip('-')
+    return name.strip("-")
 
 
 class AgentType(Enum):
@@ -45,6 +45,7 @@ class Session:
         work_path: Optional[str] = None,
         active: bool = False,
         use_docker: Optional[bool] = None,
+        parent_session_name: Optional[str] = None,
     ):
         self.session_name = session_name
         self.agent_type = agent_type
@@ -53,6 +54,7 @@ class Session:
         self.active = active
         self.paired = False  # Runtime only, not persisted
         self.children: List[Session] = []
+        self.parent_session_name = parent_session_name
         # Default use_docker based on agent type: DESIGNER=False, EXECUTOR=True
         if use_docker is None:
             self.use_docker = agent_type == AgentType.EXECUTOR
@@ -95,16 +97,16 @@ class Session:
 
         prompt_template = AGENT_TEMPLATES[self.agent_type]
 
-        kerberos_md_path = claude_dir / "kerberos.md"
+        orchestra_md_path = claude_dir / "orchestra.md"
         formatted_prompt = prompt_template.format(
             session_name=self.session_name,
             work_path=self.work_path,
             source_path=self.source_path,
         )
-        kerberos_md_path.write_text(formatted_prompt)
+        orchestra_md_path.write_text(formatted_prompt)
 
         claude_md_path = claude_dir / "CLAUDE.md"
-        import_line = "@kerberos.md"
+        import_line = "@orchestra.md"
 
         existing_content = ""
         if claude_md_path.exists():
@@ -112,9 +114,9 @@ class Session:
 
         if import_line not in existing_content:
             if existing_content:
-                new_content = f"{existing_content}\n# Kerberos Session Configuration\n{import_line}\n"
+                new_content = f"{existing_content}\n# Orchestra Session Configuration\n{import_line}\n"
             else:
-                new_content = f"# Kerberos Session Configuration\n{import_line}\n"
+                new_content = f"# Orchestra Session Configuration\n{import_line}\n"
 
             claude_md_path.write_text(new_content)
 
@@ -126,6 +128,7 @@ class Session:
             "source_path": self.source_path,
             "work_path": self.work_path,
             "use_docker": self.use_docker,
+            "parent_session_name": self.parent_session_name,
             "children": [child.to_dict() for child in self.children],
         }
 
@@ -139,6 +142,7 @@ class Session:
             work_path=data.get("work_path"),
             active=data.get("active", False),
             use_docker=data.get("use_docker"),
+            parent_session_name=data.get("parent_session_name"),
         )
         # Recursively load children (each creates its own protocol)
         session.children = [cls.from_dict(child_data) for child_data in data.get("children", [])]
@@ -161,7 +165,7 @@ class Session:
 
         # Executor uses worktree
         source_dir_name = Path(self.source_path).name
-        worktree_base = Path.home() / ".kerberos" / "worktrees" / source_dir_name
+        worktree_base = Path.home() / ".orchestra" / "worktrees" / source_dir_name
         self.work_path = str(worktree_base / self.session_id)
 
         if Path(self.work_path).exists():
@@ -220,6 +224,7 @@ class Session:
             agent_type=AgentType.EXECUTOR,
             source_path=self.work_path,  # Child's source is parent's work directory
             use_docker=executor_use_docker,  # Use config value
+            parent_session_name=self.session_name,
         )
 
         # Prepare the child session (creates its own worktree)
@@ -231,7 +236,7 @@ class Session:
 
         settings_path = claude_dir / "settings.json"
         # PROJECT_CONF is already a JSON string, just replace the placeholders
-        settings_json = PROJECT_CONF.replace("{session_id}", new_session.session_name).replace("{source_path}", self.source_path)
+        settings_json = PROJECT_CONF.replace("{session_id}", new_session.session_id).replace("{source_path}", self.source_path)
         settings_path.write_text(settings_json)
 
         instructions_path = Path(new_session.work_path) / "instructions.md"
@@ -370,9 +375,10 @@ def save_session(session: Session, project_dir: Optional[Path] = None) -> None:
 
 
 def find_session(sessions: List[Session], session_name: str) -> Optional[Session]:
-    """Find a session by name (searches recursively through children)"""
+    """Find a session by name or session_id (searches recursively through children)"""
     for session in sessions:
-        if session.session_name == session_name:
+        # Match by either session_name or session_id
+        if session.session_name == session_name or session.session_id == session_name:
             return session
         # Search in children
         child_result = find_session(session.children, session_name)

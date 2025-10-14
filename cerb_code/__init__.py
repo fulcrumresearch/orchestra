@@ -1,1 +1,0 @@
-# Cerb/Kerberos library package
