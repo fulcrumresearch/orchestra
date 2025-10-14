@@ -1,20 +1,327 @@
 #!/usr/bin/env python3
 """Launcher for Cerb's tmux workspace."""
 
+import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from .lib.tmux import TMUX_SOCKET, build_tmux_cmd, run_local_tmux_command
+from .lib.helpers import ensure_docker_image, ensure_shared_claude_config
+from .lib.tmux_agent import TmuxProtocol
+from .lib.sessions import Session
 
 
 TMUX_BIN = shutil.which("tmux") or "tmux"
 
 
+def setup_mode() -> int:
+    """Run interactive setup for Cerb"""
+    print("\n" + "=" * 60)
+    print("  Welcome to Cerb Setup!")
+    print("=" * 60)
+    print("\nThis setup will guide you through:")
+    print("  1. Checking required dependencies")
+    print("  2. Configuring Docker for sub-agents (optional)")
+    print("  3. Setting up Claude API authentication")
+    print()
+
+    # Step 1: Check dependencies
+    print("Step 1: Checking dependencies...")
+    print("-" * 60)
+
+    missing_deps = []
+    required_deps = {
+        "tmux": "tmux (install with: apt install tmux / brew install tmux)",
+        "python3": "python3 (install from: https://www.python.org/downloads/)",
+        "node": "node (install from: https://nodejs.org/)",
+        "npm": "npm (install from: https://nodejs.org/)",
+        "claude": "claude CLI (install with: npm install -g @anthropic-ai/claude-code)",
+    }
+
+    for cmd, desc in required_deps.items():
+        if shutil.which(cmd):
+            print(f"  ✓ {cmd} found")
+        else:
+            print(f"  ✗ {cmd} NOT found")
+            missing_deps.append(desc)
+
+    # Check docker separately (optional)
+    docker_available = False
+    docker_daemon_running = False
+    if shutil.which("docker"):
+        print(f"  ✓ docker found")
+        docker_available = True
+        # Check if daemon is running
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            print(f"  ✓ docker daemon running")
+            docker_daemon_running = True
+        else:
+            print(f"  ✗ docker daemon NOT running (start docker service)")
+            missing_deps.append("docker daemon (not running - start docker service)")
+    else:
+        print(f"  ✗ docker NOT found (optional, needed for Docker mode)")
+
+    if missing_deps:
+        print("\n⚠️  Missing required dependencies:")
+        for dep in missing_deps:
+            print(f"    - {dep}")
+        print("\nPlease install missing dependencies and run setup again.")
+        return 1
+
+    print("\n✓ All required dependencies found!")
+
+    # Step 2: Docker setup
+    print("\n" + "=" * 60)
+    print("Step 2: Docker Configuration")
+    print("-" * 60)
+
+    use_docker = False
+    if docker_available and docker_daemon_running:
+        while True:
+            response = input("\nDo you want to use Docker for sub-agents? (y/n): ").strip().lower()
+            if response in ['y', 'yes']:
+                use_docker = True
+                break
+            elif response in ['n', 'no']:
+                use_docker = False
+                break
+            else:
+                print("Please enter 'y' or 'n'")
+    else:
+        print("\n⚠️  Docker is not available. Sub-agents will run locally.")
+        use_docker = False
+
+    if use_docker:
+        print("\n✓ Docker mode selected")
+        print("\nChecking for cerb-image...")
+
+        # Check if image exists
+        result = subprocess.run(
+            ["docker", "images", "-q", "cerb-image"],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.stdout.strip():
+            print("  ✓ cerb-image already exists")
+        else:
+            print("  ⚠️  cerb-image not found, building now...")
+            print("     This may take a few minutes...")
+            try:
+                ensure_docker_image()
+                print("  ✓ cerb-image built successfully!")
+            except Exception as e:
+                print(f"\n✗ Failed to build Docker image: {e}")
+                return 1
+
+        # Step 3: Shared Claude Configuration (Docker only)
+        print("\n" + "=" * 60)
+        print("Step 3: Shared Claude Configuration")
+        print("-" * 60)
+
+        # Create shared Claude config directory
+        shared_claude_dir = Path.home() / ".kerberos" / "shared-claude"
+        shared_claude_json = Path.home() / ".kerberos" / "shared-claude.json"
+
+        print("\nCreating shared Claude configuration...")
+        print(f"  Location: {shared_claude_dir}")
+
+        # Use default MCP port (will be configured when containers start)
+        ensure_shared_claude_config(shared_claude_dir, shared_claude_json, mcp_port=8765)
+        print("  ✓ Shared Claude config created")
+
+        # Step 4: Claude API Authentication (Docker only)
+        print("\n" + "=" * 60)
+        print("Step 4: Claude API Authentication")
+        print("-" * 60)
+
+        is_macos = platform.system() == "Darwin"
+
+        if is_macos:
+            # macOS: Must authenticate inside container using existing session infrastructure
+            print("\n⚠️  You're on macOS - authentication must be done inside a Docker container.")
+            print("\nHere's how this works:")
+            print("  1. We'll start a temporary Claude session in a container")
+            print("  2. You'll be attached to the session automatically")
+            print("  3. Complete the authentication flow when Claude prompts you")
+            print("  4. Exit Claude when done (Ctrl+D or /exit)")
+            print("\nThe authentication will be saved and shared with all sub-agents.")
+
+            while True:
+                response = input("\nReady to start authentication session? (y/n): ").strip().lower()
+                if response in ['y', 'yes']:
+                    break
+                elif response in ['n', 'no']:
+                    print("\nAuthentication is required for Cerb to work.")
+                    print("Please run setup again when ready.")
+                    return 1
+                else:
+                    print("Please enter 'y' or 'n'")
+
+            print("\nStarting authentication session...")
+
+            # Create a temporary session for authentication
+            temp_work_dir = tempfile.mkdtemp(prefix="cerb-setup-")
+            session_id = "setup-auth"
+
+            # Create a temporary session object
+            session = Session(
+                session_id=session_id,
+                session_name="Setup Authentication",
+                source_path=temp_work_dir,
+                work_path=temp_work_dir,
+                session_type="executor",
+                paired=False
+            )
+
+            # Create TmuxProtocol in Docker mode
+            protocol = TmuxProtocol(default_command="claude", mcp_port=8765, use_docker=True)
+
+            print("  - Starting container...")
+            if not protocol.start(session):
+                print("\n✗ Failed to start authentication session")
+                return 1
+
+            print("  ✓ Session started")
+            print("\n" + "=" * 60)
+            print("  Launching Interactive Claude Session")
+            print("=" * 60)
+            print("\nYou'll now be attached to Claude inside the container.")
+            print("Complete the authentication when prompted, then exit Claude.")
+            print("\nPress Enter to continue...")
+            input()
+
+            # Attach to the session interactively (this blocks until user exits)
+            # We'll use docker exec directly to attach to stdin/stdout
+            from .lib.helpers import get_docker_container_name
+            container_name = get_docker_container_name(session_id)
+
+            attach_result = subprocess.run([
+                "docker", "exec", "-it",
+                container_name,
+                "tmux", "-L", "orchestra", "attach-session", "-t", session_id
+            ])
+
+            # Clean up the session
+            print("\n" + "=" * 60)
+            print("Cleaning up...")
+            protocol.delete(session)
+            shutil.rmtree(temp_work_dir, ignore_errors=True)
+
+            # Verify authentication
+            print("Verifying authentication...")
+            if shared_claude_json.exists():
+                try:
+                    with open(shared_claude_json, 'r') as f:
+                        config = json.load(f)
+                        if config and len(config) > 1:  # More than just mcpServers
+                            print("  ✓ Authentication successful!")
+                        else:
+                            print("  ⚠️  Authentication may not be complete")
+                            print("     You can re-run: cerb setup")
+                except Exception as e:
+                    print(f"  ⚠️  Could not verify: {e}")
+            else:
+                print("  ⚠️  Config file not found")
+                print("     You may need to re-run: cerb setup")
+
+        else:
+            # Linux: Can copy from host or use env var
+            print("\n⚠️  Checking authentication...")
+
+            # Check for API key in environment
+            if os.environ.get("ANTHROPIC_API_KEY"):
+                print("\n✓ ANTHROPIC_API_KEY found in environment")
+                print("  This will be passed to Docker containers automatically.")
+            else:
+                # Check if host has Claude auth
+                host_claude_json = Path.home() / ".claude.json"
+                if host_claude_json.exists():
+                    print("\n✓ Claude authentication found on host")
+                    print("  This has been copied to the shared config")
+                else:
+                    print("\n⚠️  No authentication found")
+                    print("\nYou have two options:")
+                    print("  1. Set ANTHROPIC_API_KEY environment variable")
+                    print("     Add to ~/.bashrc or ~/.zshrc:")
+                    print('     export ANTHROPIC_API_KEY="your-api-key-here"')
+                    print("\n  2. Login with Claude CLI on host:")
+                    print("     claude auth login")
+                    print("     (will be automatically copied to containers)")
+
+                    while True:
+                        response = input("\nHave you set up authentication? (y/n): ").strip().lower()
+                        if response in ['y', 'yes']:
+                            break
+                        elif response in ['n', 'no']:
+                            print("\nPlease set up authentication and run setup again.")
+                            return 1
+                        else:
+                            print("Please enter 'y' or 'n'")
+    else:
+        # Local mode
+        print("\n✓ Local mode selected")
+        print("\nIn local mode, sub-agents will use your host's Claude CLI configuration.")
+
+        # Check for Claude authentication
+        print("\n" + "=" * 60)
+        print("Step 3: Claude API Authentication")
+        print("-" * 60)
+
+        claude_config = Path.home() / ".claude.json"
+        if claude_config.exists():
+            print(f"\n✓ Claude config found at {claude_config}")
+        else:
+            print(f"\n⚠️  Claude config not found at {claude_config}")
+            print("\nPlease run: claude auth login")
+
+            while True:
+                response = input("\nHave you logged in? (y/n): ").strip().lower()
+                if response in ['y', 'yes']:
+                    if claude_config.exists():
+                        print("✓ Authentication successful!")
+                        break
+                    else:
+                        print("⚠️  Config file still not found. Please try again.")
+                elif response in ['n', 'no']:
+                    print("\nPlease login with 'claude auth login' and run setup again.")
+                    return 1
+                else:
+                    print("Please enter 'y' or 'n'")
+
+    # Final summary
+    print("\n" + "=" * 60)
+    print("  Setup Complete!")
+    print("=" * 60)
+    print("\nYour Cerb configuration:")
+    print(f"  - Mode: {'Docker' if use_docker else 'Local'}")
+    if use_docker:
+        print(f"  - Docker image: cerb-image")
+        print(f"  - Shared config: ~/.kerberos/shared-claude/")
+    print(f"  - Claude CLI: {shutil.which('claude')}")
+
+    print("\nYou're all set! Run 'cerb' to start using Cerb.")
+    print()
+
+    return 0
+
+
 def main() -> int:
     """Launch Cerb tmux workspace."""
+    # Check for setup command
+    if len(sys.argv) > 1 and sys.argv[1] == "setup":
+        return setup_mode()
+
     try:
         # Setup session names
         repo = Path.cwd().name.replace(" ", "-").replace(":", "-") or "workspace"
@@ -56,7 +363,12 @@ def main() -> int:
 
         # Get window width and calculate split
         result = run_local_tmux_command("display-message", "-t", target, "-p", "#{window_width}")
-        width = int(result.stdout.strip()) if result.returncode == 0 else 200
+        width = 200  # Default width
+        if result.returncode == 0 and result.stdout.strip():
+            try:
+                width = int(result.stdout.strip())
+            except ValueError:
+                pass  # Use default width if conversion fails
         left_size = max(width * 50 // 100, 1)
 
         # Create 3-pane layout
