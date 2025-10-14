@@ -375,9 +375,10 @@ def save_session(session: Session, project_dir: Optional[Path] = None) -> None:
 
 
 def find_session(sessions: List[Session], session_name: str) -> Optional[Session]:
-    """Find a session by name (searches recursively through children)"""
+    """Find a session by name or session_id (searches recursively through children)"""
     for session in sessions:
-        if session.session_name == session_name:
+        # Match by either session_name or session_id
+        if session.session_name == session_name or session.session_id == session_name:
             return session
         # Search in children
         child_result = find_session(session.children, session_name)
