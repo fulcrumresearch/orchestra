@@ -45,6 +45,7 @@ class Session:
         work_path: Optional[str] = None,
         active: bool = False,
         use_docker: Optional[bool] = None,
+        parent_session_name: Optional[str] = None,
     ):
         self.session_name = session_name
         self.agent_type = agent_type
@@ -53,6 +54,7 @@ class Session:
         self.active = active
         self.paired = False  # Runtime only, not persisted
         self.children: List[Session] = []
+        self.parent_session_name = parent_session_name
         # Default use_docker based on agent type: DESIGNER=False, EXECUTOR=True
         if use_docker is None:
             self.use_docker = agent_type == AgentType.EXECUTOR
@@ -126,6 +128,7 @@ class Session:
             "source_path": self.source_path,
             "work_path": self.work_path,
             "use_docker": self.use_docker,
+            "parent_session_name": self.parent_session_name,
             "children": [child.to_dict() for child in self.children],
         }
 
@@ -139,6 +142,7 @@ class Session:
             work_path=data.get("work_path"),
             active=data.get("active", False),
             use_docker=data.get("use_docker"),
+            parent_session_name=data.get("parent_session_name"),
         )
         # Recursively load children (each creates its own protocol)
         session.children = [cls.from_dict(child_data) for child_data in data.get("children", [])]
@@ -220,6 +224,7 @@ class Session:
             agent_type=AgentType.EXECUTOR,
             source_path=self.work_path,  # Child's source is parent's work directory
             use_docker=executor_use_docker,  # Use config value
+            parent_session_name=self.session_name,
         )
 
         # Prepare the child session (creates its own worktree)
