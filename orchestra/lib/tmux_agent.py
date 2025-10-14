@@ -105,17 +105,20 @@ class TmuxProtocol(AgentProtocol):
         )
 
         if result.returncode == 0:
-            # For executors in bypass mode, send Down arrow then Enter to accept bypass warning
-            time.sleep(2)  # Give Claude a moment to start
-            logger.info(f"Wait complete, now accepting prompts for {session.session_id}")
+            # Only send acceptance keys for executor sessions
+            # Designers should manually accept the trust prompt
+            if session.agent_type.value == "executor":
+                # For executors in bypass mode, send Down arrow then Enter to accept bypass warning
+                time.sleep(2)  # Give Claude a moment to start
+                logger.info(f"Wait complete, now accepting prompts for {session.session_id}")
 
-            # Send Down arrow to select "Yes, I accept" option
-            self._exec(session, ["tmux", "-L", "orchestra", "send-keys", "-t", f"{session.session_id}:0.0", "Down"])
-            time.sleep(0.2)
+                # Send Down arrow to select "Yes, I accept" option
+                self._exec(session, ["tmux", "-L", "orchestra", "send-keys", "-t", f"{session.session_id}:0.0", "Down"])
+                time.sleep(0.2)
 
-            # Send Enter to accept
-            session.send_message("")
-            logger.info(f"Sent acceptance keys to session {session.session_id}")
+                # Send Enter to accept
+                session.send_message("")
+                logger.info(f"Sent acceptance keys to session {session.session_id}")
 
         return result.returncode == 0
 
@@ -172,8 +175,8 @@ class TmuxProtocol(AgentProtocol):
         self,
         session: "Session",
         message: str,
-        max_retries: int = 3,
-        backoff: List[float] = None,
+        max_retries: int = 5,
+        backoff: List[float] = [0.5, 1.0, 2.0, 4.0, 8.0],
     ) -> bool:
         """
         Send a message to tmux session using paste buffer with retry logic and exponential backoff.
@@ -181,15 +184,12 @@ class TmuxProtocol(AgentProtocol):
         Args:
             session: Session object
             message: Message to send
-            max_retries: Maximum number of retries (default: 3)
-            backoff: List of backoff delays in seconds (default: [0.5, 1.0, 2.0])
+            max_retries: Maximum number of retries (default: 5)
+            backoff: List of backoff delays in seconds (default: [0.5, 1.0, 2.0, 4.0, 8.0])
 
         Returns:
             bool: True if successful, False otherwise
         """
-        if backoff is None:
-            backoff = [0.5, 1.0, 2.0]
-
         target = f"{session.session_id}:0.0"
 
         for attempt in range(max_retries + 1):

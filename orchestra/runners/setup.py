@@ -168,16 +168,15 @@ def main() -> int:
 
             # Create a temporary session for authentication
             temp_work_dir = tempfile.mkdtemp(prefix="orchestra-setup-")
-            session_id = "setup-auth"
+            from orchestra.lib.sessions import AgentType
 
             # Create a temporary session object
             session = Session(
-                session_id=session_id,
-                session_name="Setup Authentication",
+                session_name="setup-auth",
+                agent_type=AgentType.EXECUTOR,
                 source_path=temp_work_dir,
                 work_path=temp_work_dir,
-                session_type="executor",
-                paired=False
+                use_docker=True
             )
 
             # Create TmuxProtocol in Docker mode
@@ -198,12 +197,12 @@ def main() -> int:
             input()
 
             # Attach to the session interactively (this blocks until user exits)
-            container_name = get_docker_container_name(session_id)
+            container_name = get_docker_container_name(session.session_id)
 
             attach_result = subprocess.run([
                 "docker", "exec", "-it",
                 container_name,
-                "tmux", "-L", "orchestra", "attach-session", "-t", session_id
+                "tmux", "-L", "orchestra", "attach-session", "-t", session.session_id
             ])
 
             # Clean up the session
