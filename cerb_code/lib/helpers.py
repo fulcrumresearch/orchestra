@@ -413,7 +413,8 @@ def ensure_orchestra_in_gitignore(project_dir: Path) -> None:
 
 
 def ensure_orchestra_directory(project_dir: Path) -> tuple[Path, Path]:
-    """Ensure .orchestra/ directory exists with designer.md and doc.md templates
+    """Ensure .orchestra/ directory exists with designer.md and doc.md templates,
+    and add .orchestra/ to .gitignore if needed.
 
     Args:
         project_dir: Path to the project directory
@@ -422,6 +423,9 @@ def ensure_orchestra_directory(project_dir: Path) -> tuple[Path, Path]:
         Tuple of (designer_md_path, doc_md_path)
     """
     from .prompts import DESIGNER_MD_TEMPLATE, DOC_MD_TEMPLATE
+
+    # Ensure .orchestra/ is in .gitignore first
+    ensure_orchestra_in_gitignore(project_dir)
 
     orchestra_dir = project_dir / ".orchestra"
     orchestra_dir.mkdir(exist_ok=True)

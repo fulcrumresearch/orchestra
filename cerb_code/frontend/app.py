@@ -43,7 +43,6 @@ from cerb_code.lib.helpers import (
     respawn_pane_with_vim,
     respawn_pane_with_terminal,
     ensure_docker_image,
-    ensure_orchestra_in_gitignore,
     ensure_orchestra_directory,
     PANE_AGENT,
 )
@@ -220,9 +219,6 @@ class UnifiedApp(App):
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
-        # Ensure .orchestra/ is in .gitignore
-        ensure_orchestra_in_gitignore(self.state.project_dir)
-
         # Build docker image in background if needed
         config = load_config()
         if config.get("use_docker", True):
