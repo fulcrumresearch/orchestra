@@ -83,10 +83,15 @@ class SessionMonitor:
         if self.client is not None:
             return
 
+        # Get parent session name if available
+        parent_session_id = getattr(self.session, 'parent_session_name', 'unknown')
+
         # Format system prompt with session info
         system_prompt = self.system_prompt_template.format(
             session_id=self.session.session_id,
             agent_type=self.session.agent_type.value if self.session.agent_type else "unknown",
+            parent_session_id=parent_session_id,
+            source_path=self.session.source_path,
         )
 
         # MCP config to give monitor access to send_message_to_session via HTTP transport
@@ -129,12 +134,8 @@ class SessionMonitor:
         self.queue.put_nowait(evt)
 
     async def _run(self) -> None:
-        # Ensure .orchestra directory exists
-        orchestra_dir = Path(self.session.work_path) / ".orchestra"
-        orchestra_dir.mkdir(exist_ok=True)
-
         await self.client.query(
-            f"Session online. Understand and update the .orchestra/monitor.md in the given format. Do NOT log every event, the whole point is to make this easier for the a human to understand what is going on."
+            "Monitor session started. Watch the executor's events and intervene only when necessary by coaching the executor or alerting the designer. Build understanding in your head - inaction bias applies."
         )
 
         async for chunk in self.client.receive_response():
