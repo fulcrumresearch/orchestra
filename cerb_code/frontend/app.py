@@ -25,7 +25,6 @@ from textual.binding import Binding
 # Import widgets from new locations
 from cerb_code.frontend.widgets.hud import HUD
 from cerb_code.frontend.widgets.diff_tab import DiffTab
-from cerb_code.frontend.widgets.monitor_tab import ModelMonitorTab
 from cerb_code.frontend.state import AppState
 
 # Import from lib
@@ -217,8 +216,6 @@ class UnifiedApp(App):
                 with TabbedContent(initial="diff-tab"):
                     with TabPane("Diff", id="diff-tab"):
                         yield DiffTab()
-                    with TabPane("Monitor", id="monitor-tab"):
-                        yield ModelMonitorTab()
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
@@ -471,9 +468,6 @@ class UnifiedApp(App):
 
         session.protocol.attach(session, target_pane=PANE_AGENT)
         self.hud.set_session(session.session_name)
-
-        monitor_tab = self.query_one(ModelMonitorTab)
-        monitor_tab.refresh_monitor()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle session selection from list when clicked"""
