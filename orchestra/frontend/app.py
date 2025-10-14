@@ -3,10 +3,7 @@
 
 from __future__ import annotations
 import asyncio
-import subprocess
-import shutil
 from pathlib import Path
-import threading
 
 from textual.app import App, ComposeResult
 from textual.widgets import (
@@ -32,7 +29,6 @@ from orchestra.lib.sessions import (
     Session,
     AgentType,
     save_session,
-    SESSIONS_FILE,
 )
 from orchestra.lib.tmux_agent import TmuxProtocol
 from orchestra.lib.logger import get_logger
@@ -44,7 +40,9 @@ from orchestra.lib.helpers import (
     respawn_pane_with_vim,
     respawn_pane_with_terminal,
     ensure_docker_image,
-    ensure_orchestra_in_gitignore,
+    ensure_orchestra_directory,
+    is_first_run,
+    SESSIONS_FILE,
     PANE_AGENT,
 )
 from orchestra.lib.prompts import DESIGNER_MD_TEMPLATE
@@ -170,6 +168,7 @@ class UnifiedApp(App):
         Binding("ctrl+d", "delete_session", "Delete", priority=True),
         Binding("p", "toggle_pairing", "Toggle Pairing", priority=True, show=True),
         Binding("s", "open_spec", "Open Spec", priority=True),
+        Binding("m", "open_docs", "Open Docs", priority=True),
         Binding("t", "open_terminal", "Open Terminal", priority=True),
         Binding("enter", "select_session", "Select", show=False),
         Binding("up", "cursor_up", show=False),
@@ -218,13 +217,13 @@ class UnifiedApp(App):
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
-        # Ensure .orchestra/ is in .gitignore
-        ensure_orchestra_in_gitignore(self.state.project_dir)
-
         # Build docker image in background if needed
         config = load_config()
         if config.get("use_docker", True):
             asyncio.create_task(asyncio.to_thread(ensure_docker_image))
+
+        # Check if this is the first run BEFORE creating any sessions
+        first_run = is_first_run(self.state.project_dir)
 
         # Detect current git branch and store as fixed root
         branch_name = get_current_branch()
@@ -270,25 +269,18 @@ class UnifiedApp(App):
         self.state.file_watcher.register(SESSIONS_FILE, on_sessions_file_change)
         await self.state.file_watcher.start()
 
-        # Auto-open designer.md on startup (always in .orchestra directory)
-        orchestra_dir = self.state.project_dir / ".orchestra"
-        orchestra_dir.mkdir(exist_ok=True)
-        designer_md = orchestra_dir / "designer.md"
-
-        # Create designer.md with template if it doesn't exist
-        if not designer_md.exists():
-            try:
-                designer_md.write_text(DESIGNER_MD_TEMPLATE)
-                logger.info(f"Created designer.md with template at {designer_md}")
-            except Exception as e:
-                logger.error(f"Failed to create designer.md: {e}")
+        # Ensure .orchestra directory and files exist
+        designer_md, doc_md = ensure_orchestra_directory(self.state.project_dir)
 
         # Add watcher for designer.md (once root session is ready)
         if self.state.root_session:
             self.state.file_watcher.add_designer_watcher(designer_md, self.state.root_session)
 
-        # Auto-open the designer.md file
-        respawn_pane_with_vim(designer_md)
+        # Auto-open doc.md on first run, otherwise open designer.md
+        if first_run:
+            respawn_pane_with_vim(doc_md)
+        else:
+            respawn_pane_with_vim(designer_md)
 
     async def action_refresh(self) -> None:
         """Refresh the session list"""
@@ -424,18 +416,19 @@ class UnifiedApp(App):
 
     def action_open_spec(self) -> None:
         """Open designer.md in vim in a split tmux pane"""
-        # Always open designer.md from .orchestra directory
-        orchestra_dir = self.state.project_dir / ".orchestra"
-        orchestra_dir.mkdir(exist_ok=True)
-        designer_md = orchestra_dir / "designer.md"
-
-        if not designer_md.exists():
-            designer_md.write_text(DESIGNER_MD_TEMPLATE)
-            logger.info(f"Created designer.md with template at {designer_md}")
+        designer_md, _ = ensure_orchestra_directory(self.state.project_dir)
 
         if not respawn_pane_with_vim(designer_md):
             self.status_indicator.update("❌ No editor found. Install nano, vim, or VS Code")
             logger.error(f"Failed to open spec: {designer_md}")
+
+    def action_open_docs(self) -> None:
+        """Open doc.md in vim in a split tmux pane"""
+        _, doc_md = ensure_orchestra_directory(self.state.project_dir)
+
+        if not respawn_pane_with_vim(doc_md):
+            self.status_indicator.update("❌ No editor found. Install nano, vim, or VS Code")
+            logger.error(f"Failed to open docs: {doc_md}")
 
     def action_open_terminal(self) -> None:
         """Open bash terminal in the highlighted session's worktree in pane 1"""

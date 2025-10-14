@@ -15,6 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
+orchestra-setup = "cerb_code.runners.setup:main"
 orchestra = "orchestra.launch:main"
 orchestra-ui = "orchestra.runners.maestro:main"
 maestro = "orchestra.runners.maestro:main"

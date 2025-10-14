@@ -11,8 +11,12 @@ import shlex
 from pathlib import Path
 from .logger import get_logger
 from .tmux import build_respawn_pane_cmd
+from .prompts import DESIGNER_MD_TEMPLATE, DOC_MD_TEMPLATE
 
 logger = get_logger(__name__)
+
+# Sessions file path (shared constant)
+SESSIONS_FILE = Path.home() / ".orchestra" / "sessions.json"
 
 
 def check_dependencies(require_docker: bool = True) -> tuple[bool, list[str]]:
@@ -410,3 +414,61 @@ def ensure_orchestra_in_gitignore(project_dir: Path) -> None:
 
     gitignore_path.write_text(new_content)
     logger.info(f"Added .orchestra/ to {gitignore_path}")
+
+
+def ensure_orchestra_directory(project_dir: Path) -> tuple[Path, Path]:
+    """Ensure .orchestra/ directory exists with designer.md and doc.md templates,
+    and add .orchestra/ to .gitignore if needed.
+
+    Args:
+        project_dir: Path to the project directory
+
+    Returns:
+        Tuple of (designer_md_path, doc_md_path)
+    """
+    # Ensure .orchestra/ is in .gitignore first
+    ensure_orchestra_in_gitignore(project_dir)
+
+    orchestra_dir = project_dir / ".orchestra"
+    orchestra_dir.mkdir(exist_ok=True)
+
+    designer_md = orchestra_dir / "designer.md"
+    doc_md = orchestra_dir / "doc.md"
+
+    # Create designer.md with template if it doesn't exist
+    if not designer_md.exists():
+        designer_md.write_text(DESIGNER_MD_TEMPLATE)
+        logger.info(f"Created designer.md with template at {designer_md}")
+
+    # Create doc.md with template if it doesn't exist
+    if not doc_md.exists():
+        doc_md.write_text(DOC_MD_TEMPLATE)
+        logger.info(f"Created doc.md with template at {doc_md}")
+
+    return designer_md, doc_md
+
+
+def is_first_run(project_dir: Path | None = None) -> bool:
+    """Check if this is the first run for a project (no sessions in sessions.json)
+
+    Args:
+        project_dir: Path to the project directory. Defaults to current directory.
+
+    Returns:
+        True if no sessions exist for the project, False otherwise
+    """
+    if project_dir is None:
+        project_dir = Path.cwd()
+
+    project_dir_str = str(project_dir)
+
+    if not SESSIONS_FILE.exists():
+        return True
+
+    try:
+        with open(SESSIONS_FILE, "r") as f:
+            data = json.load(f)
+            project_sessions = data.get(project_dir_str, [])
+            return len(project_sessions) == 0
+    except (json.JSONDecodeError, KeyError):
+        return True

@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .lib.tmux import TMUX_SOCKET, build_tmux_cmd, run_local_tmux_command
+from orchestra.lib.tmux import TMUX_SOCKET, build_tmux_cmd, run_local_tmux_command
 
 
 TMUX_BIN = shutil.which("tmux") or "tmux"
@@ -56,7 +56,12 @@ def main() -> int:
 
         # Get window width and calculate split
         result = run_local_tmux_command("display-message", "-t", target, "-p", "#{window_width}")
-        width = int(result.stdout.strip()) if result.returncode == 0 else 200
+        width = 200  # Default width
+        if result.returncode == 0 and result.stdout.strip():
+            try:
+                width = int(result.stdout.strip())
+            except ValueError:
+                pass  # Use default width if conversion fails
         left_size = max(width * 50 // 100, 1)
 
         # Create 3-pane layout
