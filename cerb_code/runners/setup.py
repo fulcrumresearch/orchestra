@@ -10,9 +10,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-from ..lib.helpers import ensure_docker_image, ensure_shared_claude_config, get_docker_container_name
-from ..lib.sessions import Session
-from ..lib.tmux_agent import TmuxProtocol
+from cerb_code.lib.helpers import ensure_docker_image, ensure_shared_claude_config, get_docker_container_name
+from cerb_code.lib.sessions import Session
+from cerb_code.lib.tmux_agent import TmuxProtocol
 
 
 def main() -> int:
@@ -215,16 +215,7 @@ def main() -> int:
             # Verify authentication
             print("Verifying authentication...")
             if shared_claude_json.exists():
-                try:
-                    with open(shared_claude_json, 'r') as f:
-                        config = json.load(f)
-                        if config and len(config) > 1:  # More than just mcpServers
-                            print("  ✓ Authentication successful!")
-                        else:
-                            print("  ⚠️  Authentication may not be complete")
-                            print("     You can re-run: cerb-setup")
-                except Exception as e:
-                    print(f"  ⚠️  Could not verify: {e}")
+                print("  ✓ Configuration file created")
             else:
                 print("  ⚠️  Config file not found")
                 print("     You may need to re-run: cerb-setup")

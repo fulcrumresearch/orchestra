@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ..lib.tmux import TMUX_SOCKET, build_tmux_cmd, run_local_tmux_command
+from cerb_code.lib.tmux import TMUX_SOCKET, build_tmux_cmd, run_local_tmux_command
 
 
 TMUX_BIN = shutil.which("tmux") or "tmux"
