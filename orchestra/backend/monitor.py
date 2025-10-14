@@ -51,7 +51,7 @@ def get_session(session_id: str, source_path: str) -> Session:
     sessions = load_sessions(flat=True, project_dir=Path(source_path))
 
     for sess in sessions:
-        if sess.session_name == session_id:
+        if sess.session_id == session_id:
             return sess
 
     raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found in {source_path}")

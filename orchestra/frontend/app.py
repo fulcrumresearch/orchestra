@@ -25,7 +25,6 @@ from textual.binding import Binding
 # Import widgets from new locations
 from orchestra.frontend.widgets.hud import HUD
 from orchestra.frontend.widgets.diff_tab import DiffTab
-from orchestra.frontend.widgets.monitor_tab import ModelMonitorTab
 from orchestra.frontend.state import AppState
 
 # Import from lib
@@ -216,8 +215,6 @@ class UnifiedApp(App):
                 with TabbedContent(initial="diff-tab"):
                     with TabPane("Diff", id="diff-tab"):
                         yield DiffTab()
-                    with TabPane("Monitor", id="monitor-tab"):
-                        yield ModelMonitorTab()
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
@@ -468,9 +465,6 @@ class UnifiedApp(App):
 
         session.protocol.attach(session, target_pane=PANE_AGENT)
         self.hud.set_session(session.session_name)
-
-        monitor_tab = self.query_one(ModelMonitorTab)
-        monitor_tab.refresh_monitor()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle session selection from list when clicked"""
