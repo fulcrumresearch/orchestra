@@ -22,8 +22,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
 RUN npm install -g @anthropic-ai/claude-code
 
 # Copy and install hook forwarder script
-COPY runners/cerb-hook-forward.sh /usr/local/bin/cerb-hook
-RUN chmod +x /usr/local/bin/cerb-hook
+COPY runners/orchestra-hook-forward.sh /usr/local/bin/orchestra-hook
+RUN chmod +x /usr/local/bin/orchestra-hook
 
 # Create user with matching UID/GID
 RUN groupadd -g ${GROUP_ID} executor || true && \

@@ -6,11 +6,11 @@ import re
 import subprocess
 import time
 
-from cerb_code.lib.tmux_agent import TmuxProtocol
+from orchestra.lib.tmux_agent import TmuxProtocol
 from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
 from .config import load_config
 
-SESSIONS_FILE = Path.home() / ".kerberos" / "sessions.json"
+SESSIONS_FILE = Path.home() / ".orchestra" / "sessions.json"
 
 
 def sanitize_session_name(name: str) -> str:
@@ -18,11 +18,11 @@ def sanitize_session_name(name: str) -> str:
     Replaces any character that's not alphanumeric, dash, or underscore with a dash.
     This handles spaces, apostrophes, colons, quotes, and other special characters."""
     # Replace any character that's not alphanumeric, dash, or underscore with a dash
-    name = re.sub(r'[^a-zA-Z0-9_-]', '-', name)
+    name = re.sub(r"[^a-zA-Z0-9_-]", "-", name)
     # Replace multiple consecutive dashes with single dash
-    name = re.sub(r'-+', '-', name)
+    name = re.sub(r"-+", "-", name)
     # Strip leading/trailing dashes
-    return name.strip('-')
+    return name.strip("-")
 
 
 class AgentType(Enum):
@@ -95,16 +95,16 @@ class Session:
 
         prompt_template = AGENT_TEMPLATES[self.agent_type]
 
-        kerberos_md_path = claude_dir / "kerberos.md"
+        orchestra_md_path = claude_dir / "orchestra.md"
         formatted_prompt = prompt_template.format(
             session_name=self.session_name,
             work_path=self.work_path,
             source_path=self.source_path,
         )
-        kerberos_md_path.write_text(formatted_prompt)
+        orchestra_md_path.write_text(formatted_prompt)
 
         claude_md_path = claude_dir / "CLAUDE.md"
-        import_line = "@kerberos.md"
+        import_line = "@orchestra.md"
 
         existing_content = ""
         if claude_md_path.exists():
@@ -112,9 +112,9 @@ class Session:
 
         if import_line not in existing_content:
             if existing_content:
-                new_content = f"{existing_content}\n# Kerberos Session Configuration\n{import_line}\n"
+                new_content = f"{existing_content}\n# Orchestra Session Configuration\n{import_line}\n"
             else:
-                new_content = f"# Kerberos Session Configuration\n{import_line}\n"
+                new_content = f"# Orchestra Session Configuration\n{import_line}\n"
 
             claude_md_path.write_text(new_content)
 
@@ -161,7 +161,7 @@ class Session:
 
         # Executor uses worktree
         source_dir_name = Path(self.source_path).name
-        worktree_base = Path.home() / ".kerberos" / "worktrees" / source_dir_name
+        worktree_base = Path.home() / ".orchestra" / "worktrees" / source_dir_name
         self.work_path = str(worktree_base / self.session_id)
 
         if Path(self.work_path).exists():
@@ -231,7 +231,9 @@ class Session:
 
         settings_path = claude_dir / "settings.json"
         # PROJECT_CONF is already a JSON string, just replace the placeholders
-        settings_json = PROJECT_CONF.replace("{session_id}", new_session.session_name).replace("{source_path}", self.source_path)
+        settings_json = PROJECT_CONF.replace("{session_id}", new_session.session_name).replace(
+            "{source_path}", self.source_path
+        )
         settings_path.write_text(settings_json)
 
         instructions_path = Path(new_session.work_path) / "instructions.md"

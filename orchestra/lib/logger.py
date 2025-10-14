@@ -2,12 +2,12 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
-# Create ~/.kerberos directory if it doesn't exist
-LOG_DIR = Path.home() / ".kerberos"
+# Create ~/.orchestra directory if it doesn't exist
+LOG_DIR = Path.home() / ".orchestra"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Configure logging
-LOG_FILE = LOG_DIR / "kerberos.log"
+LOG_FILE = LOG_DIR / "orchestra.log"
 
 
 def get_logger(name: str) -> logging.Logger:
