@@ -303,7 +303,7 @@ wheels = [
 
 [[package]]
 name = "orchestra-code"
-version = "0.1.19"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "claude-agent-sdk" },

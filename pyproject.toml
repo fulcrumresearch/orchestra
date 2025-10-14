@@ -1,6 +1,6 @@
 [project]
 name = "orchestra-code"
-version = "0.1.19"
+version = "0.1.1"
 description = "Terminal UI for managing multiple Claude sessions with tmux"
 readme = "README.md"
 requires-python = ">=3.11"
