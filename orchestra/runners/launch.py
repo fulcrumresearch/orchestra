@@ -7,19 +7,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from cerb_code.lib.tmux import TMUX_SOCKET, build_tmux_cmd, run_local_tmux_command
+from orchestra.lib.tmux import TMUX_SOCKET, build_tmux_cmd, run_local_tmux_command
 
 
 TMUX_BIN = shutil.which("tmux") or "tmux"
 
 
 def main() -> int:
-<<<<<<<< HEAD:orchestra/runners/launch.py
-    """Launch Cerb tmux workspace."""
-
-========
     """Launch Orchestra tmux workspace."""
->>>>>>>> origin/main:orchestra/launch.py
     try:
         # Setup session names
         repo = Path.cwd().name.replace(" ", "-").replace(":", "-") or "workspace"

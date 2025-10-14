@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Interactive setup for Cerb."""
+"""Interactive setup for Orchestra."""
 
 import json
 import os
@@ -10,15 +10,15 @@ import sys
 import tempfile
 from pathlib import Path
 
-from cerb_code.lib.helpers import ensure_docker_image, ensure_shared_claude_config, get_docker_container_name
-from cerb_code.lib.sessions import Session
-from cerb_code.lib.tmux_agent import TmuxProtocol
+from orchestra.lib.helpers import ensure_docker_image, ensure_shared_claude_config, get_docker_container_name
+from orchestra.lib.sessions import Session
+from orchestra.lib.tmux_agent import TmuxProtocol
 
 
 def main() -> int:
-    """Run interactive setup for Cerb."""
+    """Run interactive setup for Orchestra."""
     print("\n" + "=" * 60)
-    print("  Welcome to Cerb Setup!")
+    print("  Welcome to Orchestra Setup!")
     print("=" * 60)
     print("\nThis setup will guide you through:")
     print("  1. Checking required dependencies")
@@ -99,23 +99,23 @@ def main() -> int:
 
     if use_docker:
         print("\n✓ Docker mode selected")
-        print("\nChecking for cerb-image...")
+        print("\nChecking for orchestra-image...")
 
         # Check if image exists
         result = subprocess.run(
-            ["docker", "images", "-q", "cerb-image"],
+            ["docker", "images", "-q", "orchestra-image"],
             capture_output=True,
             text=True,
         )
 
         if result.stdout.strip():
-            print("  ✓ cerb-image already exists")
+            print("  ✓ orchestra-image already exists")
         else:
-            print("  ⚠️  cerb-image not found, building now...")
+            print("  ⚠️  orchestra-image not found, building now...")
             print("     This may take a few minutes...")
             try:
                 ensure_docker_image()
-                print("  ✓ cerb-image built successfully!")
+                print("  ✓ orchestra-image built successfully!")
             except Exception as e:
                 print(f"\n✗ Failed to build Docker image: {e}")
                 return 1
@@ -158,7 +158,7 @@ def main() -> int:
                 if response in ['y', 'yes']:
                     break
                 elif response in ['n', 'no']:
-                    print("\nAuthentication is required for Cerb to work.")
+                    print("\nAuthentication is required for Orchestra to work.")
                     print("Please run setup again when ready.")
                     return 1
                 else:
@@ -167,7 +167,7 @@ def main() -> int:
             print("\nStarting authentication session...")
 
             # Create a temporary session for authentication
-            temp_work_dir = tempfile.mkdtemp(prefix="cerb-setup-")
+            temp_work_dir = tempfile.mkdtemp(prefix="orchestra-setup-")
             session_id = "setup-auth"
 
             # Create a temporary session object
@@ -218,7 +218,7 @@ def main() -> int:
                 print("  ✓ Configuration file created")
             else:
                 print("  ⚠️  Config file not found")
-                print("     You may need to re-run: cerb-setup")
+                print("     You may need to re-run: orchestra-setup")
 
         else:
             # Linux: Check for auth on host
@@ -286,14 +286,14 @@ def main() -> int:
     print("\n" + "=" * 60)
     print("  Setup Complete!")
     print("=" * 60)
-    print("\nYour Cerb configuration:")
+    print("\nYour Orchestra configuration:")
     print(f"  - Mode: {'Docker' if use_docker else 'Local'}")
     if use_docker:
-        print(f"  - Docker image: cerb-image")
+        print(f"  - Docker image: orchestra-image")
         print(f"  - Shared config: ~/.kerberos/shared-claude/")
     print(f"  - Claude CLI: {shutil.which('claude')}")
 
-    print("\nYou're all set! Run 'cerb' to start using Cerb.")
+    print("\nYou're all set! Run 'orchestra' to start using Orchestra.")
     print()
 
     return 0

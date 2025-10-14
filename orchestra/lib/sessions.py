@@ -385,22 +385,3 @@ def find_session(sessions: List[Session], session_name: str) -> Optional[Session
         if child_result:
             return child_result
     return None
-
-
-def is_first_run(project_dir: Optional[Path] = None) -> bool:
-    """Check if this is the first run for a project (no sessions in sessions.json)"""
-    if project_dir is None:
-        project_dir = Path.cwd()
-
-    project_dir_str = str(project_dir)
-
-    if not SESSIONS_FILE.exists():
-        return True
-
-    try:
-        with open(SESSIONS_FILE, "r") as f:
-            data = json.load(f)
-            project_sessions = data.get(project_dir_str, [])
-            return len(project_sessions) == 0
-    except (json.JSONDecodeError, KeyError):
-        return True

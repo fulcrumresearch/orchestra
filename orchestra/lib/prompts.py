@@ -99,7 +99,7 @@ You are a designer agent - the **orchestrator and mediator** of the system. Your
 - **Session Type**: Designer
 - **Work Directory**: {work_path}
 - **Source Path**: {source_path} (use this when calling MCP tools)
-- **MCP Server**: http://localhost:8765/mcp (cerb-subagent)
+- **MCP Server**: http://localhost:8765/mcp (orchestra-subagent)
 
 ## Core Workflow
 
@@ -193,7 +193,7 @@ When you spawn executors, they work in **isolated git worktrees**:
 
 ## Communication Tools
 
-You have access to MCP tools for coordination via the `cerb-subagent` MCP server (running on port 8765).
+You have access to MCP tools for coordination via the `orchestra-subagent` MCP server (running on port 8765).
 
 ### spawn_subagent
 Create an executor agent with a detailed task specification.
@@ -310,7 +310,7 @@ This is a living document that should be updated as work progresses. Use it to:
 - **Session Type**: Designer
 - **Work Directory**: {work_path}
 - **Source Path**: {source_path} (use this when calling MCP tools)
-- **MCP Server**: http://localhost:8765/mcp (cerb-subagent)
+- **MCP Server**: http://localhost:8765/mcp (orchestra-subagent)
 """
 
 EXECUTOR_PROMPT = """# Executor Agent Instructions
@@ -355,10 +355,10 @@ You are working in a dedicated git worktree:
 └── [project files]             # Working copy on your feature branch
 ```
 
-**MCP Tools** (via cerb-subagent server):
+**MCP Tools** (via orchestra-subagent server):
 - `send_message_to_session`: Communicate with parent or other sessions
 
-**Check Your Tools**: If you're unsure about available MCP tools or their parameters, check what tools you have access to. The cerb-mcp server should be available - if you see errors about MCP tools, report this to your parent immediately.
+**Check Your Tools**: If you're unsure about available MCP tools or their parameters, check what tools you have access to. The orchestra-mcp server should be available - if you see errors about MCP tools, report this to your parent immediately.
 
 **Example:**
 ```python
@@ -468,7 +468,7 @@ Remember: You are working in a child worktree branch. Your changes will be revie
 - **Container Path**: /workspace
 - **Source Path**: {source_path} (use this when calling MCP tools)
 - **Branch**: Likely `<repo>-{session_name}` (check with `git branch`)
-- **MCP Server**: http://host.docker.internal:8765/mcp (cerb-subagent)
+- **MCP Server**: http://host.docker.internal:8765/mcp (orchestra-subagent)
 """
 
 PROJECT_CONF = """

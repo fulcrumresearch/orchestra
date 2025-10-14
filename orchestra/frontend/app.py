@@ -29,8 +29,6 @@ from orchestra.lib.sessions import (
     Session,
     AgentType,
     save_session,
-    is_first_run,
-    SESSIONS_FILE,
 )
 from orchestra.lib.tmux_agent import TmuxProtocol
 from orchestra.lib.logger import get_logger
@@ -43,6 +41,8 @@ from orchestra.lib.helpers import (
     respawn_pane_with_terminal,
     ensure_docker_image,
     ensure_orchestra_directory,
+    is_first_run,
+    SESSIONS_FILE,
     PANE_AGENT,
 )
 from orchestra.lib.prompts import DESIGNER_MD_TEMPLATE
