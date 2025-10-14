@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launcher for Cerb's tmux workspace."""
+"""Interactive setup for Cerb."""
 
 import json
 import os
@@ -10,17 +10,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-from .lib.tmux import TMUX_SOCKET, build_tmux_cmd, run_local_tmux_command
-from .lib.helpers import ensure_docker_image, ensure_shared_claude_config
-from .lib.tmux_agent import TmuxProtocol
-from .lib.sessions import Session
+from ..lib.helpers import ensure_docker_image, ensure_shared_claude_config, get_docker_container_name
+from ..lib.sessions import Session
+from ..lib.tmux_agent import TmuxProtocol
 
 
-TMUX_BIN = shutil.which("tmux") or "tmux"
-
-
-def setup_mode() -> int:
-    """Run interactive setup for Cerb"""
+def main() -> int:
+    """Run interactive setup for Cerb."""
     print("\n" + "=" * 60)
     print("  Welcome to Cerb Setup!")
     print("=" * 60)
@@ -202,8 +198,6 @@ def setup_mode() -> int:
             input()
 
             # Attach to the session interactively (this blocks until user exits)
-            # We'll use docker exec directly to attach to stdin/stdout
-            from .lib.helpers import get_docker_container_name
             container_name = get_docker_container_name(session_id)
 
             attach_result = subprocess.run([
@@ -228,16 +222,16 @@ def setup_mode() -> int:
                             print("  ✓ Authentication successful!")
                         else:
                             print("  ⚠️  Authentication may not be complete")
-                            print("     You can re-run: cerb setup")
+                            print("     You can re-run: cerb-setup")
                 except Exception as e:
                     print(f"  ⚠️  Could not verify: {e}")
             else:
                 print("  ⚠️  Config file not found")
-                print("     You may need to re-run: cerb setup")
+                print("     You may need to re-run: cerb-setup")
 
         else:
-            # Linux: Can copy from host or use env var
-            print("\n⚠️  Checking authentication...")
+            # Linux: Check for auth on host
+            print("\nChecking authentication...")
 
             # Check for API key in environment
             if os.environ.get("ANTHROPIC_API_KEY"):
@@ -248,16 +242,14 @@ def setup_mode() -> int:
                 host_claude_json = Path.home() / ".claude.json"
                 if host_claude_json.exists():
                     print("\n✓ Claude authentication found on host")
-                    print("  This has been copied to the shared config")
+                    print("  This will be copied to the shared config for containers")
                 else:
                     print("\n⚠️  No authentication found")
-                    print("\nYou have two options:")
-                    print("  1. Set ANTHROPIC_API_KEY environment variable")
-                    print("     Add to ~/.bashrc or ~/.zshrc:")
-                    print('     export ANTHROPIC_API_KEY="your-api-key-here"')
-                    print("\n  2. Login with Claude CLI on host:")
-                    print("     claude auth login")
-                    print("     (will be automatically copied to containers)")
+                    print("\nPlease ensure you're authenticated with Claude CLI on your local system.")
+                    print("Your authentication will be automatically shared with Docker containers.")
+                    print("\nMake sure you have either:")
+                    print("  1. ANTHROPIC_API_KEY environment variable set")
+                    print("  2. Claude CLI authenticated (check with: claude)")
 
                     while True:
                         response = input("\nHave you set up authentication? (y/n): ").strip().lower()
@@ -283,18 +275,18 @@ def setup_mode() -> int:
             print(f"\n✓ Claude config found at {claude_config}")
         else:
             print(f"\n⚠️  Claude config not found at {claude_config}")
-            print("\nPlease run: claude auth login")
+            print("\nPlease ensure you're authenticated with Claude CLI.")
 
             while True:
-                response = input("\nHave you logged in? (y/n): ").strip().lower()
+                response = input("\nAre you authenticated with Claude CLI? (y/n): ").strip().lower()
                 if response in ['y', 'yes']:
                     if claude_config.exists():
                         print("✓ Authentication successful!")
                         break
                     else:
-                        print("⚠️  Config file still not found. Please try again.")
+                        print("⚠️  Config file still not found. Please verify your authentication.")
                 elif response in ['n', 'no']:
-                    print("\nPlease login with 'claude auth login' and run setup again.")
+                    print("\nPlease authenticate with Claude CLI and run setup again.")
                     return 1
                 else:
                     print("Please enter 'y' or 'n'")
@@ -314,100 +306,6 @@ def setup_mode() -> int:
     print()
 
     return 0
-
-
-def main() -> int:
-    """Launch Cerb tmux workspace."""
-    # Check for setup command
-    if len(sys.argv) > 1 and sys.argv[1] == "setup":
-        return setup_mode()
-
-    try:
-        # Setup session names
-        repo = Path.cwd().name.replace(" ", "-").replace(":", "-") or "workspace"
-        session = f"cerb-{repo}"
-        target = f"{session}:main"
-
-        # Kill old session
-        run_local_tmux_command("kill-session", "-t", session)
-
-        # Create new session with config
-        run_local_tmux_command(
-            "new-session",
-            "-d",
-            "-s",
-            session,
-            "-n",
-            "main",
-            ";",
-            "set",
-            "-t",
-            session,
-            "status",
-            "off",
-            ";",
-            "set",
-            "-t",
-            session,
-            "-g",
-            "mouse",
-            "on",
-            ";",
-            "bind-key",
-            "-n",
-            "C-s",
-            "select-pane",
-            "-t",
-            ":.+",
-        )
-
-        # Get window width and calculate split
-        result = run_local_tmux_command("display-message", "-t", target, "-p", "#{window_width}")
-        width = 200  # Default width
-        if result.returncode == 0 and result.stdout.strip():
-            try:
-                width = int(result.stdout.strip())
-            except ValueError:
-                pass  # Use default width if conversion fails
-        left_size = max(width * 50 // 100, 1)
-
-        # Create 3-pane layout
-        run_local_tmux_command("split-window", "-t", target, "-h", "-b", "-l", str(left_size))
-        run_local_tmux_command("split-window", "-t", f"{target}.0", "-v", "-l", "8")
-
-        # Initialize panes
-        run_local_tmux_command("send-keys", "-t", f"{target}.0", "cerb-ui", "C-m")
-        run_local_tmux_command("send-keys", "-t", f"{target}.1", "clear; echo 'Press s to open spec editor'; echo ''", "C-m")
-        run_local_tmux_command(
-            "send-keys",
-            "-t",
-            f"{target}.2",
-            "echo 'Claude sessions will appear here'; echo 'Use the left panel to create or select a session'",
-            "C-m",
-        )
-        run_local_tmux_command("select-pane", "-t", f"{target}.0")
-
-        # Attach (nested if inside tmux already)
-        if os.environ.get("TMUX"):
-            subprocess.run([TMUX_BIN, "new-window", "-n", f"cerb-{repo}"], check=True)
-            subprocess.run(
-                [
-                    TMUX_BIN,
-                    "send-keys",
-                    "-t",
-                    f"cerb-{repo}",
-                    f"TMUX= tmux -L {TMUX_SOCKET} attach-session -t {session}",
-                    "C-m",
-                ],
-                check=True,
-            )
-            return 0
-
-        return subprocess.run(build_tmux_cmd("attach-session", "-t", session)).returncode
-
-    except subprocess.CalledProcessError as e:
-        print(f"tmux error: {e.stderr or e}", file=sys.stderr)
-        return e.returncode or 1
 
 
 if __name__ == "__main__":
