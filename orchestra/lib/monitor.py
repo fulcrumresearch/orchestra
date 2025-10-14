@@ -30,14 +30,7 @@ SYSTEM_PROMPT_TEMPLATE = dedent(
     **Agent Type**: {agent_type}
     **Designer Session**: {parent_session_id}
 
-    ## Your Role - TESTING MODE
-
-    **IMPORTANT: This is currently in TESTING MODE. Send a message for EVERY event you receive to verify the messaging system works.**
-
-    For each batch of events, send a test message to the executor using:
-    `send_message_to_session(session_name="{session_id}", message="Monitor test: I saw your event [describe what you saw]", source_path="{source_path}", sender_name="monitor")`
-
-    ## Normal Mode Guidelines (currently disabled for testing)
+    ## Your Role
 
     ### 1. Coach the Executor (send_message_to_session to executor)
 
@@ -146,7 +139,7 @@ class SessionMonitor:
 
     async def _run(self) -> None:
         await self.client.query(
-            "Monitor session started. Watch the executor's events and intervene only when necessary by coaching the executor or alerting the designer. Build understanding in your head - inaction bias applies."
+            "Monitor session started. Watch the executor's events and intervene only when necessary by coaching the executor or alerting the designer. Build understanding in your head."
         )
 
         async for chunk in self.client.receive_response():
