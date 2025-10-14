@@ -23,21 +23,21 @@ from textual.containers import Container, Horizontal
 from textual.binding import Binding
 
 # Import widgets from new locations
-from cerb_code.frontend.widgets.hud import HUD
-from cerb_code.frontend.widgets.diff_tab import DiffTab
-from cerb_code.frontend.state import AppState
+from orchestra.frontend.widgets.hud import HUD
+from orchestra.frontend.widgets.diff_tab import DiffTab
+from orchestra.frontend.state import AppState
 
 # Import from lib
-from cerb_code.lib.sessions import (
+from orchestra.lib.sessions import (
     Session,
     AgentType,
     save_session,
     SESSIONS_FILE,
 )
-from cerb_code.lib.tmux_agent import TmuxProtocol
-from cerb_code.lib.logger import get_logger
-from cerb_code.lib.config import load_config
-from cerb_code.lib.helpers import (
+from orchestra.lib.tmux_agent import TmuxProtocol
+from orchestra.lib.logger import get_logger
+from orchestra.lib.config import load_config
+from orchestra.lib.helpers import (
     check_dependencies,
     get_current_branch,
     respawn_pane,
@@ -47,7 +47,7 @@ from cerb_code.lib.helpers import (
     ensure_orchestra_in_gitignore,
     PANE_AGENT,
 )
-from cerb_code.lib.prompts import DESIGNER_MD_TEMPLATE
+from orchestra.lib.prompts import DESIGNER_MD_TEMPLATE
 
 logger = get_logger(__name__)
 
@@ -186,7 +186,6 @@ class UnifiedApp(App):
         super().__init__()
         project_dir = Path.cwd().resolve()
         self.state = AppState(project_dir)
-
 
     def compose(self) -> ComposeResult:
         # Check dependencies based on config
@@ -460,9 +459,7 @@ class UnifiedApp(App):
         if not status.get("exists", False):
             if not session.start():
                 logger.error(f"Failed to start session: {session.session_id}")
-                error_cmd = (
-                    f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
-                )
+                error_cmd = f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
                 respawn_pane(PANE_AGENT, error_cmd)
                 return
 

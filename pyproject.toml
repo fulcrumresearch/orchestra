@@ -1,5 +1,5 @@
 [project]
-name = "cerb-code"
+name = "orchestra"
 version = "0.1.19"
 description = "Terminal UI for managing multiple Claude sessions with tmux"
 readme = "README.md"
@@ -15,18 +15,19 @@ dependencies = [
 ]
 
 [project.scripts]
-cerb = "cerb_code.launch:main"
-cerb-ui = "cerb_code.runners.kerberos:main"
-cerb-monitor-server = "cerb_code.backend.monitor:main"
-cerb-mcp = "cerb_code.backend.mcp_server:main"
-cerb-hook = "cerb_code.runners.hook_monitor:main"
+orchestra = "orchestra.launch:main"
+orchestra-ui = "orchestra.runners.maestro:main"
+maestro = "orchestra.runners.maestro:main"
+orchestra-monitor-server = "orchestra.backend.monitor:main"
+orchestra-mcp = "orchestra.backend.mcp_server:main"
+orchestra-hook = "orchestra.runners.hook_monitor:main"
 
 [tool.setuptools]
-packages = ["cerb_code", "cerb_code.lib", "cerb_code.runners", "cerb_code.backend", "cerb_code.frontend", "cerb_code.frontend.widgets"]
+packages = ["orchestra", "orchestra.lib", "orchestra.runners", "orchestra.backend", "orchestra.frontend", "orchestra.frontend.widgets"]
 
 [tool.setuptools.package-data]
-cerb_code = ["Dockerfile"]
-"cerb_code.runners" = ["cerb-hook-forward.sh"]
+orchestra = ["Dockerfile"]
+"orchestra.runners" = ["orchestra-hook-forward.sh"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

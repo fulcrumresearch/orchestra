@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Kerberos UI entry point - minimal launcher"""
+"""Orchestra UI entry point - minimal launcher"""
 
 import os
 import signal
 import subprocess
 from pathlib import Path
 
-from cerb_code.frontend.app import UnifiedApp
-from cerb_code.lib.logger import get_logger
-from cerb_code.lib.config import load_config
-from cerb_code.lib.tmux import build_tmux_cmd, execute_local
+from orchestra.frontend.app import UnifiedApp
+from orchestra.lib.logger import get_logger
+from orchestra.lib.config import load_config
+from orchestra.lib.tmux import build_tmux_cmd, execute_local
 
 logger = get_logger(__name__)
 
-# UnifiedApp is imported from cerb_code.frontend.app above
+# UnifiedApp is imported from orchestra.frontend.app above
 
 START_MONITOR = True
 
@@ -29,7 +29,7 @@ def main():
     mcp_port = config.get("mcp_port", 8765)
 
     # Start the MCP server in the background (HTTP transport)
-    mcp_log = Path.home() / ".kerberos" / "mcp-server.log"
+    mcp_log = Path.home() / ".orchestra" / "mcp-server.log"
     mcp_log.parent.mkdir(parents=True, exist_ok=True)
 
     logger.info(f"Starting MCP server on port {mcp_port}")
@@ -37,7 +37,7 @@ def main():
 
     with open(mcp_log, "w") as log_file:
         mcp_proc = subprocess.Popen(
-            ["cerb-mcp", str(mcp_port)],
+            ["orchestra-mcp", str(mcp_port)],
             stdout=log_file,
             stderr=log_file,
             start_new_session=True,
@@ -47,7 +47,7 @@ def main():
     # Start the monitoring server in the background
     if START_MONITOR:
         monitor_port = 8081
-        monitor_log = Path.home() / ".kerberos" / "monitor-server.log"
+        monitor_log = Path.home() / ".orchestra" / "monitor-server.log"
         monitor_log.parent.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"Starting monitor server on port {monitor_port}")
@@ -55,7 +55,7 @@ def main():
 
         with open(monitor_log, "w") as log_file:
             monitor_proc = subprocess.Popen(
-                ["cerb-monitor-server", str(monitor_port)],
+                ["orchestra-monitor-server", str(monitor_port)],
                 stdout=log_file,
                 stderr=log_file,
                 start_new_session=True,

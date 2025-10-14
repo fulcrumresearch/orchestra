@@ -1,4 +1,4 @@
-"""Helper utilities for kerberos"""
+"""Helper utilities for Orchestra"""
 
 import json
 import os
@@ -162,23 +162,23 @@ def respawn_pane_with_terminal(work_path: Path) -> bool:
 
 def get_docker_container_name(session_id: str) -> str:
     """Get Docker container name for a session"""
-    return f"cerb-{session_id}"
+    return f"orchestra-{session_id}"
 
 
 def ensure_docker_image() -> None:
     """Ensure Docker image exists, build if necessary"""
     # Check if image exists
     result = subprocess.run(
-        ["docker", "images", "-q", "cerb-image"],
+        ["docker", "images", "-q", "orchestra-image"],
         capture_output=True,
         text=True,
     )
 
     if not result.stdout.strip():
         # Image doesn't exist, build it
-        # Find Dockerfile in the cerb_code package
+        # Find Dockerfile in the orchestra package
         try:
-            dockerfile_path = resources.files("cerb_code") / "Dockerfile"
+            dockerfile_path = resources.files("orchestra") / "Dockerfile"
         except (ImportError, AttributeError):
             # Fallback for older Python or development mode
             dockerfile_path = Path(__file__).parent.parent / "Dockerfile"
@@ -190,7 +190,7 @@ def ensure_docker_image() -> None:
         uid = os.getuid()
         gid = os.getgid()
 
-        logger.info(f"Building Docker image cerb-image with USER_ID={uid}, GROUP_ID={gid}...")
+        logger.info(f"Building Docker image orchestra-image with USER_ID={uid}, GROUP_ID={gid}...")
         build_result = subprocess.run(
             [
                 "docker",
@@ -200,7 +200,7 @@ def ensure_docker_image() -> None:
                 "--build-arg",
                 f"GROUP_ID={gid}",
                 "-t",
-                "cerb-image",
+                "orchestra-image",
                 "-f",
                 str(dockerfile_path),
                 str(Path(dockerfile_path).parent),
@@ -246,8 +246,8 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
         mounts = ["-v", f"{work_path}:/workspace"]
 
         # Ensure shared Claude Code directory and config file exist
-        shared_claude_dir = Path.home() / ".kerberos" / "shared-claude"
-        shared_claude_json = Path.home() / ".kerberos" / "shared-claude.json"
+        shared_claude_dir = Path.home() / ".orchestra" / "shared-claude"
+        shared_claude_json = Path.home() / ".orchestra" / "shared-claude.json"
         ensure_shared_claude_config(shared_claude_dir, shared_claude_json, mcp_port)
 
         # Mount shared .claude directory and .claude.json for all executor agents
@@ -286,7 +286,7 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
             *mounts,
             "-w",
             "/workspace",
-            "cerb-image",
+            "orchestra-image",
             "tail",
             "-f",
             "/dev/null",
@@ -357,7 +357,7 @@ def ensure_shared_claude_config(shared_claude_dir: Path, shared_claude_json: Pat
             logger.info(f"Loaded config from host's .claude.json")
 
     # Inject MCP server configuration (HTTP transport)
-    config.setdefault("mcpServers", {})["cerb-mcp"] = {
+    config.setdefault("mcpServers", {})["orchestra-mcp"] = {
         "url": mcp_url,
         "type": "http",
     }
