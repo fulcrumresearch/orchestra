@@ -410,3 +410,33 @@ def ensure_orchestra_in_gitignore(project_dir: Path) -> None:
 
     gitignore_path.write_text(new_content)
     logger.info(f"Added .orchestra/ to {gitignore_path}")
+
+
+def ensure_orchestra_directory(project_dir: Path) -> tuple[Path, Path]:
+    """Ensure .orchestra/ directory exists with designer.md and doc.md templates
+
+    Args:
+        project_dir: Path to the project directory
+
+    Returns:
+        Tuple of (designer_md_path, doc_md_path)
+    """
+    from .prompts import DESIGNER_MD_TEMPLATE, DOC_MD_TEMPLATE
+
+    orchestra_dir = project_dir / ".orchestra"
+    orchestra_dir.mkdir(exist_ok=True)
+
+    designer_md = orchestra_dir / "designer.md"
+    doc_md = orchestra_dir / "doc.md"
+
+    # Create designer.md with template if it doesn't exist
+    if not designer_md.exists():
+        designer_md.write_text(DESIGNER_MD_TEMPLATE)
+        logger.info(f"Created designer.md with template at {designer_md}")
+
+    # Create doc.md with template if it doesn't exist
+    if not doc_md.exists():
+        doc_md.write_text(DOC_MD_TEMPLATE)
+        logger.info(f"Created doc.md with template at {doc_md}")
+
+    return designer_md, doc_md
