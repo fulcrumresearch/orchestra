@@ -19,6 +19,51 @@ DESIGNER_MD_TEMPLATE = """# Active Tasks
 [Freeform collaboration space between human and designer]
 """
 
+DOC_MD_TEMPLATE = """# Welcome to Cerb
+
+Cerb (previously Kerberos) is a multi-agent orchestration system for Claude Code that enables collaborative software development through designer and executor agents.
+
+## The Three-Pane Layout
+
+Cerb uses a three-pane interface in tmux:
+
+- **Left Pane (Session List)**: Shows your designer session and all spawned executor agents. Use arrow keys or `j`/`k` to navigate, and press Enter to select a session and view its Claude conversation.
+
+- **Middle Pane (Spec Editor)**: Your collaboration workspace with the designer agent. This is where `designer.md` opens by default - use it to plan tasks, track progress, and communicate requirements before spawning executors.
+
+- **Right Pane (Claude Session)**: Displays the active Claude conversation for the selected session. This is where you interact with the designer or watch executor agents work.
+
+## Key Commands
+
+- **`s`**: Open the spec editor (`designer.md`) to plan and discuss tasks with the designer
+- **`m`**: Open this documentation file
+- **`p`**: Toggle pairing mode to share your screen with the active session
+- **`t`**: Open a terminal in the selected session's work directory
+- **`Ctrl+r`**: Refresh the session list
+- **`Ctrl+d`**: Delete a selected executor session
+- **`Ctrl+q`**: Quit Cerb
+
+## The Designer/Executor Workflow
+
+Cerb uses a two-tier agent system:
+
+1. **Designer Agent**: The orchestrator that communicates with you, plans work, and spawns executor agents. It works directly in your main branch and uses `designer.md` for collaboration.
+
+2. **Executor Agents**: Implementation specialists spawned by the designer to complete specific tasks. Each executor works in its own git worktree branch, making changes that can be reviewed and merged back.
+
+**Typical workflow:**
+- Discuss your needs with the designer agent
+- Designer breaks down complex tasks and spawns executors with detailed instructions
+- Executors work autonomously in separate branches
+- Review executor changes and merge them back when approved
+
+## Getting Started
+
+You're all set! The designer agent is ready in the right pane. Start by describing what you'd like to build or improve, and the designer will help you plan and delegate the work.
+
+For more details, visit the Cerb documentation or explore `designer.md` to see how to collaborate with your designer agent.
+"""
+
 MERGE_CHILD_COMMAND = """---
 description: Merge changes from a child session into the current branch
 allowed_tools: ["Bash", "Task"]
