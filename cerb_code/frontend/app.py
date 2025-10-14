@@ -3,10 +3,7 @@
 
 from __future__ import annotations
 import asyncio
-import subprocess
-import shutil
 from pathlib import Path
-import threading
 
 from textual.app import App, ComposeResult
 from textual.widgets import (
@@ -187,7 +184,6 @@ class UnifiedApp(App):
         super().__init__()
         project_dir = Path.cwd().resolve()
         self.state = AppState(project_dir)
-
 
     def compose(self) -> ComposeResult:
         # Check dependencies based on config
@@ -463,9 +459,7 @@ class UnifiedApp(App):
         if not status.get("exists", False):
             if not session.start():
                 logger.error(f"Failed to start session: {session.session_id}")
-                error_cmd = (
-                    f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
-                )
+                error_cmd = f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
                 respawn_pane(PANE_AGENT, error_cmd)
                 return
 
