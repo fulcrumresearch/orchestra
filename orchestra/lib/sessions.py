@@ -4,7 +4,6 @@ from pathlib import Path
 import json
 import re
 import subprocess
-import time
 
 from orchestra.lib.tmux_agent import TmuxProtocol
 from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
@@ -76,9 +75,13 @@ class Session:
         combined = f"{dir_name}-{self.session_name}"
         return sanitize_session_name(combined)
 
-    def start(self) -> bool:
-        """Start the agent using the configured protocol"""
-        return self.protocol.start(self)
+    def start(self, initial_message: str = "") -> bool:
+        """Start the agent using the configured protocol
+
+        Args:
+            initial_message: Optional initial message to pass to the agent
+        """
+        return self.protocol.start(self, initial_message)
 
     def delete(self) -> bool:
         """Delete the session using the configured protocol"""
@@ -245,18 +248,18 @@ class Session:
         # Add to children
         self.children.append(new_session)
 
-        if not new_session.start():
-            raise RuntimeError(f"Failed to start child session {session_name}")
-
-        # Wait for Claude to be ready before sending instructions
-        time.sleep(1)
-
-        new_session.send_message(
+        # Build initial message to pass directly to claude command
+        initial_message = (
             f"[System] Please review your task instructions in @instructions.md, and then start implementing the task. "
             f"Your parent session name is: {self.session_name}. "
             f"Your source path is: {self.source_path}. "
             f'When you\'re done or need help, use: send_message_to_session(session_name="{self.session_name}", message="your summary/question here", source_path="{self.source_path}", sender_name="{new_session.session_name}")'
         )
+
+        if not new_session.start(initial_message=initial_message):
+            raise RuntimeError(f"Failed to start child session {session_name}")
+
+        # No need to wait or send message separately - it's passed to claude command directly
 
         return new_session
 

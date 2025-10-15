@@ -9,12 +9,13 @@ class AgentProtocol(ABC):
     """Abstract protocol for agent backends (TMux, SSH, Docker, etc.)"""
 
     @abstractmethod
-    def start(self, session: "Session") -> bool:
+    def start(self, session: "Session", initial_message: str = "") -> bool:
         """
         Start an agent for the given session.
 
         Args:
             session: Session object containing session_id and configuration
+            initial_message: Optional initial message to pass to the agent
 
         Returns:
             bool: True if agent started successfully, False otherwise

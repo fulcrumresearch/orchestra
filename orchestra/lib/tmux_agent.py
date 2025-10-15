@@ -60,12 +60,13 @@ class TmuxProtocol(AgentProtocol):
                 text=True,
             )
 
-    def start(self, session: "Session") -> bool:
+    def start(self, session: "Session", initial_message: str = "") -> bool:
         """
         Start a tmux session for the given Session object.
 
         Args:
             session: Session object containing session_id and configuration
+            initial_message: Optional initial message to pass to claude command
 
         Returns:
             bool: True if session started successfully, False otherwise
@@ -94,10 +95,19 @@ class TmuxProtocol(AgentProtocol):
         # Determine working directory
         work_dir = "/workspace" if self.use_docker else session.work_path
 
+        # Build command with optional initial message
+        if initial_message:
+            # Escape the message for shell execution
+            # Use single quotes and escape any single quotes in the message
+            escaped_message = initial_message.replace("'", "'\"'\"'")
+            command = f"{self.default_command} '{escaped_message}'"
+        else:
+            command = self.default_command
+
         # Create tmux session (works same way for both Docker and local)
         result = self._exec(
             session,
-            build_new_session_cmd(session.session_id, work_dir, self.default_command),
+            build_new_session_cmd(session.session_id, work_dir, command),
         )
 
         logger.info(
@@ -105,9 +115,9 @@ class TmuxProtocol(AgentProtocol):
         )
 
         if result.returncode == 0:
-            # Only send acceptance keys for executor sessions
-            # Designers should manually accept the trust prompt
-            if session.agent_type.value == "executor":
+            # Only send acceptance keys for executor sessions WITHOUT an initial message
+            # When initial_message is provided, it bypasses the trust prompt
+            if session.agent_type.value == "executor" and not initial_message:
                 # For executors in bypass mode, send Down arrow then Enter to accept bypass warning
                 time.sleep(2)  # Give Claude a moment to start
                 logger.info(f"Wait complete, now accepting prompts for {session.session_id}")
