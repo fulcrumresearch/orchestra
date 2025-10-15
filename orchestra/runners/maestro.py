@@ -2,7 +2,6 @@
 """Orchestra UI entry point - minimal launcher"""
 
 import os
-import signal
 import subprocess
 from pathlib import Path
 
@@ -10,10 +9,9 @@ from orchestra.frontend.app import UnifiedApp
 from orchestra.lib.logger import get_logger
 from orchestra.lib.config import load_config
 from orchestra.lib.tmux import build_tmux_cmd, execute_local
+from orchestra.lib.helpers import kill_process_gracefully
 
 logger = get_logger(__name__)
-
-# UnifiedApp is imported from orchestra.frontend.app above
 
 START_MONITOR = True
 
@@ -62,36 +60,28 @@ def main():
             )
         logger.info(f"Monitor server started with PID {monitor_proc.pid}")
 
-    try:
-        UnifiedApp().run()
-    finally:
-        # Clean up servers on exit
+    def cleanup_servers():
+        """Clean up background servers on exit"""
         logger.info("Shutting down MCP server")
-        try:
-            # Kill the process group since we used start_new_session=True
-            os.killpg(os.getpgid(mcp_proc.pid), signal.SIGTERM)
-            mcp_proc.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            os.killpg(os.getpgid(mcp_proc.pid), signal.SIGKILL)
-        except ProcessLookupError:
-            pass  # Process already gone
+        kill_process_gracefully(mcp_proc)
 
         if START_MONITOR:
             logger.info("Shutting down monitor server")
-            try:
-                # Kill the process group since we used start_new_session=True
-                os.killpg(os.getpgid(monitor_proc.pid), signal.SIGTERM)
-                monitor_proc.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                os.killpg(os.getpgid(monitor_proc.pid), signal.SIGKILL)
-            except ProcessLookupError:
-                pass  # Process already gone
+            kill_process_gracefully(monitor_proc)
 
-        # kill the tmux server
+        # Kill the tmux server
+        logger.info("Shutting down tmux server")
         try:
             execute_local(build_tmux_cmd("kill-server"))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Error killing tmux server: {e}")
+
+    try:
+        UnifiedApp(shutdown_callback=cleanup_servers).run()
+    except Exception as e:
+        logger.exception(f"Unexpected error: {e}")
+        cleanup_servers()
+        raise
 
 
 if __name__ == "__main__":

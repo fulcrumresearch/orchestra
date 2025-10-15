@@ -181,10 +181,11 @@ class UnifiedApp(App):
         Binding("l", "next_tab", show=False),
     ]
 
-    def __init__(self):
+    def __init__(self, shutdown_callback=None):
         super().__init__()
         project_dir = Path.cwd().resolve()
         self.state = AppState(project_dir)
+        self.shutdown_callback = shutdown_callback
 
     def compose(self) -> ComposeResult:
         # Check dependencies based on config
@@ -462,3 +463,15 @@ class UnifiedApp(App):
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle session selection from list when clicked"""
         self.action_select_session()
+
+    def action_quit(self) -> None:
+        """Override quit to show shutdown message and run cleanup"""
+        self.status_indicator.update("⏳ Quitting...")
+        logger.info("Shutting down Orchestra...")
+        asyncio.create_task(self._shutdown_task())
+
+    async def _shutdown_task(self) -> None:
+        """Perform shutdown cleanup before exiting"""
+        if self.shutdown_callback:
+            await asyncio.to_thread(self.shutdown_callback)
+        self.exit()

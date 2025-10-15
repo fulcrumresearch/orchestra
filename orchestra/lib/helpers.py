@@ -3,6 +3,7 @@
 import json
 import os
 import platform
+import signal
 import subprocess
 import importlib.resources as resources
 import shutil
@@ -17,6 +18,38 @@ logger = get_logger(__name__)
 
 # Sessions file path (shared constant)
 SESSIONS_FILE = Path.home() / ".orchestra" / "sessions.json"
+
+
+def kill_process_gracefully(proc: subprocess.Popen, timeout: int = 5) -> None:
+    """Kill a server process gracefully with SIGTERM, fallback to SIGKILL if needed.
+
+    Args:
+        proc: The subprocess.Popen process to kill
+        timeout: Seconds to wait for graceful shutdown (default: 5)
+
+    The function will:
+    1. Send SIGTERM to the process group
+    2. Wait up to timeout seconds for graceful shutdown
+    3. If timeout, send SIGKILL and wait indefinitely
+    4. Silently handle ProcessLookupError if process already gone
+    """
+    try:
+        pgid = os.getpgid(proc.pid)
+
+        # Try graceful shutdown with SIGTERM
+        os.killpg(pgid, signal.SIGTERM)
+        proc.wait(timeout=timeout)
+        logger.info(f"Process {proc.pid} terminated gracefully")
+
+    except subprocess.TimeoutExpired:
+        # Force kill if graceful shutdown times out
+        logger.warning(f"Process {proc.pid} did not terminate after {timeout}s, sending SIGKILL")
+        os.killpg(pgid, signal.SIGKILL)
+        proc.wait()  # Wait indefinitely for SIGKILL to complete
+        logger.info(f"Process {proc.pid} killed")
+
+    except ProcessLookupError:
+        logger.debug(f"Process {proc.pid} already gone")
 
 
 def check_dependencies(require_docker: bool = True) -> tuple[bool, list[str]]:
