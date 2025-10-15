@@ -17,9 +17,8 @@ DEFAULT_CONFIG = {
     "mcp_port": 8765,
 }
 
-# Default tmux configuration for agent sessions (inside Docker containers)
-DEFAULT_TMUX_CONF = """# Orchestra tmux configuration for agent sessions
-# This config is used inside Docker containers for executor/designer Claude sessions
+# Default tmux configuration for all Orchestra sessions
+DEFAULT_TMUX_CONF = """# Orchestra tmux configuration
 
 # Disable status bar
 set-option -g status off
@@ -36,8 +35,19 @@ set-option -g default-terminal "screen-256color"
 # Disable all default key bindings to avoid conflicts
 unbind-key -a
 
+# Ctrl+S for pane switching
+bind-key -n C-s select-pane -t :.+
+
+# Ctrl+\\ for detaching without killing session
+bind-key -n C-\\\\ detach-client
+
+# Re-enable mouse wheel scrolling bindings for copy mode
+bind-key -n WheelUpPane if-shell -F -t = "#{mouse_any_flag}" "send-keys -M" "if -Ft= '#{pane_in_mode}' 'send-keys -M' 'copy-mode -e; send-keys -M'"
+bind-key -n WheelDownPane select-pane -t= \\; send-keys -M
+
 # Copy mode usage:
 # Mouse wheel up to scroll
+# Press 'q' or Esc to exit copy mode
 """
 
 # Default tmux configuration for main layout (host tmux session)
@@ -53,12 +63,23 @@ set-option -g mouse on
 # Disable all default key bindings
 unbind-key -a
 
-# Only enable Ctrl+S for pane switching
+# Ctrl+S for pane switching
 bind-key -n C-s select-pane -t :.+
+
+# Ctrl+\\ for detaching without killing session
+bind-key -n C-\\\\ detach-client
+
+# Re-enable mouse wheel scrolling bindings for copy mode
+bind-key -n WheelUpPane if-shell -F -t = "#{mouse_any_flag}" "send-keys -M" "if -Ft= '#{pane_in_mode}' 'send-keys -M' 'copy-mode -e; send-keys -M'"
+bind-key -n WheelDownPane select-pane -t= \\; send-keys -M
 
 # Minimal pane border styling
 set-option -g pane-border-style fg=colour240
 set-option -g pane-active-border-style fg=colour33
+
+# Copy mode usage:
+# Mouse wheel up to scroll
+# Press 'q' or Esc to exit copy mode
 """
 
 def load_config() -> Dict[str, Any]:
@@ -99,17 +120,11 @@ def ensure_config_dir() -> Path:
         tmux_conf_path.write_text(DEFAULT_TMUX_CONF)
         logger.info(f"Created default tmux.conf at {tmux_conf_path}")
 
-    # Create tmux-main.conf if it doesn't exist
-    tmux_main_conf_path = config_dir / "tmux-main.conf"
-    if not tmux_main_conf_path.exists():
-        tmux_main_conf_path.write_text(DEFAULT_TMUX_MAIN_CONF)
-        logger.info(f"Created default tmux-main.conf at {tmux_main_conf_path}")
-
     return config_dir
 
 
 def get_tmux_config_path() -> Path:
-    """Get path to tmux.conf for agent sessions.
+    """Get path to tmux.conf for all Orchestra sessions.
 
     Ensures config directory exists before returning path.
 
@@ -118,15 +133,3 @@ def get_tmux_config_path() -> Path:
     """
     ensure_config_dir()
     return Path.home() / ".orchestra" / "config" / "tmux.conf"
-
-
-def get_tmux_main_config_path() -> Path:
-    """Get path to tmux-main.conf for main layout.
-
-    Ensures config directory exists before returning path.
-
-    Returns:
-        Path to ~/.orchestra/config/tmux-main.conf
-    """
-    ensure_config_dir()
-    return Path.home() / ".orchestra" / "config" / "tmux-main.conf"
