@@ -17,6 +17,31 @@ from orchestra.lib.tmux_agent import TmuxProtocol
 
 def main() -> int:
     """Run interactive setup for Orchestra."""
+    # Clean up any existing Orchestra processes silently
+    try:
+        # Kill MCP server if running
+        result = subprocess.run(
+            ["pgrep", "-f", "orchestra.mcp.server"],
+            capture_output=True,
+            text=True,
+        )
+        if result.stdout.strip():
+            pids = result.stdout.strip().split("\n")
+            for pid in pids:
+                subprocess.run(["kill", pid], capture_output=True)
+    except Exception:
+        pass
+
+    try:
+        # Kill orchestra tmux server
+        subprocess.run(
+            ["tmux", "-L", "orchestra", "kill-server"],
+            capture_output=True,
+            text=True,
+        )
+    except Exception:
+        pass
+
     print("\n" + "=" * 60)
     print("  Welcome to Orchestra Setup!")
     print("=" * 60)
@@ -33,9 +58,6 @@ def main() -> int:
     missing_deps = []
     required_deps = {
         "tmux": "tmux (install with: apt install tmux / brew install tmux)",
-        "python3": "python3 (install from: https://www.python.org/downloads/)",
-        "node": "node (install from: https://nodejs.org/)",
-        "npm": "npm (install from: https://nodejs.org/)",
         "claude": "claude CLI (install with: npm install -g @anthropic-ai/claude-code)",
     }
 
@@ -126,8 +148,8 @@ def main() -> int:
         print("-" * 60)
 
         # Create shared Claude config directory
-        shared_claude_dir = Path.home() / ".kerberos" / "shared-claude"
-        shared_claude_json = Path.home() / ".kerberos" / "shared-claude.json"
+        shared_claude_dir = Path.home() / ".orchestra" / "shared-claude"
+        shared_claude_json = Path.home() / ".orchestra" / "shared-claude.json"
 
         print("\nCreating shared Claude configuration...")
         print(f"  Location: {shared_claude_dir}")
@@ -289,7 +311,7 @@ def main() -> int:
     print(f"  - Mode: {'Docker' if use_docker else 'Local'}")
     if use_docker:
         print(f"  - Docker image: orchestra-image")
-        print(f"  - Shared config: ~/.kerberos/shared-claude/")
+        print(f"  - Shared config: ~/.orchestra/shared-claude/")
     print(f"  - Claude CLI: {shutil.which('claude')}")
 
     print("\nYou're all set! Run 'orchestra' to start using Orchestra.")

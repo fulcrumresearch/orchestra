@@ -115,12 +115,9 @@ class TmuxProtocol(AgentProtocol):
         )
 
         if result.returncode == 0:
-            # Only send acceptance keys for executor sessions WITHOUT an initial message
-            # When initial_message is provided, it bypasses the trust prompt
-            if session.agent_type.value == "executor" and not initial_message:
+            if session.agent_type.value == "executor":
                 # For executors in bypass mode, send Down arrow then Enter to accept bypass warning
-                time.sleep(2)  # Give Claude a moment to start
-                logger.info(f"Wait complete, now accepting prompts for {session.session_id}")
+                logger.info(f"Sending acceptance keys for executor {session.session_id}")
 
                 # Send Down arrow to select "Yes, I accept" option
                 self._exec(session, ["tmux", "-L", "orchestra", "send-keys", "-t", f"{session.session_id}:0.0", "Down"])
