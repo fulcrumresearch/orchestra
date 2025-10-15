@@ -36,12 +36,30 @@ def run_local_tmux_command(*args: str) -> subprocess.CompletedProcess:
 
 
 def build_new_session_cmd(session_id: str, work_dir: str, command: str) -> list[str]:
-    """Create new tmux session with status bar disabled.
+    """Create new tmux session with status bar disabled and custom config.
 
     Chains session creation with status configuration.
     """
+    from .config import get_tmux_config_path
+
+    config_path = get_tmux_config_path()
+
     return build_tmux_cmd(
-        "new-session", "-d", "-s", session_id, "-c", work_dir, command, ";", "set-option", "-t", session_id, "status", "off"
+        "new-session",
+        "-d",
+        "-s",
+        session_id,
+        "-f",
+        str(config_path),  # Use config file
+        "-c",
+        work_dir,
+        command,
+        ";",
+        "set-option",
+        "-t",
+        session_id,
+        "status",
+        "off",
     )
 
 

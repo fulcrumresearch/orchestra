@@ -260,6 +260,12 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
             ["-v", f"{shared_claude_dir}:/home/executor/.claude", "-v", f"{shared_claude_json}:/home/executor/.claude.json"]
         )
 
+        # Mount tmux config file for agent sessions
+        from .config import get_tmux_config_path
+
+        tmux_config_path = get_tmux_config_path()
+        mounts.extend(["-v", f"{tmux_config_path}:/tmp/tmux.conf:ro"])
+
         mode = "PAIRED (source symlinked)" if paired else "UNPAIRED"
         logger.info(
             f"Starting container in {mode} mode: worktree at /workspace, shared Claude config at {shared_claude_dir}"
