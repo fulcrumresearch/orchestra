@@ -30,7 +30,6 @@ from orchestra.lib.sessions import (
     AgentType,
     save_session,
 )
-from orchestra.lib.tmux_agent import TmuxProtocol
 from orchestra.lib.logger import get_logger
 from orchestra.lib.config import load_config
 from orchestra.lib.helpers import (
@@ -45,7 +44,6 @@ from orchestra.lib.helpers import (
     SESSIONS_FILE,
     PANE_AGENT,
 )
-from orchestra.lib.prompts import DESIGNER_MD_TEMPLATE
 
 logger = get_logger(__name__)
 
@@ -55,21 +53,24 @@ class UnifiedApp(App):
 
     CSS = """
     Screen {
-        background: #0a0a0a;
+        background: $background;
     }
 
     #header {
-        height: 2;
-        background: #111111;
-        border-bottom: solid #333333;
+        height: 1;
+        background: $panel;
         dock: top;
+        padding: 0 1;
     }
 
+    
+
     #hud {
-        height: 2;
-        padding: 0 1;
-        color: #C0FFFD;
+        height: 1;
+        padding: 0;
+        color: $secondary;
         text-align: center;
+        width: 100%;
     }
 
     #main-content {
@@ -78,25 +79,49 @@ class UnifiedApp(App):
 
     #left-pane {
         width: 30%;
-        background: #0a0a0a;
-        border-right: solid #333333;
+        background: $background;
+        padding: 1;
     }
 
     #right-pane {
-        width: 70%;
-        background: #000000;
+        width: 1fr;
+        background: $background;
+        padding: 1;
     }
+
+    /* Card-like containers, inspired by Posting */
+    #session-card {
+        border: round $panel;
+        background: $background;
+        height: 1fr;
+        width: 1fr;
+        padding: 0;
+    }
+
+    #diff-card {
+        border: round $panel;
+        background: $background;
+        height: 1fr;
+        width: 1fr;
+        padding: 0;
+    }
+
+    
 
     TabbedContent {
         height: 1fr;
+        padding: 0;
     }
 
     Tabs {
-        background: #1a1a1a;
+        background: transparent;
+        width: 100%;
+        padding: 0;
     }
 
     Tab {
         padding: 0 1;
+        margin: 0;
     }
 
     Tab.-active {
@@ -105,55 +130,95 @@ class UnifiedApp(App):
 
     TabPane {
         padding: 1;
-        background: #000000;
+        background: $background;
         layout: vertical;
     }
 
     #sidebar-title {
-        color: #00ff9f;
+        color: $success;
         text-style: bold;
         margin-bottom: 0;
         height: 1;
+        width: 100%;
+        padding: 0 1;
     }
 
     #branch-info {
-        color: #888888;
+        color: $foreground;
         text-style: italic;
         margin-bottom: 0;
         height: 1;
+        width: 100%;
+        padding: 0 1;
     }
 
     #status-indicator {
-        color: #ffaa00;
+        color: $warning;
         text-style: italic;
         margin-bottom: 1;
         height: 1;
+        width: 100%;
+        padding: 0 1;
+    }
+
+    #sessions-header {
+        color: $secondary;
+        text-style: bold;
+        margin-bottom: 1;
+        height: 1;
+        width: 100%;
+        padding: 0 1;
     }
 
     ListView {
         height: 1fr;
+        width: 1fr;
+        padding: 0;
+        margin: 0;
+        border: none;
+    }
+
+    ListView > .list-view--container {
+        padding: 0;
+        margin: 0;
     }
 
     ListItem {
-        color: #cccccc;
+        color: $foreground;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+        layout: horizontal;
+        height: 1;
+    }
+
+    ListItem Label {
+        width: 1fr;
         padding: 0 1;
+        height: 1;              /* one line tall */
+        text-wrap: nowrap;      /* no wrapping */
+        overflow: hidden;       /* truncate visually */
     }
 
     ListItem:hover {
-        background: #222222;
-        color: #ffffff;
+        background: $surface;
+        color: $accent;
     }
+
+    /* Left-side rectangular indicator bar for highlighted item */
+    ListItem .indicator { width: 1; height: 1; background: transparent; }
 
     ListView > ListItem.--highlight {
-        background: #1a1a1a;
-        color: #00ff9f;
+        background: $surface;
+        color: $success;
         text-style: bold;
-        border-left: thick #00ff9f;
     }
 
+    ListItem.--highlight .indicator { background: $success; }
+
     RichLog {
-        background: #000000;
-        color: #ffffff;
+        background: $background;
+        color: $foreground;
         overflow-x: hidden;
         overflow-y: auto;
         width: 100%;
@@ -187,6 +252,10 @@ class UnifiedApp(App):
         self.state = AppState(project_dir)
         self.shutdown_callback = shutdown_callback
 
+        # Load theme from config
+        config = load_config()
+        self.theme = config.get("ui_theme", "textual-light")
+
     def compose(self) -> ComposeResult:
         # Check dependencies based on config
         config = load_config()
@@ -208,13 +277,16 @@ class UnifiedApp(App):
                 yield Static("Orchestra", id="sidebar-title")
                 self.status_indicator = Static("", id="status-indicator")
                 yield self.status_indicator
-                self.session_list = ListView(id="session-list")
-                yield self.session_list
+                with Container(id="session-card"):
+                    yield Static("Sessions", id="sessions-header")
+                    self.session_list = ListView(id="session-list")
+                    yield self.session_list
 
             with Container(id="right-pane"):
-                with TabbedContent(initial="diff-tab"):
-                    with TabPane("Diff", id="diff-tab"):
-                        yield DiffTab()
+                with Container(id="diff-card"):
+                    with TabbedContent(initial="diff-tab"):
+                        with TabPane("Diff", id="diff-tab"):
+                            yield DiffTab()
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
@@ -297,12 +369,26 @@ class UnifiedApp(App):
 
         paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_name == root.session_name else ""
         label_text = f"{paired_marker}{root.session_name} [dim][#00ff9f](designer)[/#00ff9f][/dim]"
-        self.session_list.append(ListItem(Label(label_text, markup=True)))
+        self.session_list.append(
+            ListItem(
+                Horizontal(
+                    Static("", classes="indicator"),
+                    Label(label_text, markup=True),
+                )
+            )
+        )
 
         for child in root.children:
             paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_name == child.session_name else ""
             label_text = f"{paired_marker}  {child.session_name} [dim][#00d4ff](executor)[/#00d4ff][/dim]"
-            self.session_list.append(ListItem(Label(label_text, markup=True)))
+            self.session_list.append(
+                ListItem(
+                    Horizontal(
+                        Static("", classes="indicator"),
+                        Label(label_text, markup=True),
+                    )
+                )
+            )
 
         if selected_name:
             new_index = self.state.get_index_by_session_name(selected_name)
