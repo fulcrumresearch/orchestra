@@ -1,10 +1,10 @@
 from .sessions import Session
 from .logger import get_logger
 from .config import load_config
+from .prompts import get_monitor_prompt
 
 from dataclasses import dataclass, field
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
-from textwrap import dedent
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,45 +22,6 @@ BATCH_WAIT_TIME = 10  # Wait 2 seconds after first event before processing
 MAX_BATCH_SIZE = 10  # Process immediately if 10 events accumulate
 MAX_BATCH_WAIT = 20  # Never wait more than 5 seconds total
 
-SYSTEM_PROMPT_TEMPLATE = dedent(
-    """
-    You are a monitoring subagent watching an executor agent's activity through hook events.
-
-    **Session Being Monitored**: {session_id}
-    **Agent Type**: {agent_type}
-    **Designer Session**: {parent_session_id}
-
-    ## Your Role
-
-    ### 1. Coach the Executor (send_message_to_session to executor)
-
-    Send coaching messages for common mistakes:
-    - Running `python` instead of `uv run python`
-    - Running `pytest` instead of `uv run pytest`
-    - Forgetting to run tests after code changes
-    - Using wrong tool for the job
-
-    Example: `send_message_to_session(session_name="{session_id}", message="Remember to use 'uv run pytest' instead of 'pytest' to ensure correct dependency resolution.", source_path="{source_path}", sender_name="monitor")`
-
-    ### 2. Alert the Designer (send_message_to_session to designer)
-
-    Send alerts about strategic issues:
-    - Executor changed approach significantly (started with A, switched to B)
-    - Executor is stuck or confused (repeated failures, going in circles)
-    - Spec violations or going off-track
-    - Critical issues that need designer attention
-
-    Example: `send_message_to_session(session_name="{parent_session_id}", message="Alert: {session_id} changed approach from REST API to GraphQL. Originally spec'd for REST.", source_path="{source_path}", sender_name="monitor")`
-
-    ## Key Principles
-
-    - **State lives in your head**: Use your conversation context to track what's happening
-    - **No file writing**: You communicate only via send_message_to_session
-
-    Read `@instructions.md` to understand what the executor is supposed to be doing.
-    """
-).strip()
-
 
 def format_event_for_agent(evt: Dict[str, Any]) -> str:
     """Format event for the monitoring agent"""
@@ -76,7 +37,6 @@ class SessionMonitor:
     session: Session
     allowed_tools: List[str] = field(default_factory=lambda: ALLOWED_TOOLS)
     permission_mode: str = PERMISSION_MODE
-    system_prompt_template: str = SYSTEM_PROMPT_TEMPLATE
 
     client: Optional[ClaudeSDKClient] = None
     queue: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=1000))
@@ -90,8 +50,8 @@ class SessionMonitor:
         # Get parent session name if available
         parent_session_id = getattr(self.session, 'parent_session_name', 'unknown')
 
-        # Format system prompt with session info
-        system_prompt = self.system_prompt_template.format(
+        # Get system prompt from prompts module
+        system_prompt = get_monitor_prompt(
             session_id=self.session.session_id,
             agent_type=self.session.agent_type.value if self.session.agent_type else "unknown",
             parent_session_id=parent_session_id,

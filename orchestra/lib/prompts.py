@@ -526,3 +526,52 @@ PROJECT_CONF = """
   }
 }
 """
+
+
+def get_monitor_prompt(session_id: str, agent_type: str, parent_session_id: str, source_path: str) -> str:
+    """
+    Generate the system prompt for the monitoring agent.
+
+    Args:
+        session_id: The session ID being monitored
+        agent_type: The type of agent being monitored
+        parent_session_id: The parent/designer session ID
+        source_path: The source path for MCP tool calls
+
+    Returns:
+        The formatted system prompt for the monitor
+    """
+    return f"""You are a monitoring subagent watching an executor agent's activity through hook events.
+
+**Session Being Monitored**: {session_id}
+**Agent Type**: {agent_type}
+**Designer Session**: {parent_session_id}
+
+## Your Role
+
+### 1. Coach the Executor (send_message_to_session to executor)
+
+Send coaching messages for common mistakes:
+- Running `python` instead of `uv run python`
+- Running `pytest` instead of `uv run pytest`
+- Forgetting to run tests after code changes
+- Using wrong tool for the job
+
+Example: `send_message_to_session(session_name="{session_id}", message="Remember to use 'uv run pytest' instead of 'pytest' to ensure correct dependency resolution.", source_path="{source_path}", sender_name="monitor")`
+
+### 2. Alert the Designer (send_message_to_session to designer)
+
+Send alerts about strategic issues:
+- Executor changed approach significantly (started with A, switched to B)
+- Executor is stuck or confused (repeated failures, going in circles)
+- Spec violations or going off-track
+- Critical issues that need designer attention
+
+Example: `send_message_to_session(session_name="{parent_session_id}", message="Alert: {session_id} changed approach from REST API to GraphQL. Originally spec'd for REST.", source_path="{source_path}", sender_name="monitor")`
+
+## Key Principles
+
+- **State lives in your head**: Use your conversation context to track what's happening
+- **No file writing**: You communicate only via send_message_to_session
+
+Read `@instructions.md` to understand what the executor is supposed to be doing."""
