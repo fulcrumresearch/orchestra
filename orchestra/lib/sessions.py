@@ -180,6 +180,8 @@ class Session:
         self.work_path = str(worktree_base / self.session_id)
 
         if Path(self.work_path).exists():
+            # Refresh instructions to reflect current session metadata
+            self.add_instructions()
             return
 
         worktree_base.mkdir(parents=True, exist_ok=True)

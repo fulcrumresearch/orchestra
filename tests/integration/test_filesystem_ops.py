@@ -183,3 +183,43 @@ class TestFilesystemStructure:
         assert instructions_file.exists()
         content = instructions_file.read_text()
         assert "Build authentication system" in content
+
+
+class TestSessionInstructionRefresh:
+    """Tests covering regeneration of session instructions when reusing workspaces"""
+
+    def test_designer_instructions_update_after_branch_change(self, orchestra_test_env):
+        """Switching branches should refresh designer instructions in-place"""
+        repo = orchestra_test_env.repo
+
+        # Start on "old" branch and prepare designer session
+        subprocess.run(["git", "checkout", "-b", "old"], cwd=repo, capture_output=True, check=True)
+        old_session = Session(
+            session_name="old",
+            agent_type=AgentType.DESIGNER,
+            source_path=str(repo),
+            use_docker=False,
+        )
+        old_session.prepare()
+        save_session(old_session, project_dir=repo)
+
+        orchestra_md = Path(repo) / ".claude" / "orchestra.md"
+        assert orchestra_md.exists()
+        old_content = orchestra_md.read_text()
+        assert "- **Session Name**: old" in old_content
+
+        # Simulate shutting down Orchestra before switching branches
+        subprocess.run(["git", "checkout", "-b", "new"], cwd=repo, capture_output=True, check=True)
+
+        new_session = Session(
+            session_name="new",
+            agent_type=AgentType.DESIGNER,
+            source_path=str(repo),
+            use_docker=False,
+        )
+        new_session.prepare()
+        save_session(new_session, project_dir=repo)
+
+        new_content = orchestra_md.read_text()
+        assert "- **Session Name**: new" in new_content
+        assert "- **Session Name**: old" not in new_content
