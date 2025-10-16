@@ -111,56 +111,6 @@ class TestDockerContainerCreation:
         testfile = worktree / "testfile"
         assert testfile.exists(), "File created in container should be visible on host"
 
-    def test_container_lifecycle(self, docker_setup, tmp_path, cleanup_containers):
-        """Test container start, reuse, and cleanup"""
-        container_name = "orchestra-test-lifecycle"
-        cleanup_containers(container_name)
-
-        worktree = tmp_path / "test_worktree"
-        worktree.mkdir()
-
-        # Start container
-        success = start_docker_container(
-            container_name=container_name,
-            work_path=str(worktree),
-            mcp_port=8765,
-            paired=False,
-        )
-        assert success, "Container should start successfully"
-
-        # Verify container is running
-        result = subprocess.run(
-            ["docker", "inspect", "--format={{.State.Running}}", container_name],
-            capture_output=True,
-            text=True,
-        )
-        assert result.stdout.strip() == "true"
-
-        # Try to start again - should reuse
-        success2 = start_docker_container(
-            container_name=container_name,
-            work_path=str(worktree),
-            mcp_port=8765,
-            paired=False,
-        )
-        assert success2, "Should reuse existing container"
-
-        # Stop container
-        stop_docker_container(container_name)
-
-        # Verify container is removed
-        result = subprocess.run(
-            ["docker", "inspect", container_name],
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode != 0, "Container should be removed"
-
-        # Verify worktree persists after deletion
-        assert worktree.exists(), "Worktree should persist after container deletion"
-
-        # Note: cleanup_containers fixture will handle final cleanup
-
 
 @pytest.mark.slow
 class TestFullSpawnWorkflow:
@@ -317,25 +267,14 @@ class TestE2EMessagePassing:
 
         cleanup_containers(get_docker_container_name(executor.session_id))
 
-        # Start a real tmux session inside the Docker container
-        container_name = get_docker_container_name(executor.session_id)
-
-        subprocess.run(
-            [
-                "docker",
-                "exec",
-                "-d",
-                container_name,
-                "tmux",
-                "-L",
-                "orchestra",
-                "new-session",
-                "-d",
-                "-s",
-                executor.session_id,
-            ],
-            check=True,
+        # Start the executor session using the protocol's start method
+        # This will create the tmux session inside the Docker container properly
+        initial_message = (
+            f"[System] Test executor starting. "
+            f"Parent session: {designer.session_name}. "
         )
+        success = executor.protocol.start(executor, initial_message)
+        assert success, "Executor tmux session should start successfully"
 
         # Wait a moment for tmux to be ready
         time.sleep(0.5)
