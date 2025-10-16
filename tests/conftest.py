@@ -12,7 +12,11 @@ def temp_git_repo(tmp_path):
     Returns:
         Path: Path to the temporary git repository
     """
-    repo_path = tmp_path / "test_repo"
+    # Use a unique repo name based on tmp_path to avoid worktree conflicts
+    # tmp_path is unique per test function
+    import hashlib
+    unique_id = hashlib.md5(str(tmp_path).encode()).hexdigest()[:8]
+    repo_path = tmp_path / f"test_repo_{unique_id}"
     repo_path.mkdir()
 
     # Initialize git repo
@@ -26,7 +30,36 @@ def temp_git_repo(tmp_path):
     subprocess.run(["git", "add", "README.md"], cwd=repo_path, capture_output=True, check=True)
     subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_path, capture_output=True, check=True)
 
-    return repo_path
+    yield repo_path
+
+    # Cleanup: Remove any worktrees associated with this repo before it's deleted
+    try:
+        # List all worktrees for this repo
+        result = subprocess.run(
+            ["git", "worktree", "list", "--porcelain"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            lines = result.stdout.splitlines()
+            worktree_paths = []
+            for line in lines:
+                if line.startswith("worktree "):
+                    wt_path = line.split("worktree ")[1]
+                    # Don't remove the main worktree (the repo itself)
+                    if wt_path != str(repo_path):
+                        worktree_paths.append(wt_path)
+
+            # Remove all non-main worktrees
+            for wt_path in worktree_paths:
+                subprocess.run(
+                    ["git", "worktree", "remove", wt_path, "--force"],
+                    cwd=repo_path,
+                    capture_output=True,
+                )
+    except Exception:
+        pass  # Best effort cleanup
 
 
 @pytest.fixture
@@ -187,6 +220,7 @@ def designer_session(orchestra_test_env):
     return session
 
 
+<<<<<<< HEAD
 @pytest.fixture(scope="session")
 def docker_available():
     """Check if Docker is available, skip tests if not
@@ -280,3 +314,73 @@ def mock_config_with_docker(monkeypatch):
     monkeypatch.setattr("orchestra.lib.config.load_config", lambda: test_config)
 
     return test_config
+
+@pytest.fixture
+def executor_session(orchestra_test_env):
+    """Create a prepared executor session for testing
+
+    Returns a Session object that:
+    - Is an EXECUTOR type (works in separate worktree)
+    - Has use_docker=False
+    - Is prepared (worktree created, work_path set)
+    - Is saved to sessions.json
+    - Has a separate worktree with its own branch
+
+    Usage:
+        def test_something(executor_session):
+            # Session is ready to use
+            assert executor_session.agent_type == AgentType.EXECUTOR
+            assert executor_session.work_path is not None
+            assert executor_session.work_path != executor_session.source_path
+
+            # Test pairing
+            executor_session.toggle_pairing()
+    """
+    from orchestra.lib.sessions import Session, AgentType, save_session
+
+    session = Session(
+        session_name="executor",
+        agent_type=AgentType.EXECUTOR,
+        source_path=str(orchestra_test_env.repo),
+        use_docker=False,
+    )
+    session.prepare()
+    save_session(session, project_dir=orchestra_test_env.repo)
+
+    yield session
+
+    # Cleanup: Remove worktree after test
+    import subprocess
+    import shutil
+    from pathlib import Path
+
+    try:
+        # Remove the worktree
+        if session.work_path and Path(session.work_path).exists():
+            subprocess.run(
+                ["git", "worktree", "remove", session.work_path, "--force"],
+                cwd=session.source_path,
+                capture_output=True,
+            )
+
+        # Remove the branch
+        subprocess.run(
+            ["git", "branch", "-D", session.session_id],
+            cwd=session.source_path,
+            capture_output=True,
+        )
+
+        # Clean up backup if it exists (from pairing tests)
+        backup = Path(f"{session.source_path}.backup")
+        if backup.exists():
+            shutil.rmtree(backup)
+
+        # Clean up symlink if it exists
+        source = Path(session.source_path)
+        if source.is_symlink():
+            source.unlink()
+            # Restore from backup if available
+            if backup.exists():
+                backup.rename(source)
+    except Exception:
+        pass  # Best effort cleanup
