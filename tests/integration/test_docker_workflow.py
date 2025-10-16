@@ -140,6 +140,9 @@ class TestFullSpawnWorkflow:
                 instructions="Test task instructions",
             )
 
+        # Save the designer session to persist the child relationship
+        save_session(designer, project_dir=orchestra_test_env.repo)
+
         # Register container for cleanup
         container_name = get_docker_container_name(child.session_id)
         cleanup_containers(container_name)

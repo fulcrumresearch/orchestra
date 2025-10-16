@@ -252,10 +252,6 @@ class Session:
         # Add to children
         self.children.append(new_session)
 
-        # Save parent session to persist the child relationship
-        # Use the parent's source_path (which is the project root) for save location
-        save_session(self, project_dir=Path(self.source_path))
-
         # Build initial message to pass directly to claude command
         initial_message = (
             f"[System] Please review your task instructions in @instructions.md, and then start implementing the task. "
