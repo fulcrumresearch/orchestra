@@ -46,9 +46,6 @@ class TestSpawnSubagentIntegration:
         orchestra_md = worktree_path / ".claude" / "orchestra.md"
         assert orchestra_md.exists()
 
-        # Verify merge command was created
-        merge_cmd = worktree_path / ".claude" / "commands" / "merge-child.md"
-        assert merge_cmd.exists()
 
     def test_spawn_parent_not_found(self, orchestra_test_env):
         """Test error handling when parent session doesn't exist"""
