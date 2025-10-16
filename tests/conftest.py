@@ -185,3 +185,98 @@ def designer_session(orchestra_test_env):
     save_session(session, project_dir=orchestra_test_env.repo)
 
     return session
+
+
+@pytest.fixture(scope="session")
+def docker_available():
+    """Check if Docker is available, skip tests if not
+
+    Session-scoped so the check only happens once per test session.
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            pytest.skip("Docker is not available")
+    except FileNotFoundError:
+        pytest.skip("Docker is not installed")
+    return True
+
+
+@pytest.fixture(scope="session")
+def docker_setup(docker_available):
+    """One-time Docker setup for all tests
+
+    This fixture:
+    - Ensures the orchestra-image is built once
+    - Returns image info
+    - Session-scoped so it only runs once for entire test suite
+
+    Usage:
+        def test_something(docker_setup):
+            # orchestra-image is guaranteed to exist
+            ...
+    """
+    from orchestra.lib.helpers import ensure_docker_image
+
+    # Build image once for all tests
+    ensure_docker_image()
+
+    # Get image ID for verification
+    result = subprocess.run(
+        ["docker", "images", "-q", "orchestra-image"],
+        capture_output=True,
+        text=True,
+    )
+    image_id = result.stdout.strip()
+
+    return {
+        "image_id": image_id,
+        "image_name": "orchestra-image",
+    }
+
+
+@pytest.fixture
+def cleanup_containers(request):
+    """Ensure test containers are cleaned up after tests
+
+    Usage in tests:
+        def test_something(cleanup_containers):
+            cleanup_containers("my-container-name")
+            # ... test code that creates container ...
+            # Container will be cleaned up automatically after test
+    """
+    from orchestra.lib.helpers import stop_docker_container
+
+    containers_to_cleanup = []
+
+    def register_container(container_name: str):
+        """Register a container for cleanup"""
+        containers_to_cleanup.append(container_name)
+        return container_name
+
+    yield register_container
+
+    # Cleanup all registered containers
+    for container_name in containers_to_cleanup:
+        try:
+            stop_docker_container(container_name)
+        except Exception as e:
+            print(f"Warning: Failed to cleanup container {container_name}: {e}")
+
+
+@pytest.fixture
+def mock_config_with_docker(monkeypatch):
+    """Mock config loading to return test configuration with use_docker=True"""
+    test_config = {
+        "mcp_port": 8765,
+        "use_docker": True,  # Enable Docker for these tests
+    }
+
+    monkeypatch.setattr("orchestra.lib.sessions.load_config", lambda: test_config)
+    monkeypatch.setattr("orchestra.lib.config.load_config", lambda: test_config)
+
+    return test_config
