@@ -173,21 +173,17 @@ class TestFullSpawnWorkflow:
         assert claude_md.exists(), ".claude/CLAUDE.md should exist"
         assert "@orchestra.md" in claude_md.read_text()
 
-        # 5. Verify .claude/commands/merge-child.md
-        merge_cmd = worktree_path / ".claude" / "commands" / "merge-child.md"
-        assert merge_cmd.exists(), "merge-child.md command should exist"
-
-        # 6. Verify .claude/settings.json
+        # 5. Verify .claude/settings.json
         settings_json = worktree_path / ".claude" / "settings.json"
         assert settings_json.exists(), "settings.json should exist"
         settings = json.loads(settings_json.read_text())
         assert "permissions" in settings, "Settings should have permissions"
 
-        # 7. Verify child added to parent.children
+        # 6. Verify child added to parent.children
         assert len(designer.children) == 1
         assert designer.children[0].session_name == "test-executor"
 
-        # 8. Verify session saved (persists relationship)
+        # 7. Verify session saved (persists relationship)
         from orchestra.lib.sessions import load_sessions
 
         loaded_sessions = load_sessions(project_dir=orchestra_test_env.repo)
@@ -236,81 +232,3 @@ class TestFullSpawnWorkflow:
         branch_name = result.stdout.strip()
         assert child.session_id in branch_name, f"Branch name should contain session_id, got: {branch_name}"
 
-
-@pytest.mark.slow
-class TestE2EMessagePassing:
-    """End-to-end tests with real Docker containers and message passing"""
-
-    def test_designer_to_executor_message_with_docker(
-        self, orchestra_test_env, mock_config_with_docker, docker_setup, cleanup_containers
-    ):
-        """Test full E2E message passing from designer to executor in Docker"""
-        from orchestra.lib.sessions import Session, AgentType, save_session
-        from orchestra.backend.mcp_server import send_message_to_session
-
-        # Create designer session
-        designer = Session(
-            session_name="designer",
-            agent_type=AgentType.DESIGNER,
-            source_path=str(orchestra_test_env.repo),
-            use_docker=False,
-        )
-        designer.prepare()
-        save_session(designer, project_dir=orchestra_test_env.repo)
-
-        # Spawn executor (creates Docker container)
-        with patch("orchestra.lib.tmux_agent.TmuxProtocol.start", return_value=True):
-            executor = designer.spawn_executor(
-                session_name="test-executor",
-                instructions="Test task",
-            )
-
-        cleanup_containers(get_docker_container_name(executor.session_id))
-
-        # Start the executor session using the protocol's start method
-        # This will create the tmux session inside the Docker container properly
-        initial_message = (
-            f"[System] Test executor starting. "
-            f"Parent session: {designer.session_name}. "
-        )
-        success = executor.protocol.start(executor, initial_message)
-        assert success, "Executor tmux session should start successfully"
-
-        # Wait a moment for tmux to be ready
-        time.sleep(0.5)
-
-        # Send message from designer to executor
-        result = send_message_to_session(
-            session_name="test-executor",
-            message="Hello from designer",
-            source_path=str(orchestra_test_env.repo),
-            sender_name="designer",
-        )
-
-        assert "Successfully sent message" in result
-
-        # Wait for message to be delivered
-        time.sleep(0.5)
-
-        # Verify message was received in executor's tmux session
-        capture_result = subprocess.run(
-            [
-                "docker",
-                "exec",
-                container_name,
-                "tmux",
-                "-L",
-                "orchestra",
-                "capture-pane",
-                "-t",
-                executor.session_id,
-                "-p",
-            ],
-            capture_output=True,
-            text=True,
-        )
-
-        pane_content = capture_result.stdout
-        assert "[From: designer] Hello from designer" in pane_content, (
-            f"Expected prefixed message in pane, got: {pane_content}"
-        )

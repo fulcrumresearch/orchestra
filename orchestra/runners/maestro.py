@@ -22,20 +22,15 @@ def main():
     os.environ.setdefault("TERM", "xterm-256color")
     os.environ.setdefault("TMUX_TMPDIR", "/tmp")  # Use local tmp for better performance
 
-    # Load config
-    config = load_config()
-    mcp_port = config.get("mcp_port", 8765)
-
     # Start the MCP server in the background (HTTP transport)
     mcp_log = Path.home() / ".orchestra" / "mcp-server.log"
     mcp_log.parent.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"Starting MCP server on port {mcp_port}")
     logger.info(f"MCP server logs: {mcp_log}")
 
     with open(mcp_log, "w") as log_file:
         mcp_proc = subprocess.Popen(
-            ["orchestra-mcp", str(mcp_port)],
+            ["orchestra-mcp"],
             stdout=log_file,
             stderr=log_file,
             start_new_session=True,

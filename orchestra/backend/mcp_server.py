@@ -82,13 +82,7 @@ def send_message_to_session(session_name: str, message: str, source_path: str, s
 def main():
     """Entry point for MCP server."""
     # Override port if provided via command line
-    global mcp
-    if len(sys.argv) > 1:
-        port = int(sys.argv[1])
-        mcp = FastMCP("orchestra-subagent", port=port, host=host)
-
-    # Run the HTTP server
-    print(f"Starting MCP server on port {mcp.port}...")
+    print(f"Starting MCP server")
     mcp.run(transport="streamable-http")
 
 

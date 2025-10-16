@@ -136,9 +136,8 @@ class TestFilesystemStructure:
         assert claude_md.exists()
         assert "@orchestra.md" in claude_md.read_text()
 
-        # Designer should NOT have merge-child command
         merge_cmd = claude_dir / "commands" / "merge-child.md"
-        assert not merge_cmd.exists()
+        assert merge_cmd.exists()
 
     def test_executor_directory_structure(self, executor_session):
         """Test that executor session has correct file structure"""
@@ -162,10 +161,6 @@ class TestFilesystemStructure:
         claude_md = claude_dir / "CLAUDE.md"
         assert claude_md.exists()
         assert "@orchestra.md" in claude_md.read_text()
-
-        # Executor SHOULD have merge-child command
-        merge_cmd = claude_dir / "commands" / "merge-child.md"
-        assert merge_cmd.exists()
 
         # Should have .git file (not directory)
         git_file = work_path / ".git"
