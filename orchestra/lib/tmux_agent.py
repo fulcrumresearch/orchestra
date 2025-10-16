@@ -351,7 +351,10 @@ class TmuxProtocol(AgentProtocol):
 
         settings_path = claude_dir / "settings.json"
         settings_config = {
-            "permissions": {"allow": ["mcp__orchestra-mcp__spawn_subagent", "mcp__orchestra-mcp__send_message_to_session"]}
+            "permissions": {
+                "allow": ["mcp__orchestra-mcp__spawn_subagent", "mcp__orchestra-mcp__send_message_to_session"],
+                "allowPathRegex": ["^~/.orchestra/.*"]
+            }
         }
 
         try:
