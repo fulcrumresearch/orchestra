@@ -163,6 +163,14 @@ class Session:
         # Designer works directly in source directory
         if self.agent_type == AgentType.DESIGNER:
             self.work_path = self.source_path
+
+            # Create .claude/commands directory and add merge-child command
+            claude_commands_dir = Path(self.work_path) / ".claude" / "commands"
+            claude_commands_dir.mkdir(parents=True, exist_ok=True)
+
+            merge_command_path = claude_commands_dir / "merge-child.md"
+            merge_command_path.write_text(MERGE_CHILD_COMMAND)
+
             self.add_instructions()
             return
 
@@ -201,12 +209,6 @@ class Session:
                     capture_output=True,
                     text=True,
                 )
-
-            claude_commands_dir = Path(self.work_path) / ".claude" / "commands"
-            claude_commands_dir.mkdir(parents=True, exist_ok=True)
-
-            merge_command_path = claude_commands_dir / "merge-child.md"
-            merge_command_path.write_text(MERGE_CHILD_COMMAND)
 
             self.add_instructions()
 
