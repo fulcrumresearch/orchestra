@@ -10,7 +10,7 @@ class HUD(Static):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.default_text = "⌃D delete • ⌃R refresh • p pair • s spec • m docs • t terminal • ⌃Q quit"
+        self.default_text = "⌃D delete • ⌃R refresh • p pair • s spec • m docs • t terminal • ⌃\\ detach • ⌃Q quit"
         self.current_session = ""
 
     def set_session(self, session_name: str):

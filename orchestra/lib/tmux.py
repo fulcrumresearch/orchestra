@@ -5,6 +5,8 @@ import subprocess
 from collections.abc import Sequence
 from typing import Union
 
+from .config import get_tmux_config_path
+
 
 TMUX_SOCKET = "orchestra"
 
@@ -20,7 +22,13 @@ def build_tmux_cmd(*args: str) -> list[str]:
 
 
 def execute_local(cmd: list[str]) -> subprocess.CompletedProcess:
-    """Execute tmux command locally."""
+    """Execute tmux command locally with orchestra config."""
+    # Insert -f flag after "tmux -L orchestra" for local execution
+    config_path = str(get_tmux_config_path())
+    if cmd[0] == "tmux" and len(cmd) > 2 and cmd[1] == "-L":
+        # Insert -f config_path after -L SOCKET
+        cmd = cmd[:3] + ["-f", config_path] + cmd[3:]
+
     return subprocess.run(
         cmd,
         env=tmux_env(),
@@ -36,21 +44,17 @@ def run_local_tmux_command(*args: str) -> subprocess.CompletedProcess:
 
 
 def build_new_session_cmd(session_id: str, work_dir: str, command: str) -> list[str]:
-    """Create new tmux session with status bar disabled and custom config.
+    """Create new tmux session with status bar disabled.
 
-    Chains session creation with status configuration.
+    Config is auto-loaded:
+    - Docker: From /home/executor/.tmux.conf (mounted from host)
+    - Local: Via execute_local() which adds -f flag automatically
     """
-    from .config import get_tmux_config_path
-
-    config_path = get_tmux_config_path()
-
     return build_tmux_cmd(
         "new-session",
         "-d",
         "-s",
         session_id,
-        "-f",
-        str(config_path),  # Use config file
         "-c",
         work_dir,
         command,

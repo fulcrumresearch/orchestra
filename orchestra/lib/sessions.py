@@ -239,7 +239,9 @@ class Session:
 
         settings_path = claude_dir / "settings.json"
         # PROJECT_CONF is already a JSON string, just replace the placeholders
-        settings_json = PROJECT_CONF.replace("{session_id}", new_session.session_id).replace("{source_path}", self.source_path)
+        settings_json = PROJECT_CONF.replace("{session_id}", new_session.session_id).replace(
+            "{source_path}", self.source_path
+        )
         settings_path.write_text(settings_json)
 
         instructions_path = Path(new_session.work_path) / "instructions.md"
