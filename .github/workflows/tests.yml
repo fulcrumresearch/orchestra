@@ -1,0 +1,66 @@
+name: Tests
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+    branches: ["*"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            .venv
+          key: ${{ runner.os }}-uv-${{ matrix.python-version }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-${{ matrix.python-version }}-
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run all tests
+        run: uv run pytest -v --tb=short
+
+      - name: Generate coverage report (Python 3.12 only)
+        if: matrix.python-version == '3.12'
+        run: uv run pytest --cov=orchestra --cov-report=xml --cov-report=term
+
+      - name: Upload coverage to Codecov (Python 3.12 only)
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+        continue-on-error: true
+
+      - name: Cleanup Docker resources
+        if: always()
+        run: |
+          docker ps -aq --filter "name=orchestra-" | xargs -r docker rm -f || true
+          docker system prune -f || true
