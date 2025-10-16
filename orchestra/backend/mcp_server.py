@@ -9,12 +9,12 @@ from mcp.server import FastMCP
 from orchestra.lib.sessions import load_sessions, save_session, find_session
 from orchestra.lib.config import load_config
 
-# Create FastMCP server instance
+# Create FastMCP server instance with default port
+# (port can be overridden when running as script)
 config = load_config()
 default_port = config.get("mcp_port", 8765)
-port = int(sys.argv[1]) if len(sys.argv) > 1 else default_port
 host = "0.0.0.0"
-mcp = FastMCP("orchestra-subagent", port=port, host=host)
+mcp = FastMCP("orchestra-subagent", port=default_port, host=host)
 
 
 @mcp.tool()
@@ -81,8 +81,14 @@ def send_message_to_session(session_name: str, message: str, source_path: str, s
 
 def main():
     """Entry point for MCP server."""
+    # Override port if provided via command line
+    global mcp
+    if len(sys.argv) > 1:
+        port = int(sys.argv[1])
+        mcp = FastMCP("orchestra-subagent", port=port, host=host)
+
     # Run the HTTP server
-    print(f"Starting MCP server on port {port}...")
+    print(f"Starting MCP server on port {mcp.port}...")
     mcp.run(transport="streamable-http")
 
 
