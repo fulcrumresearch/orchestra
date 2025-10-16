@@ -15,7 +15,7 @@ CONFIG_FILE = Path.home() / ".orchestra" / "config.json"
 DEFAULT_CONFIG = {
     "use_docker": True,
     "mcp_port": 8765,
-    "ui_theme": "textual-light",
+    "ui_theme": "textual-dark",
 }
 
 # Default tmux configuration for all Orchestra sessions
