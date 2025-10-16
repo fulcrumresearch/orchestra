@@ -55,20 +55,20 @@ class UnifiedApp(App):
 
     CSS = """
     Screen {
-        background: #0a0a0a;
+        background: $background;
     }
 
     #header {
         height: 2;
-        background: #111111;
-        border-bottom: solid #333333;
+        background: $panel;
+        border-bottom: solid $accent;
         dock: top;
     }
 
     #hud {
         height: 2;
         padding: 0 1;
-        color: #C0FFFD;
+        color: $secondary;
         text-align: center;
     }
 
@@ -78,13 +78,13 @@ class UnifiedApp(App):
 
     #left-pane {
         width: 30%;
-        background: #0a0a0a;
-        border-right: solid #333333;
+        background: $background;
+        border-right: solid $accent;
     }
 
     #right-pane {
         width: 70%;
-        background: #000000;
+        background: $background;
     }
 
     TabbedContent {
@@ -92,7 +92,7 @@ class UnifiedApp(App):
     }
 
     Tabs {
-        background: #1a1a1a;
+        background: $surface;
     }
 
     Tab {
@@ -105,26 +105,26 @@ class UnifiedApp(App):
 
     TabPane {
         padding: 1;
-        background: #000000;
+        background: $background;
         layout: vertical;
     }
 
     #sidebar-title {
-        color: #00ff9f;
+        color: $success;
         text-style: bold;
         margin-bottom: 0;
         height: 1;
     }
 
     #branch-info {
-        color: #888888;
+        color: $foreground;
         text-style: italic;
         margin-bottom: 0;
         height: 1;
     }
 
     #status-indicator {
-        color: #ffaa00;
+        color: $warning;
         text-style: italic;
         margin-bottom: 1;
         height: 1;
@@ -135,25 +135,25 @@ class UnifiedApp(App):
     }
 
     ListItem {
-        color: #cccccc;
+        color: $foreground;
         padding: 0 1;
     }
 
     ListItem:hover {
-        background: #222222;
-        color: #ffffff;
+        background: $surface;
+        color: $accent;
     }
 
     ListView > ListItem.--highlight {
-        background: #1a1a1a;
-        color: #00ff9f;
+        background: $surface;
+        color: $success;
         text-style: bold;
-        border-left: thick #00ff9f;
+        border-left: thick $success;
     }
 
     RichLog {
-        background: #000000;
-        color: #ffffff;
+        background: $background;
+        color: $foreground;
         overflow-x: hidden;
         overflow-y: auto;
         width: 100%;
@@ -185,6 +185,10 @@ class UnifiedApp(App):
         super().__init__()
         project_dir = Path.cwd().resolve()
         self.state = AppState(project_dir)
+
+        # Load theme from config
+        config = load_config()
+        self.theme = config.get("ui_theme", "textual-light")
 
     def compose(self) -> ComposeResult:
         # Check dependencies based on config
