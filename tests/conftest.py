@@ -220,7 +220,6 @@ def designer_session(orchestra_test_env):
     return session
 
 
-<<<<<<< HEAD
 @pytest.fixture(scope="session")
 def docker_available():
     """Check if Docker is available, skip tests if not
