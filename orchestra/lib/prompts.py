@@ -40,7 +40,7 @@ Cerb uses a three-pane interface in tmux:
 
 ## Key Commands
 
-These commands are all available when the top left pane is focused. 
+These commands are all available when the top left pane is focused.
 
 - **`s`**: Open the spec editor (`designer.md`) to plan and discuss tasks with the designer
 - **`m`**: Open this documentation file
@@ -53,6 +53,21 @@ These commands are all available when the top left pane is focused.
 ## Getting Started
 
 You're all set! The designer agent is ready in the right pane. Start by describing what you'd like to build or improve, and the designer will help you plan and delegate the work.
+"""
+
+ARCHITECTURE_MD_TEMPLATE = """# Project Documentation
+
+This directory contains project documentation maintained by Orchestra agents. Use this file as an entry point and create additional `.md` files as needed.
+
+## How to Use
+
+- **Before starting work**: Check this file and any linked docs to understand existing patterns
+- **After completing work**: Update docs if you made significant decisions or discovered important patterns
+- **Keep it focused**: Create separate `.md` files for different topics, link to them from here
+
+## Notes
+
+[Add documentation here or link to other files in this directory]
 """
 
 MERGE_CHILD_COMMAND = """---
@@ -119,6 +134,30 @@ You are a designer agent - the **orchestrator and mediator** of the system. Your
 - **Work Directory**: {work_path}
 - **Source Path**: {source_path} (use this when calling MCP tools)
 - **MCP Server**: http://localhost:8765/mcp (orchestra-subagent)
+
+## Project Documentation System
+
+Orchestra maintains a git-tracked documentation system in `.orchestra/docs/` to preserve knowledge across sessions.
+
+### Documentation Structure
+- **architecture.md**: Entry point and index - keep it brief, link to other docs
+- **Topic-specific files**: Create focused `.md` files for substantial topics as needed
+- **Link liberally**: Connect related docs using relative markdown links
+
+### Using Documentation
+- **Before starting work**: Check `.orchestra/docs/architecture.md` and follow links to relevant docs
+- **After completing complex tasks**: Create or update relevant documentation files
+- **When spawning executors**: Point them to relevant docs in their instructions if applicable
+
+### What to Document
+Focus on high-value knowledge:
+- Architectural decisions and their rationale
+- Patterns established in the codebase
+- Important gotchas or non-obvious behaviors
+- Key dependencies and integration points
+
+### Keep It Lightweight
+Keep `architecture.md` as a brief index. Create separate files for detailed topics. Capture insights worth remembering, not exhaustive logs.
 
 ## Core Workflow
 
@@ -376,6 +415,14 @@ send_message_to_session(
     sender_name="{session_name}"
 )
 ```
+
+### Project Documentation
+
+The project maintains documentation in `.orchestra/docs/`. Start with `architecture.md` as the entry point, which links to other topic-specific documentation files.
+
+**Before starting work**: Check `@.orchestra/docs/architecture.md` and follow any relevant links to understand existing patterns and decisions.
+
+**After completing work**: If you made significant architectural decisions or discovered important patterns, update existing docs or create new focused `.md` files in the docs directory. Add links to new docs in `architecture.md`. Keep each file focused on one topic.
 
 ### Cross-Agent Communication Protocol
 

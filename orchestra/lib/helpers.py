@@ -12,7 +12,7 @@ import shlex
 from pathlib import Path
 from .logger import get_logger
 from .tmux import build_respawn_pane_cmd
-from .prompts import DESIGNER_MD_TEMPLATE, DOC_MD_TEMPLATE
+from .prompts import DESIGNER_MD_TEMPLATE, DOC_MD_TEMPLATE, ARCHITECTURE_MD_TEMPLATE
 
 logger = get_logger(__name__)
 
@@ -456,7 +456,7 @@ def ensure_orchestra_in_gitignore(project_dir: Path) -> None:
 
 
 def ensure_orchestra_directory(project_dir: Path) -> tuple[Path, Path]:
-    """Ensure .orchestra/ directory exists with designer.md and doc.md templates,
+    """Ensure .orchestra/ directory exists with designer.md, doc.md, and docs/architecture.md templates,
     and add .orchestra/ to .gitignore if needed.
 
     Args:
@@ -471,8 +471,13 @@ def ensure_orchestra_directory(project_dir: Path) -> tuple[Path, Path]:
     orchestra_dir = project_dir / ".orchestra"
     orchestra_dir.mkdir(exist_ok=True)
 
+    # Create docs directory
+    docs_dir = orchestra_dir / "docs"
+    docs_dir.mkdir(exist_ok=True)
+
     designer_md = orchestra_dir / "designer.md"
     doc_md = orchestra_dir / "doc.md"
+    architecture_md = docs_dir / "architecture.md"
 
     # Create designer.md with template if it doesn't exist
     if not designer_md.exists():
@@ -483,6 +488,11 @@ def ensure_orchestra_directory(project_dir: Path) -> tuple[Path, Path]:
     if not doc_md.exists():
         doc_md.write_text(DOC_MD_TEMPLATE)
         logger.info(f"Created doc.md with template at {doc_md}")
+
+    # Create architecture.md with template if it doesn't exist
+    if not architecture_md.exists():
+        architecture_md.write_text(ARCHITECTURE_MD_TEMPLATE)
+        logger.info(f"Created architecture.md with template at {architecture_md}")
 
     return designer_md, doc_md
 
