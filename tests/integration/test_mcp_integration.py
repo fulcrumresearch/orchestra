@@ -31,8 +31,10 @@ class TestSpawnSubagentIntegration:
         # Verify success
         assert "Successfully spawned child session 'test-child'" in result
 
-        # Verify worktree was created
-        worktree_path = Path.home() / ".orchestra" / "worktrees" / "test_repo" / "test_repo-test-child"
+        # Verify worktree was created (use actual repo name, not hardcoded)
+        repo_name = orchestra_test_env.repo.name
+        session_id = f"{repo_name}-test-child"
+        worktree_path = Path.home() / ".orchestra" / "worktrees" / repo_name / session_id
         assert worktree_path.exists(), f"Worktree should exist at {worktree_path}"
 
         # Verify instructions.md was created
