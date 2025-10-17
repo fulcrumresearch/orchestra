@@ -10,6 +10,7 @@ from .helpers import (
     start_docker_container,
     stop_docker_container,
     docker_exec,
+    cleanup_pairing_artifacts,
 )
 from .logger import get_logger
 from .tmux import (
@@ -307,6 +308,10 @@ class TmuxProtocol(AgentProtocol):
 
     def delete(self, session: "Session") -> bool:
         """Delete a tmux session and cleanup (Docker container or local)"""
+        # Clean up pairing artifacts if they exist
+        if session.source_path:
+            cleanup_pairing_artifacts(session.source_path, session.session_id)
+
         if self.use_docker:
             # Docker mode: stop and remove container (also kills tmux inside)
             container_name = get_docker_container_name(session.session_id)

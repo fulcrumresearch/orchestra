@@ -9,7 +9,8 @@ from orchestra.frontend.app import UnifiedApp
 from orchestra.lib.logger import get_logger
 from orchestra.lib.config import load_config
 from orchestra.lib.tmux import build_tmux_cmd, execute_local
-from orchestra.lib.helpers import kill_process_gracefully
+from orchestra.lib.helpers import kill_process_gracefully, cleanup_pairing_artifacts
+from orchestra.lib.sessions import load_sessions
 
 logger = get_logger(__name__)
 
@@ -56,7 +57,18 @@ def main():
         logger.info(f"Monitor server started with PID {monitor_proc.pid}")
 
     def cleanup_servers():
-        """Clean up background servers on exit"""
+        """Clean up background servers and pairing artifacts on exit"""
+        # Clean up pairing artifacts for all sessions
+        logger.info("Cleaning up pairing artifacts for all sessions")
+        sessions = load_sessions(flat=True)
+        for session in sessions:
+            if not session.source_path:
+                continue
+            try:
+                cleanup_pairing_artifacts(session.source_path, session.session_id)
+            except Exception as e:
+                logger.error(f"Error cleaning up pairing artifacts for session {session.session_id}: {e}")
+
         logger.info("Shutting down MCP server")
         kill_process_gracefully(mcp_proc)
 
