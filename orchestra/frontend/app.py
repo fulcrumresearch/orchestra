@@ -45,7 +45,6 @@ from orchestra.lib.helpers import (
     SESSIONS_FILE,
     PANE_AGENT,
 )
-from orchestra.lib.tmux import is_in_permission_prompt, send_escape
 
 logger = get_logger(__name__)
 
@@ -65,7 +64,7 @@ class UnifiedApp(App):
         padding: 0 1;
     }
 
-    
+
 
     #hud {
         height: 1;
@@ -108,7 +107,7 @@ class UnifiedApp(App):
         padding: 0;
     }
 
-    
+
 
     TabbedContent {
         height: 1fr;
@@ -347,43 +346,26 @@ class UnifiedApp(App):
 
         self.set_focus(self.session_list)
 
-        # Watch sessions.json for changes
-        async def on_sessions_file_change(path, change_type, last_call_time):
+        async def on_sessions_file_change(path, last_call_time):
             self.state.load(root_session_name=self.state.root_session_name)
             await self.action_refresh()
 
         self.state.file_watcher.register(SESSIONS_FILE, on_sessions_file_change)
 
-        # Watch messages.jsonl for changes
-        messages_file = Path.home() / ".orchestra" / "messages.jsonl"
+        messages_file = Path.cwd() / ".orchestra" / "messages.jsonl"
 
-        async def on_messages_file_change(path, change_type, last_call_time):
+        async def on_messages_callback(path):
             self.state.pending_messages_count += 1
             self._update_message_indicator()
 
-            # Debounce: only send message to designer if 5+ seconds since last call
-            current_time = time.time()
-            if current_time - last_call_time >= 5 and self.state.root_session:
-                # Check if designer is in permission prompt
-                if is_in_permission_prompt(self.state.root_session.session_id):
-                    logger.info(f"Designer session appears to be in permission prompt, sending ESC to clear")
-                    send_escape(self.state.root_session.session_id)
-                    # Wait a moment for the prompt to clear
-                    await asyncio.sleep(0.5)
+        self.state.file_watcher.add_session_change_notifier(messages_file, self.state.root_session, on_messages_callback)
 
-                # Now send the status update message
-                self.state.root_session.send_message("[System] Status has updated in .orchestra/messages.jsonl")
-
-        self.state.file_watcher.register(messages_file, on_messages_file_change)
-
-        await self.state.file_watcher.start()
-
-        # Ensure .orchestra directory and files exist
         designer_md, doc_md = ensure_orchestra_directory(self.state.project_dir)
 
-        # Add watcher for designer.md (once root session is ready)
         if self.state.root_session:
-            self.state.file_watcher.add_designer_watcher(designer_md, self.state.root_session)
+            self.state.file_watcher.add_session_change_notifier(designer_md, self.state.root_session)
+
+        await self.state.file_watcher.start()
 
         # Auto-open doc.md on first run, otherwise open designer.md
         if first_run:

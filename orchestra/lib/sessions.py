@@ -5,9 +5,12 @@ import json
 import re
 import subprocess
 
-from orchestra.lib.tmux_agent import TmuxProtocol
+from orchestra.lib.tmux_protocol import TmuxProtocol
 from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
 from .config import load_config
+from .logger import get_logger
+
+logger = get_logger(__name__)
 
 SESSIONS_FILE = Path.home() / ".orchestra" / "sessions.json"
 
@@ -271,9 +274,19 @@ class Session:
         """Get status information for this session"""
         return self.protocol.get_status(self)
 
-    def send_message(self, message: str) -> None:
+    def send_message(self, message: str, sender_name: str = "", queue_mode: bool = False) -> None:
         """Send a message to the session"""
-        self.protocol.send_message(self, message)
+        if queue_mode:
+            # queue mode is a less interruptive way of notifiying
+            messages_path = Path(self.work_path) / ".orchestra" / "messages.jsonl"
+            message_obj = {"sender": sender_name, "message": message}
+
+            logger.info(f"Queued message for session {self.session_name}: {message}")
+            with open(messages_path, "a") as f:
+                f.write(json.dumps(message_obj) + "\n")
+
+        else:
+            self.protocol.send_message(self, f"[From: {sender_name}] {message}")
 
     def toggle_pairing(self) -> tuple[bool, str]:
         """

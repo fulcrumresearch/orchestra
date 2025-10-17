@@ -294,10 +294,7 @@ send_message_to_session(
 
 ## Handling Queued Messages
 
-When executor agents send you messages, they are queued in `~/.orchestra/messages.jsonl` to avoid interrupting your work. When new messages arrive, you'll receive:
-
-`[System] Status has updated in .orchestra/messages.jsonl`
-
+When executor agents send you messages, they are queued in `.orchestra/messages.jsonl` to avoid interrupting your work. You will be notified of new messages.
 **How to handle status notifications:**
 
 1. **Finish current interaction**: Complete your ongoing conversation with the user before checking messages
