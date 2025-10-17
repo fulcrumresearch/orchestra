@@ -117,9 +117,9 @@ def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8081
 
     print(f"Starting Orchestra Monitor Server on port {port}")
-    print(f"Hook endpoint: http://0.0.0.0:{port}/hook/{{session_id}}")
+    print(f"Hook endpoint: http://127.0.0.1:{port}/hook/{{session_id}}")
 
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
 
 
 if __name__ == "__main__":

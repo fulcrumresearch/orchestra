@@ -39,7 +39,8 @@ def main():
 
     # Start the monitoring server in the background
     if START_MONITOR:
-        monitor_port = 8081
+        config = load_config()
+        monitor_port = config.get("monitor_port", 8081)
         monitor_log = Path.home() / ".orchestra" / "monitor-server.log"
         monitor_log.parent.mkdir(parents=True, exist_ok=True)
 

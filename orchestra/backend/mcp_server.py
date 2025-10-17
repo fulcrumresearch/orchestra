@@ -13,7 +13,7 @@ from orchestra.lib.config import load_config
 # (port can be overridden when running as script)
 config = load_config()
 default_port = config.get("mcp_port", 8765)
-host = "0.0.0.0"
+host = "127.0.0.1"
 mcp = FastMCP("orchestra-subagent", port=default_port, host=host)
 
 

@@ -202,7 +202,7 @@ def main() -> int:
             )
 
             # Create TmuxProtocol in Docker mode
-            protocol = TmuxProtocol(default_command="claude", mcp_port=8765, use_docker=True)
+            protocol = TmuxProtocol(default_command="claude", mcp_port=8765, monitor_port=8081, use_docker=True)
 
             print("  - Starting container...")
             if not protocol.start(session):

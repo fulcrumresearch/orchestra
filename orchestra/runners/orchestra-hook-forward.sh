@@ -4,6 +4,7 @@
 
 import sys
 import json
+import os
 import urllib.request
 
 session_id = sys.argv[1]
@@ -16,10 +17,13 @@ try:
     # Add source_path
     event['source_path'] = source_path
 
+    # Get monitor base URL from environment (defaults to localhost:8081)
+    monitor_base = os.getenv("CLAUDE_MONITOR_BASE", "http://localhost:8081")
+
     # POST to monitor server
     urllib.request.urlopen(
         urllib.request.Request(
-            f"http://host.docker.internal:8081/hook/{session_id}",
+            f"{monitor_base.rstrip('/')}/hook/{session_id}",
             data=json.dumps(event).encode('utf-8'),
             headers={'Content-Type': 'application/json'}
         ),

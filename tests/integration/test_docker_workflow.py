@@ -43,6 +43,7 @@ class TestDockerContainerCreation:
             container_name=container_name,
             work_path=str(worktree),
             mcp_port=8765,
+            monitor_port=8081,
             paired=False,
         )
         assert success, "Container should start successfully"
@@ -79,6 +80,7 @@ class TestDockerContainerCreation:
             container_name=container_name,
             work_path=str(worktree),
             mcp_port=8765,
+            monitor_port=8081,
             paired=False,
         )
         assert success

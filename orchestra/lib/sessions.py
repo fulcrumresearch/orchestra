@@ -64,6 +64,7 @@ class Session:
         self.protocol = TmuxProtocol(
             default_command="claude",
             mcp_port=config.get("mcp_port", 8765),
+            monitor_port=config.get("monitor_port", 8081),
             use_docker=self.use_docker,
         )
 

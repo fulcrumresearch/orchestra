@@ -15,6 +15,7 @@ CONFIG_FILE = Path.home() / ".orchestra" / "config.json"
 DEFAULT_CONFIG = {
     "use_docker": True,
     "mcp_port": 8765,
+    "monitor_port": 8081,
     "ui_theme": "textual-dark",
 }
 
