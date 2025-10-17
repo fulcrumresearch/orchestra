@@ -105,7 +105,7 @@ class Session:
             session_name=self.session_name,
             work_path=self.work_path,
             source_path=self.source_path,
-        )
+        ).strip()
         orchestra_md_path.write_text(formatted_prompt)
 
         claude_md_path = claude_dir / "CLAUDE.md"
