@@ -87,19 +87,25 @@ First, let's see what changes the child session has made:
 git diff HEAD...$1
 ```
 
-## Step 2: Check for Uncommitted Changes in Child Branch
+## Step 2: Check Child Worktree for Uncommitted Work
 
-Let's check if there are uncommitted changes in the child branch that need to be committed first:
+Let's navigate to the child worktree and check for any uncommitted or untracked files:
 
 ```bash
-git diff $1
+cd ~/.orchestra/worktrees/$(basename $(pwd))/orchestra-$1 && git status
 ```
 
-If there are uncommitted changes, I'll need to:
-1. Check out the child worktree location (typically at `~/.orchestra/worktrees/<repo>/<session-id>/`)
-2. Review the changes
-3. Commit them with an appropriate message
-4. Return to the main branch
+This will show:
+- Modified files (changes not staged)
+- Staged files (changes ready to commit)
+- Untracked files (new files not yet added)
+
+If there are any uncommitted changes or untracked files, I'll need to commit them from within the worktree:
+1. Review what was changed
+2. Stage files: `cd ~/.orchestra/worktrees/$(basename $(pwd))/orchestra-$1 && git add <files>`
+3. Commit with message: `cd ~/.orchestra/worktrees/$(basename $(pwd))/orchestra-$1 && git commit -m "message"`
+
+Let me check the worktree now...
 
 ## Step 3: Merge the Child Branch
 
