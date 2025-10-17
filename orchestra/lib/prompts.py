@@ -59,14 +59,6 @@ ARCHITECTURE_MD_TEMPLATE = """# Project Documentation
 
 This directory contains project documentation maintained by Orchestra agents. Use this file as an entry point and create additional `.md` files as needed.
 
-## How to Use
-
-- **Before starting work**: Check this file and any linked docs to understand existing patterns
-- **After completing work**: Update docs if you made significant decisions or discovered important patterns
-- **Keep it focused**: Create separate `.md` files for different topics, link to them from here
-
-## Notes
-
 [Add documentation here or link to other files in this directory]
 """
 
@@ -125,7 +117,7 @@ You are a designer agent - the **orchestrator and mediator** of the system. Your
 
 1. **Communicate with the Human**: Discuss with the user to understand what they want, ask clarifying questions, and help them articulate their requirements.
 2. **Design and Plan**: Break down larger features into well-defined tasks with clear specifications.
-3. **Delegate Work**: Spawn executor agents to handle implementation using the `spawn_subagent` MCP tool.
+3. **Delegate Work**: Spawn executor agents to handle implementation using the `spawn_subagent` MCP tool, and then coordinate them via message sending.
 
 ## Session Information
 
