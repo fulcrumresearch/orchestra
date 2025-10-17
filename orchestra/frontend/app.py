@@ -170,6 +170,15 @@ class UnifiedApp(App):
         padding: 0 1;
     }
 
+    #message-indicator {
+        color: $accent;
+        text-style: italic;
+        margin-top: 1;
+        height: 1;
+        width: 100%;
+        padding: 0 1;
+    }
+
     ListView {
         height: 1fr;
         width: 1fr;
@@ -281,6 +290,8 @@ class UnifiedApp(App):
                     yield Static("Sessions", id="sessions-header")
                     self.session_list = ListView(id="session-list")
                     yield self.session_list
+                self.message_indicator = Static("", id="message-indicator")
+                yield self.message_indicator
 
             with Container(id="right-pane"):
                 with Container(id="diff-card"):
@@ -335,11 +346,28 @@ class UnifiedApp(App):
         self.set_focus(self.session_list)
 
         # Watch sessions.json for changes
-        async def on_sessions_file_change(path, change_type):
+        async def on_sessions_file_change(path, change_type, last_call_time):
             self.state.load(root_session_name=self.state.root_session_name)
             await self.action_refresh()
 
         self.state.file_watcher.register(SESSIONS_FILE, on_sessions_file_change)
+
+        # Watch messages.jsonl for changes
+        messages_file = Path.home() / ".orchestra" / "messages.jsonl"
+
+        async def on_messages_file_change(path, change_type, last_call_time):
+            import time
+
+            self.state.pending_messages_count += 1
+            self._update_message_indicator()
+
+            # Debounce: only send message to designer if 5+ seconds since last call
+            current_time = time.time()
+            if current_time - last_call_time >= 5 and self.state.root_session:
+                self.state.root_session.send_message("[System] Status has updated in .orchestra/messages.jsonl")
+
+        self.state.file_watcher.register(messages_file, on_messages_file_change)
+
         await self.state.file_watcher.start()
 
         # Ensure .orchestra directory and files exist
@@ -530,6 +558,14 @@ class UnifiedApp(App):
 
         if not respawn_pane_with_terminal(work_path):
             logger.error(f"Failed to open terminal: {work_path}")
+
+    def _update_message_indicator(self) -> None:
+        """Update the message indicator based on pending count"""
+        count = self.state.pending_messages_count
+        if count > 0:
+            self.message_indicator.update(f"📬 {count} pending message{'s' if count != 1 else ''}")
+        else:
+            self.message_indicator.update("")
 
     def _attach_to_session(self, session: Session) -> None:
         """Select a session and update monitors to show it"""
