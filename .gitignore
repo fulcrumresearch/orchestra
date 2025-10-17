@@ -3,5 +3,6 @@
 __pycache__/
 .mcp.json
 instructions.md
-.orchestra/
+.orchestra/*
+!.orchestra/docs/
 build/
