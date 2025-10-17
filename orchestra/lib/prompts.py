@@ -538,6 +538,16 @@ PROJECT_CONF = """
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "orchestra-hook {session_id} {source_path}"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
