@@ -215,6 +215,7 @@ def designer_session(orchestra_test_env):
             designer_session.spawn_executor("child", "Task instructions")
     """
     from orchestra.lib.sessions import Session, AgentType, save_session
+    from orchestra.lib.helpers import ensure_orchestra_directory
 
     session = Session(
         session_name="designer",
@@ -223,6 +224,10 @@ def designer_session(orchestra_test_env):
         use_docker=False,
     )
     session.prepare()
+
+    # Ensure .orchestra directory exists (as it would in production)
+    ensure_orchestra_directory(orchestra_test_env.repo)
+
     save_session(session, project_dir=orchestra_test_env.repo)
 
     return session

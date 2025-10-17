@@ -141,3 +141,27 @@ class TestSendMessageIntegration:
         assert "[From: my-sender] Test message" in pane_content, (
             f"Expected message not found in pane content: {pane_content}"
         )
+
+    def test_send_message_to_designer_queues_to_jsonl(self, designer_session, orchestra_test_env):
+        """Test that messages to designer sessions are written to messages.jsonl"""
+        # Send a message to the designer session
+        result = send_message_to_session(
+            session_name="designer",
+            message="Please review the PR",
+            source_path=str(orchestra_test_env.repo),
+            sender_name="child-executor",
+        )
+
+        # Verify success
+        assert "Successfully sent message" in result
+
+        # Verify message was written to messages.jsonl
+        messages_file = Path(designer_session.work_path) / ".orchestra" / "messages.jsonl"
+        assert messages_file.exists(), "messages.jsonl should exist"
+
+        # Read and verify message format
+        with open(messages_file) as f:
+            line = f.readline().strip()
+            message_obj = json.loads(line)
+            assert message_obj["sender"] == "child-executor"
+            assert message_obj["message"] == "Please review the PR"
