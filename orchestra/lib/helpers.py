@@ -494,3 +494,81 @@ def is_first_run(project_dir: Path | None = None) -> bool:
             return len(project_sessions) == 0
     except (json.JSONDecodeError, KeyError):
         return True
+
+
+def cleanup_pairing_artifacts(source_path: str, session_id: str) -> None:
+    """
+    Clean up filesystem artifacts from pairing mode.
+
+    This function safely removes pairing mode artifacts including:
+    - Symlink at source directory (if it exists and points to correct worktree)
+    - Backup directory (if it exists)
+    - Restores the original directory from backup
+
+    This cleanup is safe to call even if the session was never paired - it will
+    only perform cleanup if the artifacts actually exist.
+
+    Args:
+        source_path: The original source directory path
+        session_id: The session ID (used to validate symlink target)
+    """
+    logger.info(f"Cleaning up pairing artifacts for {source_path}")
+
+    source = Path(source_path)
+    backup = Path(f"{source_path}.backup")
+
+    # 1. Remove symlink
+
+    if not source.exists():
+        logger.warning(f"Source directory {source_path} does not exist; cleanup cannot be done")
+        return None
+
+    if not source.is_symlink():
+        logger.info(f"Source directory {source_path} is not a symlink; cleanup is not needed")
+        return None
+
+    try:
+        target = source.readlink()
+        resolved_target = (source.parent / target).resolve(strict=False)
+    except OSError as e:
+        logger.error(f"Source directory {source_path} cannot be resolved as a symlink: {e}")
+        return None
+
+    if session_id not in resolved_target.parts:
+        logger.warning(
+            f"Symlink {source} -> {target} points to unexpected location {resolved_target}; cleanup cannot be done"
+        )
+        return None
+
+    logger.info(f"Symlink {source} -> {target} points to the expected location {resolved_target}")
+
+    logger.info(f"Removing symlink {source} -> {target}")
+    try:
+        source.unlink()
+    except OSError as e:
+        logger.error(f"Error unlinking symlink {source} -> {target}: {e}")
+        return None
+    logger.info(f"Symlink {source} -> {target} removed succesfully!")
+
+    # 2. Restore backup
+
+    if not backup.exists():
+        logger.error(f"Backup directory {backup} does not exist; original directory cannot be restored")
+        return None
+
+    if not backup.is_dir():
+        logger.error(f"Backup directory {backup} is not a directory; original directory cannot be restored")
+        return None
+
+    if backup.is_symlink():
+        logger.error(f"Backup directory {backup} is a symlink; original directory cannot be restored")
+        return None
+
+    logger.info(f"Restoring directory {source} from backup {backup}")
+    try:
+        backup.rename(source)
+    except (FileExistsError, FileNotFoundError, IsADirectoryError, PermissionError, NotADirectoryError, OSError) as e:
+        logger.error(f"Error restoring directory {source} from backup {backup}: {e}")
+        return None
+
+    logger.info(f"Directory {source} restored from backup {backup} successfully!")
