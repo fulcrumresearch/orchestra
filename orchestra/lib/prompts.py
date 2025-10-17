@@ -298,6 +298,27 @@ send_message_to_session(
 )
 ```
 
+## Handling Queued Messages
+
+When executor agents send you messages, they are queued in `~/.orchestra/messages.jsonl` to avoid interrupting your work. When new messages arrive, you'll receive:
+
+`[System] Status has updated in .orchestra/messages.jsonl`
+
+**How to handle status notifications:**
+
+1. **Finish current interaction**: Complete your ongoing conversation with the user before checking messages
+2. **Read pending messages** in the file.
+3. **Process messages**: Review each message from executors:
+   - Questions or blockers: Reply promptly with clarifications
+   - Status updates: Acknowledge and update user if needed
+   - Completion reports: Review work and coordinate with user for merge
+4. **Respond to executors**: Use `send_message_to_session` to reply as needed
+
+**Important notes:**
+- Don't interrupt user conversations to check messages - wait for a natural break
+- Summarize executor status for the user when relevant
+- The system ensures messages aren't lost, so you can handle them when appropriate
+
 ### Cross-Agent Communication Protocol
 
 **When you receive a message prefixed with `[From: xxx]`:**
