@@ -286,7 +286,9 @@ class Session:
                 f.write(json.dumps(message_obj) + "\n")
 
         else:
-            self.protocol.send_message(self, f"[From: {sender_name}] {message}")
+            if sender_name:
+                message = f"[From: {sender_name}] {message}"
+            self.protocol.send_message(self, message)
 
     def toggle_pairing(self) -> tuple[bool, str]:
         """
