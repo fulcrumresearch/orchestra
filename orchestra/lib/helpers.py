@@ -566,6 +566,7 @@ def cleanup_pairing_artifacts(source_path: str, session_id: str) -> bool:
 
     logger.info(f"Restoring source {source} from backup {backup}")
     try:
+        source.unlink()
         backup.rename(source)
         did_work = True
     except (FileExistsError, FileNotFoundError, OSError) as e:
