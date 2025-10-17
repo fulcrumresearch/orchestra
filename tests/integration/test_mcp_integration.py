@@ -20,7 +20,7 @@ class TestSpawnSubagentIntegration:
     def test_spawn_creates_worktree_and_files(self, designer_session, orchestra_test_env):
         """Test that spawn_subagent creates a real git worktree and instruction files"""
         # Mock only the tmux start operation (we're not testing tmux startup here)
-        with patch("orchestra.lib.tmux_agent.TmuxProtocol.start", return_value=True):
+        with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
             result = spawn_subagent(
                 parent_session_name="designer",
                 child_session_name="test-child",
@@ -61,7 +61,7 @@ class TestSpawnSubagentIntegration:
     def test_spawn_persists_to_sessions_file(self, designer_session, orchestra_test_env):
         """Test that spawned child is persisted in sessions.json"""
         # Spawn child
-        with patch("orchestra.lib.tmux_agent.TmuxProtocol.start", return_value=True):
+        with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
             spawn_subagent(
                 parent_session_name="designer",
                 child_session_name="child",
