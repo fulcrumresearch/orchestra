@@ -152,14 +152,15 @@ def tmux(monkeypatch):
 class OrchestraTestEnv:
     """Complete test environment for Orchestra integration tests"""
 
-    def __init__(self, git_repo: Path, sessions_file: Path, tmux_socket: str):
+    def __init__(self, git_repo: Path, sessions_file: Path, tmux_socket: str, orchestra_dir: Path):
         self.repo = git_repo
         self.sessions_file = sessions_file
         self.tmux = tmux_socket
+        self.orchestra_dir = orchestra_dir
 
 
 @pytest.fixture
-def orchestra_test_env(temp_git_repo, isolated_sessions_file, mock_config, tmux):
+def orchestra_test_env(temp_git_repo, isolated_sessions_file, mock_config, tmux, tmp_path):
     """All-in-one fixture for Orchestra integration tests
 
     Provides a complete test environment with:
@@ -167,6 +168,7 @@ def orchestra_test_env(temp_git_repo, isolated_sessions_file, mock_config, tmux)
     - Isolated sessions.json file
     - Mocked config (use_docker=False, mcp_port=8765)
     - Isolated tmux server on test socket
+    - Temporary .orchestra directory
 
     Usage:
         def test_something(orchestra_test_env):
@@ -176,14 +178,20 @@ def orchestra_test_env(temp_git_repo, isolated_sessions_file, mock_config, tmux)
             repo_path = env.repo
             sessions_file = env.sessions_file
             tmux_socket = env.tmux
+            orchestra_dir = env.orchestra_dir
 
             # Use tmux socket for subprocess calls
             subprocess.run(["tmux", "-L", env.tmux, "list-sessions"])
     """
+    # Create temporary .orchestra directory
+    orchestra_dir = tmp_path / ".orchestra"
+    orchestra_dir.mkdir(parents=True, exist_ok=True)
+
     return OrchestraTestEnv(
         git_repo=temp_git_repo,
         sessions_file=isolated_sessions_file,
         tmux_socket=tmux,
+        orchestra_dir=orchestra_dir,
     )
 
 

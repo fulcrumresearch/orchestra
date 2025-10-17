@@ -6,8 +6,9 @@ from pathlib import Path
 
 from mcp.server import FastMCP
 
-from orchestra.lib.sessions import load_sessions, save_session, find_session
+from orchestra.lib.sessions import load_sessions, save_session, find_session, AgentType
 from orchestra.lib.config import load_config
+from orchestra.lib.message_queue import append_message
 
 # Create FastMCP server instance with default port
 # (port can be overridden when running as script)
@@ -72,9 +73,15 @@ def send_message_to_session(session_name: str, message: str, source_path: str, s
     if not target:
         return f"Error: Session '{session_name}' not found"
 
+    # Check if target is a designer session
+    if target.agent_type == AgentType.DESIGNER:
+        # Queue message for designer session
+        message_id = append_message(session_name, sender_name, message, source_path)
+        return f"Message queued for designer session '{session_name}' (ID: {message_id})"
+
+    # For executor sessions, send directly via tmux
     # Add prefix to message with sender name
     prefixed_message = f"[From: {sender_name}] {message}"
-
     target.send_message(prefixed_message)
     return f"Successfully sent message to session '{session_name}'"
 

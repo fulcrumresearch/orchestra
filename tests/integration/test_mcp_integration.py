@@ -98,12 +98,12 @@ class TestSendMessageIntegration:
 
         assert "Error: Session 'nonexistent' not found" in result
 
-    def test_send_message(self, orchestra_test_env):
-        """Test that messages are prefixed with [From: sender_name]"""
-        # Create and start a real tmux session
+    def test_send_message_to_executor(self, orchestra_test_env):
+        """Test that messages to executor sessions are sent via tmux with [From: sender_name] prefix"""
+        # Create an executor session (not designer)
         target = Session(
             session_name="target",
-            agent_type=AgentType.DESIGNER,
+            agent_type=AgentType.EXECUTOR,
             source_path=str(orchestra_test_env.repo),
             use_docker=False,
         )
