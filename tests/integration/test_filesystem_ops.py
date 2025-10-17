@@ -223,3 +223,98 @@ class TestSessionInstructionRefresh:
         new_content = orchestra_md.read_text()
         assert "- **Session Name**: new" in new_content
         assert "- **Session Name**: old" not in new_content
+
+
+class TestPairingCleanup:
+    """Tests for cleanup of pairing artifacts on session deletion and shutdown"""
+
+    def test_session_delete_cleans_up_pairing_artifacts(self, executor_session):
+        """Test that deleting a paired session cleans up symlinks and backups"""
+        # Pair the session first
+        success, error = executor_session.toggle_pairing()
+        assert success, f"Pairing failed: {error}"
+
+        source = Path(executor_session.source_path)
+        backup = Path(f"{executor_session.source_path}.backup")
+
+        # Verify paired state
+        assert source.is_symlink()
+        assert backup.exists()
+
+        # Delete the session (should trigger cleanup)
+        executor_session.delete()
+
+        # Verify cleanup: symlink removed, backup restored
+        assert not source.is_symlink()
+        assert source.is_dir()
+        assert not backup.exists()
+        assert (source / ".git").exists()
+
+    def test_cleanup_pairing_artifacts_helper_function(self, executor_session):
+        """Test the cleanup_pairing_artifacts helper function directly"""
+        from orchestra.lib.helpers import cleanup_pairing_artifacts
+
+        # Pair the session first
+        success, error = executor_session.toggle_pairing()
+        assert success, f"Pairing failed: {error}"
+
+        source = Path(executor_session.source_path)
+        backup = Path(f"{executor_session.source_path}.backup")
+
+        # Verify paired state
+        assert source.is_symlink()
+        assert backup.exists()
+
+        # Call cleanup function directly
+        cleanup_pairing_artifacts(executor_session.source_path, executor_session.session_id)
+
+        # Verify cleanup: symlink removed, backup restored
+        assert not source.is_symlink()
+        assert source.is_dir()
+        assert not backup.exists()
+        assert (source / ".git").exists()
+
+    def test_cleanup_safe_when_not_paired(self, executor_session):
+        """Test that cleanup is safe to call even when session was never paired"""
+        from orchestra.lib.helpers import cleanup_pairing_artifacts
+
+        source = Path(executor_session.source_path)
+        backup = Path(f"{executor_session.source_path}.backup")
+
+        # Verify unpaired state
+        assert not source.is_symlink()
+        assert not backup.exists()
+
+        # Call cleanup function - should not crash or do anything destructive
+        cleanup_pairing_artifacts(executor_session.source_path, executor_session.session_id)
+
+        # Verify nothing changed
+        assert not source.is_symlink()
+        assert source.is_dir()
+        assert not backup.exists()
+
+    def test_cleanup_validates_symlink_target(self, executor_session):
+        """Test that cleanup only removes symlinks that point to the correct worktree"""
+        from orchestra.lib.helpers import cleanup_pairing_artifacts
+        import tempfile
+
+        source = Path(executor_session.source_path)
+        backup = Path(f"{executor_session.source_path}.backup")
+
+        # Create a symlink pointing to an unexpected location
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Move source to backup
+            source.rename(backup)
+            # Create symlink to wrong location (not our worktree)
+            source.symlink_to(tmpdir)
+
+            # Call cleanup - should NOT remove the symlink because it doesn't point to our worktree
+            cleanup_pairing_artifacts(executor_session.source_path, executor_session.session_id)
+
+            # Verify symlink was NOT removed (safety check)
+            assert source.is_symlink()
+            assert source.resolve() == Path(tmpdir).resolve()
+
+            # Cleanup: remove the test symlink and restore from backup
+            source.unlink()
+            backup.rename(source)

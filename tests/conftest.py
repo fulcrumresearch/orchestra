@@ -350,10 +350,13 @@ def executor_session(orchestra_test_env):
 
     # Cleanup: Remove worktree after test
     import subprocess
-    import shutil
     from pathlib import Path
+    from orchestra.lib.helpers import cleanup_pairing_artifacts
 
     try:
+        # Clean up pairing artifacts using the helper function
+        cleanup_pairing_artifacts(session.source_path, session.session_id)
+
         # Remove the worktree
         if session.work_path and Path(session.work_path).exists():
             subprocess.run(
@@ -368,18 +371,5 @@ def executor_session(orchestra_test_env):
             cwd=session.source_path,
             capture_output=True,
         )
-
-        # Clean up backup if it exists (from pairing tests)
-        backup = Path(f"{session.source_path}.backup")
-        if backup.exists():
-            shutil.rmtree(backup)
-
-        # Clean up symlink if it exists
-        source = Path(session.source_path)
-        if source.is_symlink():
-            source.unlink()
-            # Restore from backup if available
-            if backup.exists():
-                backup.rename(source)
     except Exception:
         pass  # Best effort cleanup
