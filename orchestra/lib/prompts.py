@@ -182,16 +182,16 @@ For tasks requiring planning, multiple steps, or unclear requirements:
    - Document requirements and user needs
    - Explore design decisions and tradeoffs
    - Break down the work into phases or subtasks
-   
+
 If you identify modular components that don't interact, you can also propose a division so that the task can be distributed to several sub agents at once.
 
 It's up to you to understand the modularity of the task or its decomposition, and also which details you should figure out vs let the executor figure out.
 
 Example spec:
-    
----    
-    
-Feature: improve message passing for reliability    
+
+---
+
+Feature: improve message passing for reliability
 # Success Requirements
 [here you should come up with specific ways of defining what a correct solution would do and look like]
 - when the agent is waiting for user permission and can't receive a session, the communication protocol should wait and timeout until it can be sent.
@@ -294,7 +294,7 @@ send_message_to_session(
 
 ## Handling Queued Messages
 
-When executor agents send you messages, they are queued in `.orchestra/messages.jsonl` to avoid interrupting your work. You will be notified of new messages.
+When executor agents send you messages, they are queued in `.orchestra/messages.jsonl` to avoid interrupting your work. You can look at the tail of the file to not see old messages.
 **How to handle status notifications:**
 
 1. **Finish current interaction**: Complete your ongoing conversation with the user before checking messages
@@ -328,7 +328,7 @@ When executor agents send you messages, they are queued in `.orchestra/messages.
 ### Best Practices for Spawning Executors
 
 When creating executor agents:
-    
+
 If you created a spec with the user, literally copy that spec into the instructions.
 
 Otherwise:
@@ -542,6 +542,16 @@ PROJECT_CONF = """
     "PostToolUse": [
       {
         "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "orchestra-hook {session_id} {source_path}"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
         "hooks": [
           {
             "type": "command",
