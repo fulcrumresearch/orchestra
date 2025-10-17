@@ -183,8 +183,8 @@ def orchestra_test_env(temp_git_repo, isolated_sessions_file, mock_config, tmux,
             # Use tmux socket for subprocess calls
             subprocess.run(["tmux", "-L", env.tmux, "list-sessions"])
     """
-    # Create temporary .orchestra directory
-    orchestra_dir = tmp_path / ".orchestra"
+    # Create .orchestra directory in the repo (where sessions actually work)
+    orchestra_dir = temp_git_repo / ".orchestra"
     orchestra_dir.mkdir(parents=True, exist_ok=True)
 
     return OrchestraTestEnv(
@@ -215,7 +215,6 @@ def designer_session(orchestra_test_env):
             designer_session.spawn_executor("child", "Task instructions")
     """
     from orchestra.lib.sessions import Session, AgentType, save_session
-    from orchestra.lib.helpers import ensure_orchestra_directory
 
     session = Session(
         session_name="designer",
@@ -224,10 +223,6 @@ def designer_session(orchestra_test_env):
         use_docker=False,
     )
     session.prepare()
-
-    # Ensure .orchestra directory exists (as it would in production)
-    ensure_orchestra_directory(orchestra_test_env.repo)
-
     save_session(session, project_dir=orchestra_test_env.repo)
 
     return session
