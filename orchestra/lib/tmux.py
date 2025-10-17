@@ -78,3 +78,57 @@ def build_respawn_pane_cmd(pane: str, command: Union[str, Sequence[str]]) -> lis
     else:
         args.extend(command)
     return build_tmux_cmd(*args)
+
+
+def is_in_permission_prompt(session_id: str) -> bool:
+    """Check if a tmux session is stuck in a permission prompt.
+
+    Args:
+        session_id: The tmux session ID
+
+    Returns:
+        True if session appears to be in a permission prompt, False otherwise
+    """
+    # Capture the pane content using run_local_tmux_command
+    result = run_local_tmux_command(
+        "capture-pane", "-p", "-t", f"{session_id}:0.0"
+    )
+
+    if result.returncode != 0:
+        return False
+
+    pane_content = result.stdout.lower()
+
+    # Common permission prompt patterns
+    permission_patterns = [
+        "allow this action",
+        "do you want to",
+        "are you sure",
+        "press enter to continue",
+        "(y/n)",
+        "permission required",
+    ]
+
+    # Check if any pattern is present in the last 20 lines
+    last_lines = "\n".join(pane_content.split("\n")[-20:])
+
+    for pattern in permission_patterns:
+        if pattern in last_lines:
+            return True
+
+    return False
+
+
+def send_escape(session_id: str) -> bool:
+    """Send ESC key to a tmux session to clear prompts.
+
+    Args:
+        session_id: The tmux session ID
+
+    Returns:
+        True if successful, False otherwise
+    """
+    result = run_local_tmux_command(
+        "send-keys", "-t", f"{session_id}:0.0", "Escape"
+    )
+    return result.returncode == 0
