@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 import asyncio
+import time
 from pathlib import Path
 
 from textual.app import App, ComposeResult
@@ -44,6 +45,7 @@ from orchestra.lib.helpers import (
     SESSIONS_FILE,
     PANE_AGENT,
 )
+from orchestra.lib.tmux import is_in_permission_prompt, send_escape
 
 logger = get_logger(__name__)
 
@@ -356,14 +358,20 @@ class UnifiedApp(App):
         messages_file = Path.home() / ".orchestra" / "messages.jsonl"
 
         async def on_messages_file_change(path, change_type, last_call_time):
-            import time
-
             self.state.pending_messages_count += 1
             self._update_message_indicator()
 
             # Debounce: only send message to designer if 5+ seconds since last call
             current_time = time.time()
             if current_time - last_call_time >= 5 and self.state.root_session:
+                # Check if designer is in permission prompt
+                if is_in_permission_prompt(self.state.root_session.session_id):
+                    logger.info(f"Designer session appears to be in permission prompt, sending ESC to clear")
+                    send_escape(self.state.root_session.session_id)
+                    # Wait a moment for the prompt to clear
+                    await asyncio.sleep(0.5)
+
+                # Now send the status update message
                 self.state.root_session.send_message("[System] Status has updated in .orchestra/messages.jsonl")
 
         self.state.file_watcher.register(messages_file, on_messages_file_change)
