@@ -1,6 +1,7 @@
 """Async file watcher utility using watchfiles"""
 
 import asyncio
+import time
 from pathlib import Path
 from typing import Callable, Awaitable, Dict, Set, TYPE_CHECKING
 from watchfiles import awatch, Change
@@ -11,8 +12,8 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# Type for async handler functions
-FileChangeHandler = Callable[[Path, Change], Awaitable[None]]
+# Type for async handler functions - now includes last_call_time parameter
+FileChangeHandler = Callable[[Path, Change, float], Awaitable[None]]
 
 
 class FileWatcher:
@@ -25,6 +26,7 @@ class FileWatcher:
 
     def __init__(self):
         self._watchers: Dict[Path, Set[FileChangeHandler]] = {}
+        self._last_call_times: Dict[tuple, float] = {}  # Key: (path, handler), Value: timestamp
         self._task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
         self._should_stop = False  # Flag to distinguish stop vs restart
@@ -130,8 +132,14 @@ class FileWatcher:
                         handlers = list(self._watchers[path])
                         logger.debug(f"Triggering {len(handlers)} handlers for {path}")
                         for handler in handlers:
+                            # Get last call time for this handler
+                            handler_key = (path, id(handler))
+                            last_call_time = self._last_call_times.get(handler_key, 0.0)
+
                             try:
-                                await handler(path, change_type)
+                                await handler(path, change_type, last_call_time)
+                                # Update last call time
+                                self._last_call_times[handler_key] = time.time()
                             except Exception as e:
                                 logger.error(f"Error in file watcher handler for {path}: {e}")
 
@@ -152,14 +160,11 @@ class FileWatcher:
         """
         designer_md = Path(designer_md).resolve()
 
-        async def on_designer_change(path: Path, change_type: Change) -> None:
+        async def on_designer_change(path: Path, change_type: Change, last_call_time: float) -> None:
             """Handler for designer.md changes"""
             logger.debug(f"designer.md changed for session {session.session_id}: {path} ({change_type})")
-            try:
-                session.send_message("[System] .orchestra/designer.md has been updated. Please review the changes")
-                logger.debug(f"Sent message to session {session.session_id}")
-            except Exception as e:
-                logger.error(f"Failed to send message to session {session.session_id}: {e}")
+            session.send_message("[System] .orchestra/designer.md has been updated. Please review the changes")
+            logger.debug(f"Sent message to session {session.session_id}")
 
         self.register(designer_md, on_designer_change)
         logger.debug(f"Registered designer.md watcher for session {session.session_id}: {designer_md}")
