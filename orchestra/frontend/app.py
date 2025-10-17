@@ -171,12 +171,12 @@ class UnifiedApp(App):
     }
 
     #message-indicator {
-        color: $accent;
-        text-style: italic;
-        margin-top: 1;
+        color: $foreground;
+        text-style: none;
         height: 1;
         width: 100%;
         padding: 0 1;
+        text-align: right;
     }
 
     ListView {
@@ -563,7 +563,8 @@ class UnifiedApp(App):
         """Update the message indicator based on pending count"""
         count = self.state.pending_messages_count
         if count > 0:
-            self.message_indicator.update(f"📬 {count} pending message{'s' if count != 1 else ''}")
+            msg_word = "message" if count == 1 else "messages"
+            self.message_indicator.update(f"[{count} {msg_word}]")
         else:
             self.message_indicator.update("")
 
