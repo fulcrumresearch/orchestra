@@ -572,7 +572,7 @@ class UnifiedApp(App):
         count = self.state.pending_messages_count
         if count > 0:
             msg_word = "message" if count == 1 else "messages"
-            self.message_indicator.update(f"[{count} {msg_word}]")
+            self.message_indicator.update(f"{count} executor {msg_word} pending")
         else:
             self.message_indicator.update("")
 
