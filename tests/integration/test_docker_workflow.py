@@ -237,3 +237,224 @@ class TestFullSpawnWorkflow:
         branch_name = result.stdout.strip()
         assert child.session_id in branch_name, f"Branch name should contain session_id, got: {branch_name}"
 
+
+@pytest.mark.slow
+class TestDockerNetworkConnectivity:
+    """Tests for Docker container connectivity to MCP and Monitor servers"""
+
+    def test_container_can_reach_mcp_server(self, docker_setup, tmp_path, cleanup_containers):
+        """Test that container can connect to MCP server via localhost with custom port"""
+        import subprocess
+        import os
+        from unittest.mock import patch
+
+        # Use custom ports to test config is respected
+        custom_mcp_port = 9876
+        custom_monitor_port = 9877
+
+        container_name = "orchestra-test-mcp-connectivity"
+        cleanup_containers(container_name)
+
+        worktree = tmp_path / "test_worktree"
+        worktree.mkdir()
+
+        # Start MCP server on custom port
+        mcp_log = tmp_path / "mcp-server.log"
+        with open(mcp_log, "w") as log_file:
+            # Override the port by patching config
+            with patch("orchestra.backend.mcp_server.default_port", custom_mcp_port):
+                mcp_proc = subprocess.Popen(
+                    ["python3", "-m", "orchestra.backend.mcp_server"],
+                    stdout=log_file,
+                    stderr=log_file,
+                    start_new_session=True,
+                )
+
+        try:
+            # Give server time to start
+            time.sleep(2)
+
+            # Start container with custom ports
+            success = start_docker_container(
+                container_name=container_name,
+                work_path=str(worktree),
+                mcp_port=custom_mcp_port,
+                monitor_port=custom_monitor_port,
+                paired=False,
+            )
+            assert success, "Container should start successfully"
+
+            # Test connectivity from inside container to MCP server
+            result = subprocess.run(
+                [
+                    "docker", "exec", container_name,
+                    "python3", "-c",
+                    f"import urllib.request; "
+                    f"response = urllib.request.urlopen('http://localhost:{custom_mcp_port}/mcp', timeout=5); "
+                    f"print('SUCCESS' if response.getcode() == 200 else 'FAILED')"
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            assert result.returncode == 0, f"MCP connectivity check failed: {result.stderr}"
+            assert "SUCCESS" in result.stdout, "Container should be able to reach MCP server via localhost"
+
+            # Verify port forwarding is configured correctly
+            inspect_result = subprocess.run(
+                ["docker", "inspect", container_name],
+                capture_output=True,
+                text=True,
+            )
+            assert inspect_result.returncode == 0
+
+            inspect_data = json.loads(inspect_result.stdout)
+            port_bindings = inspect_data[0]["HostConfig"]["PortBindings"]
+
+            # Verify MCP port is bound to 127.0.0.1
+            mcp_binding_key = f"{custom_mcp_port}/tcp"
+            assert mcp_binding_key in port_bindings, f"MCP port {custom_mcp_port} should be in port bindings"
+            assert port_bindings[mcp_binding_key][0]["HostIp"] == "127.0.0.1", "MCP port should be bound to 127.0.0.1"
+            assert port_bindings[mcp_binding_key][0]["HostPort"] == str(custom_mcp_port), "MCP port should match config"
+
+        finally:
+            # Cleanup MCP server
+            os.killpg(os.getpgid(mcp_proc.pid), 15)
+            mcp_proc.wait(timeout=5)
+
+    def test_container_receives_monitor_env_var(self, docker_setup, tmp_path, cleanup_containers):
+        """Test that container receives CLAUDE_MONITOR_BASE environment variable"""
+        import subprocess
+
+        custom_monitor_port = 9988
+        container_name = "orchestra-test-monitor-env"
+        cleanup_containers(container_name)
+
+        worktree = tmp_path / "test_worktree"
+        worktree.mkdir()
+
+        # Start container with custom monitor port
+        success = start_docker_container(
+            container_name=container_name,
+            work_path=str(worktree),
+            mcp_port=8765,
+            monitor_port=custom_monitor_port,
+            paired=False,
+        )
+        assert success, "Container should start successfully"
+
+        # Check that CLAUDE_MONITOR_BASE env var is set correctly
+        result = subprocess.run(
+            ["docker", "exec", container_name, "printenv", "CLAUDE_MONITOR_BASE"],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, "CLAUDE_MONITOR_BASE should be set in container"
+        expected_url = f"http://localhost:{custom_monitor_port}"
+        assert result.stdout.strip() == expected_url, f"CLAUDE_MONITOR_BASE should be {expected_url}"
+
+    def test_container_port_forwarding_localhost_only(self, docker_setup, tmp_path, cleanup_containers):
+        """Test that port forwarding is bound to 127.0.0.1 only (not 0.0.0.0)"""
+        import subprocess
+
+        container_name = "orchestra-test-port-binding"
+        cleanup_containers(container_name)
+
+        worktree = tmp_path / "test_worktree"
+        worktree.mkdir()
+
+        mcp_port = 8765
+        monitor_port = 8081
+
+        # Start container
+        success = start_docker_container(
+            container_name=container_name,
+            work_path=str(worktree),
+            mcp_port=mcp_port,
+            monitor_port=monitor_port,
+            paired=False,
+        )
+        assert success, "Container should start successfully"
+
+        # Inspect container port bindings
+        result = subprocess.run(
+            ["docker", "inspect", container_name],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+
+        inspect_data = json.loads(result.stdout)
+        port_bindings = inspect_data[0]["HostConfig"]["PortBindings"]
+
+        # Verify both MCP and Monitor ports are bound to 127.0.0.1
+        mcp_key = f"{mcp_port}/tcp"
+        monitor_key = f"{monitor_port}/tcp"
+
+        assert mcp_key in port_bindings, "MCP port should be in bindings"
+        assert monitor_key in port_bindings, "Monitor port should be in bindings"
+
+        # Check MCP port binding
+        assert port_bindings[mcp_key][0]["HostIp"] == "127.0.0.1", "MCP port should be bound to localhost only"
+        assert port_bindings[mcp_key][0]["HostPort"] == str(mcp_port), "MCP host port should match container port"
+
+        # Check Monitor port binding
+        assert port_bindings[monitor_key][0]["HostIp"] == "127.0.0.1", "Monitor port should be bound to localhost only"
+        assert port_bindings[monitor_key][0]["HostPort"] == str(monitor_port), "Monitor host port should match container port"
+
+    def test_config_ports_are_respected(self, docker_setup, tmp_path, cleanup_containers):
+        """Test that custom ports from config are properly used throughout the system"""
+        from unittest.mock import patch
+        from orchestra.lib.config import load_config
+
+        # Mock config with custom ports
+        custom_config = {
+            "use_docker": True,
+            "mcp_port": 7777,
+            "monitor_port": 7778,
+            "ui_theme": "textual-dark",
+        }
+
+        container_name = "orchestra-test-config-ports"
+        cleanup_containers(container_name)
+
+        worktree = tmp_path / "test_worktree"
+        worktree.mkdir()
+
+        with patch("orchestra.lib.config.load_config", return_value=custom_config):
+            # Manually call with config values (simulating what Session would do)
+            success = start_docker_container(
+                container_name=container_name,
+                work_path=str(worktree),
+                mcp_port=custom_config["mcp_port"],
+                monitor_port=custom_config["monitor_port"],
+                paired=False,
+            )
+            assert success, "Container should start with custom ports"
+
+            # Verify ports in container inspection
+            result = subprocess.run(
+                ["docker", "inspect", container_name],
+                capture_output=True,
+                text=True,
+            )
+            assert result.returncode == 0
+
+            inspect_data = json.loads(result.stdout)
+            port_bindings = inspect_data[0]["HostConfig"]["PortBindings"]
+
+            # Verify custom ports are used
+            assert f"{custom_config['mcp_port']}/tcp" in port_bindings, "Custom MCP port should be bound"
+            assert f"{custom_config['monitor_port']}/tcp" in port_bindings, "Custom monitor port should be bound"
+
+            # Verify CLAUDE_MONITOR_BASE uses custom port
+            result = subprocess.run(
+                ["docker", "exec", container_name, "printenv", "CLAUDE_MONITOR_BASE"],
+                capture_output=True,
+                text=True,
+            )
+            expected_monitor_url = f"http://localhost:{custom_config['monitor_port']}"
+            assert result.stdout.strip() == expected_monitor_url, "CLAUDE_MONITOR_BASE should use custom port"
+
