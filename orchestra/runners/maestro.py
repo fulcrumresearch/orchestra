@@ -23,17 +23,7 @@ def main():
     os.environ.setdefault("TMUX_TMPDIR", "/tmp")  # Use local tmp for better performance
 
     # Check if orchestra-main session already exists
-    try:
-        check_result = execute_local(build_tmux_cmd("has-session", "-t", "orchestra-main"))
-        if check_result.returncode == 0:
-            # Session exists - try to attach to it
-            logger.info("Existing Orchestra session found. Attaching...")
-            attach_result = execute_local(build_tmux_cmd("attach-session", "-t", "orchestra-main"))
-            # If attach succeeded, we're done - return/exit
-            return
-    except Exception as e:
-        logger.debug(f"No existing session found: {e}")
-        # Continue with normal startup
+
 
     # If we get here, no session exists or attach failed - proceed with normal startup
     logger.info("Starting new Orchestra session...")

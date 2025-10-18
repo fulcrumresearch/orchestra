@@ -96,6 +96,7 @@ class FileWatcher:
         while not self._should_stop:
             if not self._watchers:
                 # No files to watch, sleep briefly
+                # TODO: fix this unclean logic
                 await asyncio.sleep(0.5)
                 continue
 
