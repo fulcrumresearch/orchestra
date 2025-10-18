@@ -32,17 +32,19 @@ from orchestra.lib.sessions import (
 )
 from orchestra.lib.logger import get_logger
 from orchestra.lib.config import load_config
-from orchestra.lib.helpers import (
-    check_dependencies,
-    get_current_branch,
+from orchestra.lib.helpers.process import check_dependencies
+from orchestra.lib.helpers.git import get_current_branch
+from orchestra.lib.helpers.tmux import (
     respawn_pane,
     respawn_pane_with_vim,
     respawn_pane_with_terminal,
-    ensure_docker_image,
+    PANE_AGENT,
+)
+from orchestra.lib.helpers.docker import ensure_docker_image
+from orchestra.lib.helpers.file_ops import (
     ensure_orchestra_directory,
     is_first_run,
     SESSIONS_FILE,
-    PANE_AGENT,
 )
 
 logger = get_logger(__name__)

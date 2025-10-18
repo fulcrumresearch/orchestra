@@ -78,7 +78,7 @@ def isolated_sessions_file(tmp_path, monkeypatch):
 
     # Patch SESSIONS_FILE in all modules that use it
     monkeypatch.setattr("orchestra.lib.sessions.SESSIONS_FILE", temp_sessions_file)
-    monkeypatch.setattr("orchestra.lib.helpers.SESSIONS_FILE", temp_sessions_file)
+    monkeypatch.setattr("orchestra.lib.helpers.file_ops.SESSIONS_FILE", temp_sessions_file)
 
     # Initialize empty sessions file
     temp_sessions_file.write_text("{}")
@@ -137,7 +137,7 @@ def tmux(monkeypatch):
     def test_build_tmux_cmd(*args):
         return ["tmux", "-L", socket_name] + list(args)
 
-    monkeypatch.setattr("orchestra.lib.tmux.build_tmux_cmd", test_build_tmux_cmd)
+    monkeypatch.setattr("orchestra.lib.helpers.tmux.build_tmux_cmd", test_build_tmux_cmd)
     monkeypatch.setattr("orchestra.lib.tmux_agent.build_tmux_cmd", test_build_tmux_cmd)
 
     yield socket_name
@@ -253,7 +253,7 @@ def docker_setup(docker_available):
             # orchestra-image is guaranteed to exist
             ...
     """
-    from orchestra.lib.helpers import ensure_docker_image
+    from orchestra.lib.helpers.docker import ensure_docker_image
 
     # Build image once for all tests
     ensure_docker_image()
@@ -282,7 +282,7 @@ def cleanup_containers(request):
             # ... test code that creates container ...
             # Container will be cleaned up automatically after test
     """
-    from orchestra.lib.helpers import stop_docker_container
+    from orchestra.lib.helpers.docker import stop_docker_container
 
     containers_to_cleanup = []
 

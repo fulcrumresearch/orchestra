@@ -1,14 +1,31 @@
-"""Tmux command builder and executor for orchestra socket."""
+"""Tmux command builders and pane management utilities"""
 
 import os
 import subprocess
+import shutil
+import shlex
+from pathlib import Path
 from collections.abc import Sequence
 from typing import Union
 
-from .config import get_tmux_config_path
+from ..logger import get_logger
+from ..config import get_tmux_config_path
+from .process import find_available_editor
+
+logger = get_logger(__name__)
 
 
+# Tmux socket name
 TMUX_SOCKET = "orchestra"
+
+
+# Tmux pane constants
+PANE_UI = "0"
+PANE_EDITOR = "1"
+PANE_AGENT = "2"
+
+
+# Low-level command builders
 
 
 def tmux_env() -> dict:
@@ -78,3 +95,64 @@ def build_respawn_pane_cmd(pane: str, command: Union[str, Sequence[str]]) -> lis
     else:
         args.extend(command)
     return build_tmux_cmd(*args)
+
+
+# High-level pane management
+
+
+def respawn_pane(pane: str, command: str) -> bool:
+    """Generic helper to respawn a tmux pane with a command.
+
+    Args:
+        pane: The pane number to respawn
+        command: The command to run in the pane
+
+    Returns:
+        True if successful, False otherwise
+    """
+    result = subprocess.run(
+        build_respawn_pane_cmd(pane, command),
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
+
+
+def respawn_pane_with_vim(spec_file: Path) -> bool:
+    """Open an editor in the editor pane.
+
+    Args:
+        spec_file: Path to the file to open
+
+    Returns:
+        True if successful, False otherwise
+    """
+    editor = find_available_editor()
+
+    if not editor:
+        logger.error("No editor found. Please install nano, vim, or VS Code, or set the $EDITOR environment variable.")
+        return False
+
+    # Get user's shell, fallback to bash
+    shell = os.environ.get('SHELL', '/bin/bash')
+
+    editor_cmd = (
+        f'{shell} -c "{editor} {shlex.quote(str(spec_file))}; clear; echo \\"Press s to open spec editor\\"; exec {shell}"'
+    )
+    return respawn_pane(PANE_EDITOR, editor_cmd)
+
+
+def respawn_pane_with_terminal(work_path: Path) -> bool:
+    """Open shell in editor pane.
+
+    Args:
+        work_path: Path to cd into before starting shell
+
+    Returns:
+        True if successful, False otherwise
+    """
+    # Get user's shell, fallback to bash
+    shell = os.environ.get('SHELL', '/bin/bash')
+
+    bash_cmd = f'{shell} -c "cd {shlex.quote(str(work_path))} && exec {shell}"'
+    return respawn_pane(PANE_EDITOR, bash_cmd)
