@@ -1,6 +1,5 @@
 """File and directory utilities"""
 
-import json
 from pathlib import Path
 
 from ..logger import get_logger
@@ -68,18 +67,8 @@ def is_first_run(project_dir: Path | None = None) -> bool:
     Returns:
         True if no sessions exist for the project, False otherwise
     """
-    if project_dir is None:
-        project_dir = Path.cwd()
+    # Import here to avoid circular dependency
+    from ..sessions import load_sessions
 
-    project_dir_str = str(project_dir)
-
-    if not SESSIONS_FILE.exists():
-        return True
-
-    try:
-        with open(SESSIONS_FILE, "r") as f:
-            data = json.load(f)
-            project_sessions = data.get(project_dir_str, [])
-            return len(project_sessions) == 0
-    except (json.JSONDecodeError, KeyError):
-        return True
+    sessions = load_sessions(project_dir=project_dir)
+    return len(sessions) == 0

@@ -30,11 +30,7 @@ def ensure_docker_image() -> None:
     if not result.stdout.strip():
         # Image doesn't exist, build it
         # Find Dockerfile in the orchestra package
-        try:
-            dockerfile_path = resources.files("orchestra") / "Dockerfile"
-        except (ImportError, AttributeError):
-            # Fallback for older Python or development mode
-            dockerfile_path = Path(__file__).parent.parent.parent / "Dockerfile"
+        dockerfile_path = resources.files("orchestra") / "Dockerfile"
 
         if not Path(dockerfile_path).exists():
             raise RuntimeError(f"Dockerfile not found at {dockerfile_path}")
@@ -73,96 +69,91 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
     Returns:
         True on success, False on failure
     """
-    try:
-        # Ensure Docker image exists
-        ensure_docker_image()
+    # Ensure Docker image exists
+    ensure_docker_image()
 
-        # Check if container already exists (exact name match)
-        check_result = subprocess.run(
-            ["docker", "inspect", "--format={{.State.Running}}", container_name],
-            capture_output=True,
-            text=True,
-        )
+    # Check if container already exists (exact name match)
+    check_result = subprocess.run(
+        ["docker", "inspect", "--format={{.State.Running}}", container_name],
+        capture_output=True,
+        text=True,
+    )
 
-        if check_result.returncode == 0:
-            is_running = check_result.stdout.strip() == "true"
-            if is_running:
-                logger.info(f"Container {container_name} already running")
-                return True
-            else:
-                subprocess.run(["docker", "rm", container_name], capture_output=True)
+    if check_result.returncode == 0:
+        is_running = check_result.stdout.strip() == "true"
+        if is_running:
+            logger.info(f"Container {container_name} already running")
+            return True
+        else:
+            subprocess.run(["docker", "rm", container_name], capture_output=True)
 
-        # Prepare volume mounts
-        env_vars = []
+    # Prepare volume mounts
+    env_vars = []
 
-        # Always mount worktree at /workspace
-        mounts = ["-v", f"{work_path}:/workspace"]
+    # Always mount worktree at /workspace
+    mounts = ["-v", f"{work_path}:/workspace"]
 
-        # Ensure shared Claude Code directory and config file exist
-        shared_claude_dir = Path.home() / ".orchestra" / "shared-claude"
-        shared_claude_json = Path.home() / ".orchestra" / "shared-claude.json"
-        ensure_shared_claude_config(shared_claude_dir, shared_claude_json, mcp_port)
+    # Ensure shared Claude Code directory and config file exist
+    shared_claude_dir = Path.home() / ".orchestra" / "shared-claude"
+    shared_claude_json = Path.home() / ".orchestra" / "shared-claude.json"
+    ensure_shared_claude_config(shared_claude_dir, shared_claude_json, mcp_port)
 
-        # Mount shared .claude directory and .claude.json for all executor agents
-        # This is separate from host's ~/.claude to avoid conflicts
-        mounts.extend(
-            ["-v", f"{shared_claude_dir}:/home/executor/.claude", "-v", f"{shared_claude_json}:/home/executor/.claude.json"]
-        )
+    # Mount shared .claude directory and .claude.json for all executor agents
+    # This is separate from host's ~/.claude to avoid conflicts
+    mounts.extend(
+        ["-v", f"{shared_claude_dir}:/home/executor/.claude", "-v", f"{shared_claude_json}:/home/executor/.claude.json"]
+    )
 
-        # Mount tmux config file for agent sessions to default location
-        from ..config import get_tmux_config_path
+    # Mount tmux config file for agent sessions to default location
+    from ..config import get_tmux_config_path
 
-        tmux_config_path = get_tmux_config_path()
-        mounts.extend(["-v", f"{tmux_config_path}:/home/executor/.tmux.conf:ro"])
+    tmux_config_path = get_tmux_config_path()
+    mounts.extend(["-v", f"{tmux_config_path}:/home/executor/.tmux.conf:ro"])
 
-        mode = "PAIRED (source symlinked)" if paired else "UNPAIRED"
-        logger.info(
-            f"Starting container in {mode} mode: worktree at /workspace, shared Claude config at {shared_claude_dir}"
-        )
+    mode = "PAIRED (source symlinked)" if paired else "UNPAIRED"
+    logger.info(
+        f"Starting container in {mode} mode: worktree at /workspace, shared Claude config at {shared_claude_dir}"
+    )
 
-        # Get API key from environment
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    # Get API key from environment
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 
-        if api_key:
-            env_vars.extend(["-e", f"ANTHROPIC_API_KEY={api_key}"])
+    if api_key:
+        env_vars.extend(["-e", f"ANTHROPIC_API_KEY={api_key}"])
 
-        # Get host user's UID and GID to run container as matching user
-        uid = os.getuid()
-        gid = os.getgid()
+    # Get host user's UID and GID to run container as matching user
+    uid = os.getuid()
+    gid = os.getgid()
 
-        # Start container (keep alive with tail -f)
-        cmd = [
-            "docker",
-            "run",
-            "-d",
-            "--name",
-            container_name,
-            "--user",
-            f"{uid}:{gid}",  # Run as host user to match file permissions
-            "--add-host",
-            "host.docker.internal:host-gateway",  # Allow access to host
-            *env_vars,
-            *mounts,
-            "-w",
-            "/workspace",
-            "orchestra-image",
-            "tail",
-            "-f",
-            "/dev/null",
-        ]
+    # Start container (keep alive with tail -f)
+    cmd = [
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "--user",
+        f"{uid}:{gid}",  # Run as host user to match file permissions
+        "--add-host",
+        "host.docker.internal:host-gateway",  # Allow access to host
+        *env_vars,
+        *mounts,
+        "-w",
+        "/workspace",
+        "orchestra-image",
+        "tail",
+        "-f",
+        "/dev/null",
+    ]
 
-        result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)
 
-        if result.returncode != 0:
-            raise RuntimeError(f"Failed to start container: {result.stderr}")
+    if result.returncode != 0:
+        raise RuntimeError(f"Failed to start container: {result.stderr}")
 
-        logger.info(f"Container {container_name} started successfully")
+    logger.info(f"Container {container_name} started successfully")
 
-        return True
-
-    except Exception as e:
-        logger.error(f"Failed to start container: {e}")
-        return False
+    return True
 
 
 def stop_docker_container(container_name: str) -> None:
