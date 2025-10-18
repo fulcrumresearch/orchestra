@@ -6,4 +6,3 @@ instructions.md
 .orchestra/*
 !.orchestra/docs/
 build/
-.orchestra/
