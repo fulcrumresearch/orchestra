@@ -13,13 +13,14 @@ from pathlib import Path
 from .logger import get_logger
 from .tmux import build_respawn_pane_cmd
 from .prompts import DESIGNER_MD_TEMPLATE, DOC_MD_TEMPLATE, ARCHITECTURE_MD_TEMPLATE
+from .config import get_orchestra_home
 
 
 logger = get_logger(__name__)
 
 
 # Sessions file path (shared constant)
-SESSIONS_FILE = Path.home() / ".orchestra" / "sessions.json"
+SESSIONS_FILE = get_orchestra_home() / "sessions.json"
 
 
 def kill_process_gracefully(proc: subprocess.Popen, timeout: int = 5) -> None:
@@ -285,8 +286,8 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, m
         mounts = ["-v", f"{work_path}:/workspace"]
 
         # Ensure shared Claude Code directory and config file exist
-        shared_claude_dir = Path.home() / ".orchestra" / "shared-claude"
-        shared_claude_json = Path.home() / ".orchestra" / "shared-claude.json"
+        shared_claude_dir = get_orchestra_home() / "shared-claude"
+        shared_claude_json = get_orchestra_home() / "shared-claude.json"
         ensure_shared_claude_config(shared_claude_dir, shared_claude_json, mcp_port)
 
         # Mount shared .claude directory and .claude.json for all executor agents

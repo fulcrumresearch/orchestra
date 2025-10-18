@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from orchestra.backend.mcp_server import spawn_subagent, send_message_to_session
 from orchestra.lib.sessions import Session, AgentType, save_session
+from orchestra.lib.config import get_orchestra_home
 
 
 class TestSpawnSubagentIntegration:
@@ -34,7 +35,7 @@ class TestSpawnSubagentIntegration:
         # Verify worktree was created (use actual repo name, not hardcoded)
         repo_name = orchestra_test_env.repo.name
         session_id = f"{repo_name}-test-child"
-        worktree_path = Path.home() / ".orchestra" / "worktrees" / repo_name / session_id
+        worktree_path = get_orchestra_home() / "worktrees" / repo_name / session_id
         assert worktree_path.exists(), f"Worktree should exist at {worktree_path}"
 
         # Verify instructions.md was created

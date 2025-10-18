@@ -1,5 +1,6 @@
 """Shared pytest fixtures for Orchestra tests"""
 
+import os
 import pytest
 import subprocess
 from pathlib import Path
@@ -63,7 +64,28 @@ def temp_git_repo(tmp_path):
 
 
 @pytest.fixture
-def isolated_sessions_file(tmp_path, monkeypatch):
+def isolated_orchestra_home(tmp_path, monkeypatch):
+    """Use a temporary ORCHESTRA_HOME directory isolated from the real one
+
+    This fixture:
+    1. Creates a temporary orchestra home directory
+    2. Sets ORCHESTRA_HOME environment variable to point to it
+    3. Ensures tests don't affect the real ~/.orchestra directory
+
+    Returns:
+        Path: Path to the temporary orchestra home directory
+    """
+    temp_orchestra_home = tmp_path / ".orchestra"
+    temp_orchestra_home.mkdir()
+
+    # Set ORCHESTRA_HOME environment variable
+    monkeypatch.setenv("ORCHESTRA_HOME", str(temp_orchestra_home))
+
+    return temp_orchestra_home
+
+
+@pytest.fixture
+def isolated_sessions_file(tmp_path, monkeypatch, isolated_orchestra_home):
     """Use a temporary sessions.json file isolated from the real one
 
     This fixture:
@@ -71,10 +93,12 @@ def isolated_sessions_file(tmp_path, monkeypatch):
     2. Patches SESSIONS_FILE in all relevant modules
     3. Ensures tests don't affect the real sessions file
 
+    Note: Depends on isolated_orchestra_home to ensure ORCHESTRA_HOME is set first
+
     Returns:
         Path: Path to the temporary sessions file
     """
-    temp_sessions_file = tmp_path / "sessions.json"
+    temp_sessions_file = isolated_orchestra_home / "sessions.json"
 
     # Patch SESSIONS_FILE in all modules that use it
     monkeypatch.setattr("orchestra.lib.sessions.SESSIONS_FILE", temp_sessions_file)

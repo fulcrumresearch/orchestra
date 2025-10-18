@@ -7,9 +7,9 @@ import subprocess
 
 from orchestra.lib.tmux_agent import TmuxProtocol
 from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
-from .config import load_config
+from .config import load_config, get_orchestra_home
 
-SESSIONS_FILE = Path.home() / ".orchestra" / "sessions.json"
+SESSIONS_FILE = get_orchestra_home() / "sessions.json"
 
 
 def sanitize_session_name(name: str) -> str:
@@ -177,7 +177,7 @@ class Session:
 
         # Executor uses worktree
         source_dir_name = Path(self.source_path).name
-        worktree_base = Path.home() / ".orchestra" / "worktrees" / source_dir_name
+        worktree_base = get_orchestra_home() / "worktrees" / source_dir_name
         self.work_path = str(worktree_base / self.session_id)
 
         if Path(self.work_path).exists():
