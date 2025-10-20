@@ -6,7 +6,7 @@ from pathlib import Path
 
 from mcp.server import FastMCP
 
-from orchestra.lib.sessions import load_sessions, save_session, find_session
+from orchestra.lib.sessions import load_sessions, save_session, find_session, AgentType
 from orchestra.lib.config import load_config
 
 # Create FastMCP server instance with default port
@@ -72,10 +72,10 @@ def send_message_to_session(session_name: str, message: str, source_path: str, s
     if not target:
         return f"Error: Session '{session_name}' not found"
 
-    # Add prefix to message with sender name
-    prefixed_message = f"[From: {sender_name}] {message}"
+    # don't interrupt designers for MCP calls
+    queue_mode = target.agent_type == AgentType.DESIGNER
 
-    target.send_message(prefixed_message)
+    target.send_message(message, sender_name=sender_name, queue_mode=queue_mode)
     return f"Successfully sent message to session '{session_name}'"
 
 

@@ -173,7 +173,7 @@ class TestFilesystemStructure:
         """Test that spawned executor has instructions.md file"""
         from unittest.mock import patch
 
-        with patch("orchestra.lib.tmux_agent.TmuxProtocol.start", return_value=True):
+        with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
             child = designer_session.spawn_executor(
                 session_name="child-with-instructions",
                 instructions="Build authentication system",

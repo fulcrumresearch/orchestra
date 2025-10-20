@@ -21,10 +21,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
 # Install Claude Code globally
 RUN npm install -g @anthropic-ai/claude-code
 
-# Copy and install hook forwarder script
-COPY runners/orchestra-hook-forward.sh /usr/local/bin/orchestra-hook
-RUN chmod +x /usr/local/bin/orchestra-hook
-
 # Create user with matching UID/GID
 RUN groupadd -g ${GROUP_ID} executor || true && \
     useradd -u ${USER_ID} -g ${GROUP_ID} -m -s /bin/bash executor && \

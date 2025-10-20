@@ -20,7 +20,7 @@ class TestSpawnSubagentIntegration:
     def test_spawn_creates_worktree_and_files(self, designer_session, orchestra_test_env):
         """Test that spawn_subagent creates a real git worktree and instruction files"""
         # Mock only the tmux start operation (we're not testing tmux startup here)
-        with patch("orchestra.lib.tmux_agent.TmuxProtocol.start", return_value=True):
+        with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
             result = spawn_subagent(
                 parent_session_name="designer",
                 child_session_name="test-child",
@@ -61,7 +61,7 @@ class TestSpawnSubagentIntegration:
     def test_spawn_persists_to_sessions_file(self, designer_session, orchestra_test_env):
         """Test that spawned child is persisted in sessions.json"""
         # Spawn child
-        with patch("orchestra.lib.tmux_agent.TmuxProtocol.start", return_value=True):
+        with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
             spawn_subagent(
                 parent_session_name="designer",
                 child_session_name="child",
@@ -98,12 +98,12 @@ class TestSendMessageIntegration:
 
         assert "Error: Session 'nonexistent' not found" in result
 
-    def test_send_message(self, orchestra_test_env):
-        """Test that messages are prefixed with [From: sender_name]"""
-        # Create and start a real tmux session
+    def test_send_message_to_executor(self, orchestra_test_env):
+        """Test that messages to executor sessions are sent via tmux with [From: sender_name] prefix"""
+        # Create an executor session (not designer)
         target = Session(
             session_name="target",
-            agent_type=AgentType.DESIGNER,
+            agent_type=AgentType.EXECUTOR,
             source_path=str(orchestra_test_env.repo),
             use_docker=False,
         )
@@ -141,3 +141,27 @@ class TestSendMessageIntegration:
         assert "[From: my-sender] Test message" in pane_content, (
             f"Expected message not found in pane content: {pane_content}"
         )
+
+    def test_send_message_to_designer_queues_to_jsonl(self, designer_session, orchestra_test_env):
+        """Test that messages to designer sessions are written to messages.jsonl"""
+        # Send a message to the designer session
+        result = send_message_to_session(
+            session_name="designer",
+            message="Please review the PR",
+            source_path=str(orchestra_test_env.repo),
+            sender_name="child-executor",
+        )
+
+        # Verify success
+        assert "Successfully sent message" in result
+
+        # Verify message was written to messages.jsonl
+        messages_file = Path(designer_session.work_path) / ".orchestra" / "messages.jsonl"
+        assert messages_file.exists(), "messages.jsonl should exist"
+
+        # Read and verify message format
+        with open(messages_file) as f:
+            line = f.readline().strip()
+            message_obj = json.loads(line)
+            assert message_obj["sender"] == "child-executor"
+            assert message_obj["message"] == "Please review the PR"
