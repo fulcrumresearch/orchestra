@@ -22,6 +22,12 @@ def main():
     os.environ.setdefault("TERM", "xterm-256color")
     os.environ.setdefault("TMUX_TMPDIR", "/tmp")  # Use local tmp for better performance
 
+    # Check if orchestra-main session already exists
+
+
+    # If we get here, no session exists or attach failed - proceed with normal startup
+    logger.info("Starting new Orchestra session...")
+
     # Start the MCP server in the background (HTTP transport)
     mcp_log = Path.home() / ".orchestra" / "mcp-server.log"
     mcp_log.parent.mkdir(parents=True, exist_ok=True)

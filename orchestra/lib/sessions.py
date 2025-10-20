@@ -108,7 +108,7 @@ class Session:
             session_name=self.session_name,
             work_path=self.work_path,
             source_path=self.source_path,
-        )
+        ).strip()
         orchestra_md_path.write_text(formatted_prompt)
 
         claude_md_path = claude_dir / "CLAUDE.md"
@@ -183,6 +183,8 @@ class Session:
         self.work_path = str(worktree_base / self.session_id)
 
         if Path(self.work_path).exists():
+            # Refresh instructions to reflect current session metadata
+            self.add_instructions()
             return
 
         worktree_base.mkdir(parents=True, exist_ok=True)

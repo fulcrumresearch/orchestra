@@ -95,6 +95,12 @@ class FileWatcher:
         logger.debug("File watcher started")
 
         while not self._should_stop:
+          
+            if not self._watchers:
+                # No files to watch, sleep briefly
+                # TODO: fix this unclean logic
+                await asyncio.sleep(0.5)
+                continue
             # Get all paths to watch - convert files to their parent directories to handle awatch buggy file logic when editors use tmpfiles
             watch_paths = set()
             for path in self._watchers.keys():

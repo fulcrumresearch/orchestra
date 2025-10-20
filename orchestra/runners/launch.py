@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Launcher for Orchestra's tmux workspace."""
 
+from asyncio.tasks import run_coroutine_threadsafe
 import os
+from profile import run
 import shutil
 import subprocess
 import sys
@@ -20,6 +22,13 @@ def main() -> int:
         repo = Path.cwd().name.replace(" ", "-").replace(":", "-") or "workspace"
         session = f"orchestra-{repo}"
         target = f"{session}:main"
+
+        check_result = run_local_tmux_command("has-session", "-t", session)
+        if check_result.returncode == 0:
+            # Session exists - try to attach to it
+            attach_result = run_local_tmux_command("attach-session", "-t", session)
+            # If attach succeeded, we're done - return/exit
+            return
 
         # Kill old session
         run_local_tmux_command("kill-session", "-t", session)

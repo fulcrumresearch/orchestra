@@ -8,13 +8,15 @@ import subprocess
 import importlib.resources as resources
 import shutil
 import shlex
-
 from pathlib import Path
+
 from .logger import get_logger
 from .tmux import build_respawn_pane_cmd
 from .prompts import DESIGNER_MD_TEMPLATE, DOC_MD_TEMPLATE, ARCHITECTURE_MD_TEMPLATE
 
+
 logger = get_logger(__name__)
+
 
 # Sessions file path (shared constant)
 SESSIONS_FILE = Path.home() / ".orchestra" / "sessions.json"
@@ -420,42 +422,9 @@ def docker_exec(container_name: str, cmd: list[str]) -> subprocess.CompletedProc
     )
 
 
-def ensure_orchestra_in_gitignore(project_dir: Path) -> None:
-    """Ensure .orchestra/ is in the project's .gitignore file
-
-    Args:
-        project_dir: Path to the project directory
-    """
-    gitignore_path = project_dir / ".gitignore"
-    orchestra_entry = ".orchestra/"
-
-    # Read existing gitignore or create new content
-    if gitignore_path.exists():
-        content = gitignore_path.read_text()
-        lines = content.splitlines()
-    else:
-        content = ""
-        lines = []
-
-    # Check if .orchestra/ is already in gitignore
-    if any(line.strip() == orchestra_entry for line in lines):
-        logger.debug(f".orchestra/ already in {gitignore_path}")
-        return
-
-    # Add .orchestra/ to gitignore
-    if content and not content.endswith("\n"):
-        # Ensure there's a newline before adding new entry
-        new_content = content + "\n" + orchestra_entry + "\n"
-    else:
-        new_content = content + orchestra_entry + "\n"
-
-    gitignore_path.write_text(new_content)
-    logger.info(f"Added .orchestra/ to {gitignore_path}")
-
-
 def ensure_orchestra_directory(project_dir: Path) -> tuple[Path, Path]:
     """Ensure .orchestra/ directory exists with designer.md, doc.md, and docs/architecture.md templates,
-    and add .orchestra/ to .gitignore if needed.
+    and create a .gitignore file inside .orchestra/ to manage what gets committed.
 
     Args:
         project_dir: Path to the project directory
@@ -463,11 +432,15 @@ def ensure_orchestra_directory(project_dir: Path) -> tuple[Path, Path]:
     Returns:
         Tuple of (designer_md_path, doc_md_path)
     """
-    # Ensure .orchestra/ is in .gitignore first
-    ensure_orchestra_in_gitignore(project_dir)
-
     orchestra_dir = project_dir / ".orchestra"
     orchestra_dir.mkdir(exist_ok=True)
+
+    # Create .gitignore inside .orchestra/ to ignore most content but preserve docs and markdown files
+    gitignore_path = orchestra_dir / ".gitignore"
+    gitignore_content = "*"
+    if not gitignore_path.exists():
+        gitignore_path.write_text(gitignore_content)
+        logger.info(f"Created .gitignore at {gitignore_path}")
 
     # Create docs directory
     docs_dir = orchestra_dir / "docs"
