@@ -9,10 +9,15 @@ import importlib.resources as resources
 import shutil
 import shlex
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .logger import get_logger
 from .tmux import build_respawn_pane_cmd
 from .prompts import DESIGNER_MD_TEMPLATE, DOC_MD_TEMPLATE, ARCHITECTURE_MD_TEMPLATE
+
+
+if TYPE_CHECKING:
+    from .sessions import Session
 
 
 logger = get_logger(__name__)
@@ -515,61 +520,102 @@ def _validate_backup(backup: Path) -> bool:
     return True
 
 
-def cleanup_pairing_artifacts(source_path: str, session_id: str) -> bool:
+def cleanup_pairing_artifacts(session: "Session") -> bool:
     """
     Clean up filesystem artifacts from pairing mode.
 
-    This function safely removes pairing mode artifacts including:
-    - Symlink at source directory (if it exists and points to correct worktree)
-    - Backup directory (if it exists)
-    - Restores the original directory from backup
+    Uses git worktree repair to fix broken worktree links after restoring backup.
 
     This cleanup is safe to call even if the session was never paired - it will
     only perform cleanup if the artifacts actually exist.
 
     Args:
-        source_path: The original source directory path
-        session_id: The session ID (used to validate symlink target)
+        session: The Session object containing all relevant paths
 
     Returns:
         True if any cleanup work was done, False otherwise
     """
-    logger.info(f"Cleaning up pairing artifacts for {source_path}")
+    logger.info(f"Cleaning up pairing artifacts for session {session.session_id}")
 
-    source = Path(source_path)
-    backup = Path(f"{source_path}.backup")
+    if not session.source_path:
+        logger.debug(f"Session {session.session_id} has no source path, skipping cleanup")
+        return False
+
+    # Only cleanup for executor sessions (designers don't have separate worktrees)
+    if not session.work_path or session.source_path == session.work_path:
+        logger.debug(f"Session {session.session_id} has no separate worktree, skipping cleanup")
+        return False
+
+    source = Path(session.source_path)
+    backup = Path(f"{session.source_path}.backup")
     did_work = False
+
+    # Check if backup exists - if not, nothing to clean up
+    if not backup.exists():
+        logger.debug(f"No backup at {backup}, nothing to clean up")
+        return False
 
     if not _validate_backup(backup):
         logger.error(f"Backup {backup} is not valid; aborting cleanup")
         return False
 
+    # Verify source is a symlink pointing to our worktree
     if source.is_symlink():
         try:
             target = source.readlink()
             resolved_target = (source.parent / target).resolve(strict=False)
         except OSError as e:
-            logger.error(f"Source {source} is not a symlink: {e}; aborting cleanup")
+            logger.error(f"Source {source} readlink failed: {e}; aborting cleanup")
             return False
 
-        if session_id not in resolved_target.parts:
+        if session.session_id not in resolved_target.parts:
             logger.error(f"Symlink {source} -> {target} points to unexpected location {resolved_target}; aborting cleanup")
             return False
-    else:
-        logger.warning(f"Source {source_path} is not a symlink; backup is only restored if source does not exist")
 
+        # Remove symlink
+        logger.info(f"Removing symlink {source}")
+        try:
+            source.unlink()
+        except OSError as e:
+            logger.error(f"Error removing symlink {source}: {e}")
+            return False
+    else:
+        logger.warning(f"Source {source} is not a symlink")
         if source.exists():
-            logger.warning(f"Source {source} exists, so backup might be stale; aborting cleanup")
+            logger.warning(f"Source {source} exists as regular directory, backup might be stale; aborting cleanup")
             return False
 
+    # Restore backup to source
     logger.info(f"Restoring source {source} from backup {backup}")
     try:
-        source.unlink()
         backup.rename(source)
         did_work = True
     except (FileExistsError, FileNotFoundError, OSError) as e:
         logger.error(f"Error restoring source {source} from backup {backup}: {e}")
         return False
+
     logger.info(f"Restored source {source} from backup {backup} successfully!")
+
+    # Use git worktree repair to fix all worktree links
+    try:
+        result = subprocess.run(
+            ["git", "worktree", "repair"],
+            cwd=source,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if result.returncode == 0:
+            logger.info(f"Successfully repaired worktree links for {source}")
+            if result.stdout.strip():
+                logger.debug(f"git worktree repair output: {result.stdout}")
+        else:
+            logger.warning(f"git worktree repair returned {result.returncode}: {result.stderr}")
+            # Don't fail - we already restored the main work
+
+    except Exception as e:
+        logger.error(f"Failed to run git worktree repair: {e}")
+        # Don't fail - we already restored the main work
 
     return did_work

@@ -25,7 +25,6 @@ def main():
 
     # Check if orchestra-main session already exists
 
-
     # If we get here, no session exists or attach failed - proceed with normal startup
     logger.info("Starting new Orchestra session...")
 
@@ -68,10 +67,8 @@ def main():
         logger.info("Cleaning up pairing artifacts for all sessions")
         sessions = load_sessions(flat=True)
         for session in sessions:
-            if not session.source_path:
-                continue
             try:
-                cleanup_pairing_artifacts(session.source_path, session.session_id)
+                cleanup_pairing_artifacts(session)
             except Exception as e:
                 logger.error(f"Error cleaning up pairing artifacts for session {session.session_id}: {e}")
 
