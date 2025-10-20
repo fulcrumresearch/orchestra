@@ -22,6 +22,7 @@ maestro = "orchestra.runners.maestro:main"
 orchestra-monitor-server = "orchestra.backend.monitor:main"
 orchestra-mcp = "orchestra.backend.mcp_server:main"
 orchestra-hook = "orchestra.runners.hook_monitor:main"
+orchestra-monitor-display = "orchestra.runners.monitor_display:main"
 
 [tool.setuptools]
 packages = ["orchestra", "orchestra.lib", "orchestra.runners", "orchestra.backend", "orchestra.frontend", "orchestra.frontend.widgets"]

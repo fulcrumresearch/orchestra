@@ -14,22 +14,27 @@ def main() -> int:
     if os.getenv("CLAUDE_MONITOR_SKIP_FORWARD") == "1":
         return 0
 
-    if len(sys.argv) < 2:
-        print("Usage: hook_monitor.py <session_id> [source_path]", file=sys.stderr)
-        return 1
-
-    session_id = sys.argv[1]
-    source_path = sys.argv[2] if len(sys.argv) > 2 else None
-
-    base = os.getenv("CLAUDE_MONITOR_BASE", "http://127.0.0.1:8081")
-
-    # Read hook JSON from stdin
+    # Read hook JSON from stdin first
     try:
         raw = sys.stdin.read()
         payload = json.loads(raw)
     except Exception as e:
         print(f"[hook_monitor] invalid stdin JSON: {e}", file=sys.stderr)
         return 1
+
+    # Get session_id from args or payload
+    if len(sys.argv) >= 2:
+        session_id = sys.argv[1]
+        source_path = sys.argv[2] if len(sys.argv) > 2 else None
+    else:
+        # Fallback to payload if no args provided
+        session_id = payload.get("session_id")
+        source_path = None
+        if not session_id:
+            print("Usage: hook_monitor.py <session_id> [source_path] OR provide session_id in payload", file=sys.stderr)
+            return 1
+
+    base = os.getenv("CLAUDE_MONITOR_BASE", "http://127.0.0.1:8081")
 
     # URL-encode for safety
     session_id_enc = quote(session_id, safe="")
