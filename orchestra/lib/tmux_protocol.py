@@ -187,15 +187,6 @@ class TmuxProtocol(AgentProtocol):
     ) -> bool:
         """
         Send a message to tmux session using paste buffer with retry logic and exponential backoff.
-
-        Args:
-            session: Session object
-            message: Message to send
-            max_retries: Maximum number of retries (default: 5)
-            backoff: List of backoff delays in seconds (default: [0.5, 1.0, 2.0, 4.0, 8.0])
-
-        Returns:
-            bool: True if successful, False otherwise
         """
         target = f"{session.session_id}:0.0"
 
@@ -223,18 +214,15 @@ class TmuxProtocol(AgentProtocol):
             # If this wasn't the last attempt, wait before retrying
             if attempt < max_retries:
                 delay = backoff[attempt] if attempt < len(backoff) else backoff[-1]
-                logger.warning(
-                    f"Send failed (attempt {attempt + 1}/{max_retries + 1}), "
-                    f"retrying in {delay}s..."
-                )
+                logger.warning(f"Send failed (attempt {attempt + 1}/{max_retries + 1}), retrying in {delay}s...")
                 time.sleep(delay)
 
         # All retries exhausted
         logger.error(f"Failed to send after {max_retries + 1} attempts.")
         return False
 
-    def _send_enter(self, session: "Session", attempts: int = 3, delay: float = 0.1) -> bool:
-        """Send Enter key multiple times to ensure it's received.
+    def _send_key(self, key, session: "Session", delay: float = 0.1) -> bool:
+        """Send key and ensure it's received.
 
         Args:
             session: Session object
@@ -244,27 +232,56 @@ class TmuxProtocol(AgentProtocol):
         Returns:
             bool: True if at least one attempt succeeded
         """
+        # TODO: refactor these 2 methods back into each other due to API changes making them similar
         target = f"{session.session_id}:0.0"
-        success = False
 
+        attempts = 5
         for i in range(attempts):
-            if i > 0:
-                time.sleep(delay)
-            result = self._exec(session, build_tmux_cmd("send-keys", "-t", target, "C-m"))
+            time.sleep(delay)
+            result = self._exec(session, build_tmux_cmd("send-keys", "-t", target, key))
             logger.info(f"send-keys C-m attempt {i + 1}/{attempts}: returncode={result.returncode}")
             if result.returncode == 0:
-                success = True
+                return True
 
-        return success
+        return False
+
+    def get_pane_content(self, session: "Session") -> str:
+        """Get the content of a tmux pane"""
+        result = self._exec(session, build_tmux_cmd("capture-pane", "-t", f"{session.session_id}:0.0", "-p"))
+        if result.returncode == 0:
+            # result.stdout is already a string (text=True in subprocess.run)
+            return result.stdout.strip()
+        return ""
+
+    def is_in_permission_prompt(self, session: "Session") -> bool:
+        """Check if the session is in a permission prompt"""
+        content = self.get_pane_content(session)
+
+        permission_patterns = [
+            "allow this action",
+            "do you want to",
+            "are you sure",
+            "press enter to continue",
+            "(y/n)",
+            "permission required",
+        ]
+
+        last_lines = "\n".join(content.split("\n")[-20:])
+
+        for pattern in permission_patterns:
+            if pattern in last_lines:
+                return True
 
     def send_message(self, session: "Session", message: str) -> bool:
         """Send a message to a tmux session using paste buffer with retry logic (Docker or local mode)"""
         # Send message using buffer with retry logic
+        if session.agent_type.value == "designer" and self.is_in_permission_prompt(session):
+            self._send_key("Esc", session)
+
         if not self._send_with_retry(session, message + "\n"):
             return False
 
-        # Hammer Enter multiple times to ensure it's received
-        return self._send_enter(session)
+        return self._send_key("Enter", session)
 
     def attach(self, session: "Session", target_pane: str = "2") -> bool:
         """Attach to a tmux session in the specified pane"""
@@ -353,7 +370,7 @@ class TmuxProtocol(AgentProtocol):
         settings_config = {
             "permissions": {
                 "allow": ["mcp__orchestra-mcp__spawn_subagent", "mcp__orchestra-mcp__send_message_to_session"],
-                "allowPathRegex": ["^~/.orchestra/.*"]
+                "allowPathRegex": ["^~/.orchestra/.*"],
             }
         }
 

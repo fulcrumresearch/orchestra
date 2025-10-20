@@ -1,7 +1,7 @@
 """Application state management for Orchestra UI"""
 
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 from orchestra.lib.sessions import Session, load_sessions
 from orchestra.lib.file_watcher import FileWatcher
 
@@ -25,6 +25,7 @@ class AppState:
         self.paired_session_name: Optional[str] = None
         self.project_dir = project_dir
         self.file_watcher = FileWatcher()
+        self.pending_messages_count = 0
 
     def load(self, root_session_name: str) -> None:
         """Load sessions from disk.

@@ -383,10 +383,8 @@ def ensure_shared_claude_config(shared_claude_dir: Path, shared_claude_json: Pat
     if shared_claude_json.exists():
         with open(shared_claude_json, "r") as f:
             config = json.load(f)
-        return None
-
     # On Linux, copy auth settings from host's .claude directory and .claude.json
-    if platform.system() == "Linux":
+    elif platform.system() == "Linux":
         host_claude_dir = Path.home() / ".claude"
         host_claude_json = Path.home() / ".claude.json"
 
