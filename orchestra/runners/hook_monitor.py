@@ -34,6 +34,10 @@ def main() -> int:
             print("Usage: hook_monitor.py <session_id> [source_path] OR provide session_id in payload", file=sys.stderr)
             return 1
 
+    # Default source_path to cwd if not provided
+    if not source_path:
+        source_path = os.getcwd()
+
     base = os.getenv("CLAUDE_MONITOR_BASE", "http://127.0.0.1:8081")
 
     # URL-encode for safety

@@ -38,9 +38,9 @@ class BaseMonitor(ABC):
     Subclasses must implement abstract methods to define monitor-specific behavior.
     """
 
-    client: Optional[ClaudeSDKClient] = None
-    queue: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=1000))
-    task: Optional[asyncio.Task] = None
+    client: Optional[ClaudeSDKClient] = field(default=None, init=False)
+    queue: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=1000), init=False)
+    task: Optional[asyncio.Task] = field(default=None, init=False)
 
     @abstractmethod
     def get_system_prompt(self) -> str:
