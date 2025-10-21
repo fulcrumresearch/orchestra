@@ -2,8 +2,8 @@
 """Unified UI - Session picker and monitor combined (refactored)"""
 
 from __future__ import annotations
+
 import asyncio
-import time
 from pathlib import Path
 
 from textual.app import App, ComposeResult
@@ -69,7 +69,7 @@ class UnifiedApp(App):
     #hud {
         height: 1;
         padding: 0;
-        color: $secondary;
+        color: $primary;
         text-align: center;
         width: 100%;
     }
@@ -107,8 +107,6 @@ class UnifiedApp(App):
         padding: 0;
     }
 
-
-
     TabbedContent {
         height: 1fr;
         padding: 0;
@@ -127,6 +125,10 @@ class UnifiedApp(App):
 
     Tab.-active {
         text-style: bold;
+    }
+
+    Tab.-active:focus-within {
+        background: $primary 25%;
     }
 
     TabPane {
@@ -195,6 +197,7 @@ class UnifiedApp(App):
 
     ListItem {
         color: $foreground;
+        background: $background;
         width: 100%;
         padding: 0;
         margin: 0;
@@ -210,21 +213,18 @@ class UnifiedApp(App):
         overflow: hidden;       /* truncate visually */
     }
 
-    ListItem:hover {
-        background: $surface;
-        color: $accent;
-    }
-
     /* Left-side rectangular indicator bar for highlighted item */
     ListItem .indicator { width: 1; height: 1; background: transparent; }
 
-    ListView > ListItem.--highlight {
-        background: $surface;
-        color: $success;
-        text-style: bold;
+    /* Subtle purple background for highlighted item (both focused and unfocused) */
+    ListItem.-highlight {
+        background: $primary 25%;
     }
 
-    ListItem.--highlight .indicator { background: $success; }
+    ListItem.-highlight Label {
+        color: $text;
+        text-style: bold;
+    }
 
     RichLog {
         background: $background;
@@ -386,7 +386,7 @@ class UnifiedApp(App):
             return
 
         paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_name == root.session_name else ""
-        label_text = f"{paired_marker}{root.session_name} [dim][#00ff9f](designer)[/#00ff9f][/dim]"
+        label_text = f"{paired_marker}{root.session_name} (designer)"
         self.session_list.append(
             ListItem(
                 Horizontal(
@@ -398,7 +398,7 @@ class UnifiedApp(App):
 
         for child in root.children:
             paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_name == child.session_name else ""
-            label_text = f"{paired_marker}  {child.session_name} [dim][#00d4ff](executor)[/#00d4ff][/dim]"
+            label_text = f"{paired_marker}  {child.session_name} (executor)"
             self.session_list.append(
                 ListItem(
                     Horizontal(
@@ -581,7 +581,7 @@ class UnifiedApp(App):
         """Override quit to show shutdown message and run cleanup"""
         self.status_indicator.update("⏳ Quitting...")
         logger.info("Shutting down Orchestra...")
-        
+
         # Unpair synchronously if needed
         paired_session = self.state.get_paired_session()
         if paired_session:
@@ -591,7 +591,7 @@ class UnifiedApp(App):
                 logger.error(f"Failed to unpair: {error_msg}")
             else:
                 self.state.set_paired_session(None)
-        
+
         asyncio.create_task(self._shutdown_task())
 
     async def _shutdown_task(self) -> None:
