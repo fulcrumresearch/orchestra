@@ -1,8 +1,9 @@
 # Orchestra
 
-Orchestra is an AI coding that allows you to quickly design good software. It allows you to iterate on specs for what you want to build, and then delegate work in parallel to agents building your software in an overseeable way..
+Orchestra is an AI coding to quickly design good software. It is an opinionated coding interface that makes it easy to run isolated coding agents in parallel, and comes with a monitoring and communication layer to prevent that parallelization from compromising your work or overwhelming your human understanding.
 
-The best coding experiences understand the tango of deference between human and AI thinking.
+
+Orchestra lets you iterate on specs for what you want to build, and then delegate work in parallel to agents building your software, and then quickly review their work.
 
 Humans excel at:
 
@@ -16,11 +17,11 @@ AI agents excel at:
 - Exploring codebases
 - Handling repetitive transformations
 
-Orchestra is a multi-agent development environment that lets you focus on the creative work of software design while coordinating swarms of AI agents to handle implementation. You provide the vision, Orchestra manages the execution.
+Orchestra aims to provide the experience to leverage the best of these 2 worlds.
 
 ## How It Works
 
-### Designer and Executor Sessions
+For each project, you communicate with a designer agent, that drafts and creates specs for various tasks with you.
 
 **Main Session (Designer):** Your primary workspace lives in your source code directory. The designer agent discusses with you, understands your requirements, and orchestrates the work.
 
