@@ -8,7 +8,7 @@ Agents can implement well-scoped tasks in massive parallelization. Humans are co
 
 You describe what you want, and how it should be designed. A designer agent breaks it into tasks and spawns executor agents for each one. The agents run in parallel, and are given tools to communicate with the designer when they are blocked. You come in to polish gaps in the spec, and decide what code to merge.
 
-You can jump into a sub agent's execution, see its work, and even stage its changes in your source directory to pair with it.
+You can jump into an Executor's execution, see its work, and even stage its changes in your source directory to pair with it.
 
 <demo video>
 
@@ -41,14 +41,14 @@ Then go to your coding project, and run `orchestra`, launching the interface.
 
 You're all set! The designer agent is ready in the right pane. Start by describing what you'd like to build or improve, and the designer will help you plan and delegate the work.
 
-Orchestra is a TUI with a 3 pane layout. On the top right, you have the sidebar, with the different agent sessions you can switch between, as well as see the the diff. On the right, you have the actual agent execution, running via claude code, which you can interact with and steer. On the bottom left, you have an extra pane where you can do various things, like open terminals in the various sub agents environments, edit a spec file the agent has access to, etc...
+Orchestra is a TUI with a 3 pane layout. On the top right, you have the sidebar, with the different agent sessions you can switch between, as well as see the the diff. On the right, you have the actual agent execution, running via claude code, which you can interact with and steer. On the bottom left, you have an extra pane where you can do various things, like open terminals in the various Executor's environments, edit a spec file the agent has access to, etc...
 
 Use `CTRL+S` to shift between the panes.
 
 ## Features
 
-- **Sub agents**: tell the designer to spawn a sub agent for a task and it will launch an agent, that will then appear in the sidebar, running in an isolated container to accomplish the task. Tell the designer to merge it in when you are happy with the sub agent's code, for example via the `/merge-child` command you can call in claude.
-- **Spec design**: if you type `s` on a session from the sidebar, it will open a spec file in your default editor. This is a place to think and write plans which the designer will collaborate with you on before spawning a sub agent.
+- **Executors**: tell the designer to spawn a executor for a task and it will launch an agent, that will then appear in the sidebar, running in an isolated container to accomplish the task. Tell the designer to merge it in when you are happy with the executor's code, for example via the `/merge-child` command you can call in claude.
+- **Spec design**: if you type `s` on a session from the sidebar, it will open a spec file in your default editor. This is a place to think and write plans which the designer will collaborate with you on before spawning a executor.
 - **Pairing mode**, `p` will take the currently focused agent's session and stage its changes on your local code, so you can directly work together and pair program. Unpair via `p` to restore the original state.
 
 ## Full list of sidebar commands
@@ -101,7 +101,7 @@ Created automatically on first run. Customize this file to change keybindings or
 ## Troubleshooting
 
 
-**Spawning sub agents doesn't work**:
+**Spawning Executors doesn't work**:
 
 - check if the orchestra mcp is properly running, via `/mcp` in claude
 - make sure you didn't overwrite the config to remove the MCP
@@ -119,6 +119,6 @@ This can be buggy due to differences in user systems sometimes, we're trying to 
 
 ## Contributing
 .
-If you notice an issue or bug, please [open an issue](https://github.com/fulcrumresearch/orchestra). We also welcome contributions, feel free to open a PR to fix an issue.
+If you notice an issue or bug, please [open an issue](https://github.com/fulcrumresearch/orchestra). We also welcome contributions: feel free to open a PR to fix an issue.
 
 You can join the user community to discuss issues and workflows you find useful, on [discord](https://discord.gg/QmMybVuwWp).
