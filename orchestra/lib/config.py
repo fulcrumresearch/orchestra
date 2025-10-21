@@ -10,7 +10,7 @@ from .logger import get_logger
 
 logger = get_logger(__name__)
 
-CONFIG_FILE = Path.home() / ".orchestra" / "config.json"
+CONFIG_FILE = Path.home() / ".orchestra" / "config" / "settings.json"
 
 DEFAULT_CONFIG = {
     "use_docker": True,

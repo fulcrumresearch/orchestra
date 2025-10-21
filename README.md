@@ -1,158 +1,124 @@
 # Orchestra
 
-Orchestra is an AI coding to quickly design good software. It is an opinionated coding interface that makes it easy to run isolated coding agents in parallel, and comes with a monitoring and communication layer to prevent that parallelization from compromising your work or overwhelming your human understanding.
+Orchestra is an experimental multi-agent coding system.
 
+Agents can implement well-scoped tasks in massive parallelization. Humans are comparatively better at making high level decisions and directing the work so it matches their intentions. Orchestra leverages parallel agents while keeping the human in the loop, so you have the information to keep making those decisions and design a good system.
 
-Orchestra lets you iterate on specs for what you want to build, and then delegate work in parallel to agents building your software, and then quickly review their work.
+## The flow
 
-Humans excel at:
+You describe what you want, and how it should be designed. A designer agent breaks it into tasks and spawns executor agents for each one. The agents run in parallel, and are given tools to communicate with the designer when they are blocked. You come in to polish gaps in the spec, and decide what code to merge.
 
-- Articulating vision and requirements
-- Making architectural decisions
-- Providing context and judgment
+You can jump into a sub agent's execution, see its work, and even stage its changes in your source directory to pair with it.
 
-AI agents excel at:
+<demo video>
 
-- Implementing well-specified tasks
-- Exploring codebases
-- Handling repetitive transformations
-
-Orchestra aims to provide the experience to leverage the best of these 2 worlds.
-
-## How It Works
+## Prerequisites
 
 For each project, you communicate with a designer agent, that drafts and creates specs for various tasks with you.
 
-**Main Session (Designer):** Your primary workspace lives in your source code directory. The designer agent discusses with you, understands your requirements, and orchestrates the work.
+- **git** Orchestra uses git worktrees for parallel development
+- **claude-code**
+- **tmux**
+- **docker:** Orchestra runs agents in isolated containers
 
-**Executor Sessions:** When you define a task, the designer spawns executor agents in isolated git worktrees. Each executor works independently on their assigned task, reaching out to you only when clarification is needed.
+## Installation
 
-### The Orchestrator UI
-
-Orchestra provides a unified interface to manage your agent swarm:
-
-- **Session List:** View all active designer and executor sessions
-- **Diff View:** See changes in real-time as agents work
-- **Monitor Tab:** Watch automated summaries of agent activities
-- **Keyboard Controls:**
-  - `s` - Open spec editor for the selected session (designer gets notified on save)
-  - `t` - Open terminal in the selected session's worktree
-  - `N` - Create new session
-  - `D` - Delete session
-  - Arrow keys - Navigate sessions
-
-### Workflow
-
-1. **Design:** Discuss your ideas with the designer agent. Use the spec editor (`s`) to sketch out plans.
-
-2. **Delegate:** The designer spawns executor agents with clear task specifications.
-
-3. **Monitor:** Watch executors work through the UI. They'll reach out if they need guidance.
-
-4. **Review:** Jump into executor worktrees (`t`) to test changes, or view diffs before merging.
-
-5. **Integrate:** Merge completed work back into your main branch.
-
-## Executor Communication Examples
-
-Executors are trained to proactively report issues back to the designer. Here are real-world scenarios showing when and how executors should communicate:
-
-### Example 1: Missing Dependencies
-
-**Scenario:** Executor tries to run tests but pytest is not installed.
-
-```
-Executor thinks: "I need to run tests but pytest isn't available. I should report this immediately."
-
-Executor sends: send_message_to_session(
-  session_id="main",
-  message="ERROR: Cannot run tests - 'pytest' is not installed. Should I install it with pip, or would you prefer a different testing approach?"
-)
-
-Designer responds: "Yes, go ahead and install pytest. We use it for all Python tests."
-```
-
-### Example 2: Build Failures
-
-**Scenario:** Executor makes changes but the build fails with existing TypeScript errors.
-
-```
-Executor thinks: "The build is failing, but it's due to pre-existing errors, not my changes. I need guidance."
-
-Executor sends: send_message_to_session(
-  session_id="main",
-  message="ERROR: Build failed with TypeScript errors in 3 files (user.ts, auth.ts, api.ts). These errors existed before my changes. Should I fix them first or implement my task differently?"
-)
-
-Designer responds: "Those are known issues. Focus on your task and we'll fix those separately."
-```
-
-### Example 3: Ambiguous Requirements
-
-**Scenario:** Instructions mention a component that doesn't exist in the codebase.
-
-```
-Executor thinks: "The instructions reference 'UserService' but I can't find it. Better ask than guess."
-
-Executor sends: send_message_to_session(
-  session_id="main",
-  message="QUESTION: Instructions say to extend 'UserService' but I cannot find this class in the codebase. Did you mean 'AuthService' or should I create a new UserService?"
-)
-
-Designer responds: "Sorry, my mistake - I meant AuthService. Please extend that."
-```
-
-### Example 4: Successful Completion
-
-**Scenario:** Executor completes the task successfully.
-
-```
-Executor sends: send_message_to_session(
-  session_id="main",
-  message="COMPLETE: Added rate limiting to all API endpoints. Implemented using Redis with 100 requests/minute limit. All 23 existing tests pass, added 8 new tests for rate limiting behavior. Ready for review."
-)
-```
-
-**Key Takeaway:** Executors should err on the side of over-communication. It's better to ask a question that seems obvious than to waste time or implement incorrectly.
-
-## Architecture
-
-### Git Worktrees + Docker Isolation
-
-Orchestra combines git worktrees with Docker containerization:
-
-**Worktrees (Visible on Host)**:
-
-- Each executor gets its own branch and working directory at `~/.orchestra/worktrees/`
-- Changes are tracked independently
-- No conflicts between concurrent agent work
-- Easy to review, test, and merge completed tasks
-- Worktrees are visible and editable in your editor
-
-**Docker Containers (Isolated Execution)**:
-
-- Each session runs in its own Docker container
-- Agent commands execute in isolation with mounted worktree
-- Two modes:
-  - **Unpaired** (default): Agent only accesses worktree
-  - **Paired** (opt-in): Agent also accesses source project
-- Provides command isolation while keeping files accessible
-
-See [DOCKER.md](DOCKER.md) for detailed Docker architecture.
-
-**Communication (MCP)**:
-
-- Designers spawn executors with detailed instructions
-- Executors can message back with questions or completion status
-- Automated monitoring tracks agent activity
-
-## Getting Started
-
+pip:
 ```bash
-# Launch the Orchestra orchestrator
-orchestra
-
-# The UI will open with a main designer session
-# Press 's' to open the spec editor and start planning
-# The designer will spawn executors as needed
+pip install orchestra-code
 ```
+
+uv:
+```bash
+uv tool install orchestra-code
+```
+
+## Usage
+
+Run `orchestra-setup` on initial install to configure things and make sure you have all the dependencies.
+
+Then go to your coding project, and run `orchestra`, launching the interface.
+
+You're all set! The designer agent is ready in the right pane. Start by describing what you'd like to build or improve, and the designer will help you plan and delegate the work.
+
+Orchestra is a TUI with a 3 pane layout. On the top right, you have the sidebar, with the different agent sessions you can switch between, as well as see the the diff. On the right, you have the actual agent execution, running via claude code, which you can interact with and steer. On the bottom left, you have an extra pane where you can do various things, like open terminals in the various sub agents environments, edit a spec file the agent has access to, etc...
+
+Use `CTRL+S` to shift between the panes.
+
+## Features
+
+- **Sub agents**: tell the designer to spawn a sub agent for a task and it will launch an agent, that will then appear in the sidebar, running in an isolated container to accomplish the task. Tell the designer to merge it in when you are happy with the sub agent's code, for example via the `/merge-child` command you can call in claude.
+- **Spec design**: if you type `s` on a session from the sidebar, it will open a spec file in your default editor. This is a place to think and write plans which the designer will collaborate with you on before spawning a sub agent.
+- **Pairing mode**, `p` will take the currently focused agent's session and stage its changes on your local code, so you can directly work together and pair program. Unpair via `p` to restore the original state.
+
+## Full list of sidebar commands
+
+- **`s`**: Open the spec editor (`designer.md`) to plan and discuss tasks with the designer
+- **`m`**: Open documentation
+- **`p`**: Toggle pairing mode to share your screen with the active session
+- **`t`**: Open a terminal in the selected session's work directory
+- **`Ctrl+d`**: Delete a selected executor session
+- **`Ctrl+q`**: Quit Orchestra
+
+## Configuration
+
+Orchestra stores configuration in two places:
+
+### Global Configuration
+
+`~/.orchestra/config/settings.json` — Global settings for your Orchestra installation.
+
+**Default values:**
+```json
+{
+  "use_docker": true,
+  "mcp_port": 8765,
+  "ui_theme": "textual-dark"
+}
+```
+
+**Options:**
+- **`use_docker`** (bool): Whether to run executor agents in Docker containers. Set to `false` to run executors on your local machine (not recommended for production).
+- **`mcp_port`** (int): Port for the Orchestra MCP server. Change this if 8765 is already in use.
+- **`ui_theme`** (string): Textual theme for the Orchestra UI. See [Textual themes](https://textual.textualize.io/guide/themes/) for options.
+
+To modify: Edit `~/.orchestra/config/settings.json` and restart Orchestra.
+
+### Tmux Configuration
+
+`~/.orchestra/config/tmux.conf` — Tmux keybindings and behavior for the Orchestra interface.
+
+Created automatically on first run. Customize this file to change keybindings or tmux behavior. Changes take effect when you restart Orchestra.
+
+**Default keybindings:**
+- **`Ctrl+S`**: Switch between panes (top left, bottom left, right)
+- **`Ctrl+\\`**: Detach from Orchestra session
+- **Mouse wheel**: Scroll through terminal output
+
+## Example workflows
+
+
+## Troubleshooting
+
+
+**Spawning sub agents doesn't work**:
+
+- check if the orchestra mcp is properly running, via `/mcp` in claude
+- make sure you didn't overwrite the config to remove the MCP
+- check you aren't occupying the MCP port (by default `8090`)
+
+**Executor is created, won't start automatically:**
+
+- Make sure you ran the setup, and properly authenticated
+- Make sure docker is installed.
+
+**Message sending doesn't go through**:
+
+This can be buggy due to differences in user systems sometimes, we're trying to figure out why. Please open an issue with details.
+
+
+## Contributing
+.
+If you notice an issue or bug, please [open an issue](https://github.com/fulcrumresearch/orchestra). We also welcome contributions, feel free to open a PR to fix an issue.
+
+You can join the user community to discuss issues and workflows you find useful, on [discord](https://discord.gg/QmMybVuwWp).

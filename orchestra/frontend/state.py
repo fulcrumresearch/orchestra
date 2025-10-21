@@ -64,6 +64,34 @@ class AppState:
         """
         self.active_session_name = session_name
 
+    def get_paired_session(self) -> Optional[Session]:
+        """Get the currently paired session.
+
+        Returns:
+            The paired Session object or None
+        """
+        if not self.paired_session_name or not self.root_session:
+            return None
+
+        # Check root
+        if self.root_session.session_name == self.paired_session_name:
+            return self.root_session
+
+        # Check children
+        for child in self.root_session.children:
+            if child.session_name == self.paired_session_name:
+                return child
+
+        return None
+
+    def set_paired_session(self, session_name: Optional[str]) -> None:
+        """Set the paired session by name.
+
+        Args:
+            session_name: The session name to set as paired, or None to clear
+        """
+        self.paired_session_name = session_name
+
     def get_session_by_index(self, index: int) -> Optional[Session]:
         """Get session by list index (0 = root, 1+ = children).
 
