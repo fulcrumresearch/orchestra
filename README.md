@@ -61,37 +61,43 @@ Use `CTRL+S` to shift between the panes.
 - **`Ctrl+d`**: Delete a selected executor session
 - **`Ctrl+q`**: Quit Orchestra
 
+## Configuration
+
+Orchestra stores configuration in two places:
+
+### Global Configuration
+
+`~/.orchestra/config/settings.json` — Global settings for your Orchestra installation.
+
+**Default values:**
+```json
+{
+  "use_docker": true,
+  "mcp_port": 8765,
+  "ui_theme": "textual-dark"
+}
+```
+
+**Options:**
+- **`use_docker`** (bool): Whether to run executor agents in Docker containers. Set to `false` to run executors on your local machine (not recommended for production).
+- **`mcp_port`** (int): Port for the Orchestra MCP server. Change this if 8765 is already in use.
+- **`ui_theme`** (string): Textual theme for the Orchestra UI. See [Textual themes](https://textual.textualize.io/guide/themes/) for options.
+
+To modify: Edit `~/.orchestra/config/settings.json` and restart Orchestra.
+
+### Tmux Configuration
+
+`~/.orchestra/config/tmux.conf` — Tmux keybindings and behavior for the Orchestra interface.
+
+Created automatically on first run. Customize this file to change keybindings or tmux behavior. Changes take effect when you restart Orchestra.
+
+**Default keybindings:**
+- **`Ctrl+S`**: Switch between panes (top left, bottom left, right)
+- **`Ctrl+\\`**: Detach from Orchestra session
+- **Mouse wheel**: Scroll through terminal output
+
 ## Example workflows
 
-
-## Tips for Success
-
-### Write Clear Specifications
-
-The better you articulate requirements, the more effectively agents can work:
-
-- Define success criteria explicitly
-- Mention edge cases and constraints
-- Provide context about existing patterns
-- Link to relevant documentation
-
-### Start Small
-
-For your first project with Orchestra:
-
-- Begin with a small, well-defined feature
-- Get comfortable with the workflow
-- Gradually increase task complexity
-
-
-
-### Stay Available
-
-Executors may ask questions:
-
-- Respond promptly to keep work moving
-- Clarify ambiguities early
-- Provide guidance when they're blocked
 
 ## Troubleshooting
 
