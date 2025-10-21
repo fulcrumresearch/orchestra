@@ -1,16 +1,17 @@
 # Orchestra
 
-Orchestra is an experimental multi agent coding system.
+Orchestra is an experimental multi-agent coding system.
 
-Coding agents can be massively parallelized, run quickly, and are good at implementing well scoped tasks, but left unchecked they drift from the human designer's intent. Active human oversight prevents this drift both in the quality of the code and its alignment with what the user wants.
+Agents can implement well-scoped tasks in massive parallelization. Humans are comparatively better at making high level decisions and directing the work so it matches their intentions. Orchestra leverages parallel agents while keeping the human in the loop, so you have the information to keep making those decisions and design a good system.
 
-Orchestra is designed to optimize this asymmetry in capabilities, by making it easy for humans to oversee and design systems as they work with many parallel coding agents.
 
-When you start Orchestra, it opens a designer agent, that discusses, and co-writes feature specs with you. When the spec is complete, the designer spawns a sub agent, that runs in a separate git worktree and a local docker container, where it autonomously completes the task.
+## The flow
 
-Orchestra agents run in parallel, and are given tools so they can communicate *with each other*, despite their filesystem isolation.
+You describe what you want, and how it should be designed. A designer agent breaks it into tasks and spawns executor agents for each one. The agents run in parallel, and are given tools to communicate with the designer when they are blocked. You come in to polish gaps in the spec, and decide what code to merge.
 
-communicate with the main designer thread that relays information to you. It is easy to jump into a sub agent's execution, see its work, and even stage its changes in your source directory to pair with it.
+You can jump into a sub agent's execution, see its work, and even stage its changes in your source directory to pair with it.
+
+<demo video>
 
 ## Prerequisites
 
@@ -23,316 +24,45 @@ Before installing Orchestra, ensure you have:
 
 ## Installation
 
+pip:
 ```bash
-# Install Orchestra
-pip install orchestra-dev
-
-# Verify installation
-orchestra --version
+pip install orchestra-code
 ```
 
-## Core Concepts
-
-For each project, you communicate with a designer agent, that drafts and creates specs for various tasks with you.
-
-Orchestra uses two types of AI sessions:
-
-**Designer Session (You work here):**
-
-- Lives in your main source code directory
-- Discusses requirements with you
-- Plans architecture and breaks down work
-- Spawns and coordinates executor agents
-- Reviews completed work
-
-**Executor Sessions (Agents work here):**
-
-- Created by the designer for specific tasks
-- Work in isolated git worktrees (separate branches)
-- Implement features independently
-- Ask questions when blocked
-- Report back when complete
-
-### The Orchestra UI
-
-Orchestra provides a unified terminal interface to manage all sessions:
-
-**Main Views:**
-
-- **Session List:** See all active designer and executor sessions
-- **Diff View:** Watch real-time changes as agents work
-- **Monitor Tab:** Track automated summaries of agent activity
-
-**Keyboard Controls:**
-
-- `s` - Open spec editor (define tasks, provide context)
-- `t` - Open terminal in selected session's worktree
-- `Ctrl+N` - Create new session manually
-- `Ctrl+D` - Delete session
-- `Arrow keys` - Navigate between sessions
-
-## Getting Started
-
-### 1. Launch Orchestra
-
+uv:
 ```bash
-# Start Orchestra in your project directory
-cd /path/to/your/project
-orchestra
+uv tool install orchestra-code
 ```
 
-The UI opens with a designer session connected to your codebase.
+## Usage
 
-### 2. Define What You Want
+Run `orchestra-setup` on initial install to configure things and make sure you have all the dependencies.
 
-Talk to the designer agent about your goals:
+Then go to your coding project, and run `orchestra`, launching the interface.
 
-```
-You: I want to add user authentication with JWT tokens
-```
+You're all set! The designer agent is ready in the right pane. Start by describing what you'd like to build or improve, and the designer will help you plan and delegate the work.
 
-For complex features, press `s` to open the spec editor. Write down requirements, constraints, and success criteria. The designer reads this and uses it to plan work.
+Orchestra is a TUI with a 3 pane layout. On the top right, you have the sidebar, with the different agent sessions you can switch between, as well as see the the diff. On the right, you have the actual agent execution, running via claude code, which you can interact with and steer. On the bottom left, you have an extra pane where you can do various things, like open terminals in the various sub agents environments, edit a spec file the agent has access to, etc...
 
-### 3. Let the Designer Plan
+Use `CTRL+S` to shift between the panes.
 
-The designer will discuss the approach with you:
+## Features
 
-- Ask clarifying questions
-- Break down the work into tasks
-- Identify dependencies
-- Propose an implementation strategy
+- **Sub agents**: tell the designer to spawn a sub agent for a task and it will launch an agent, that will then appear in the sidebar, running in an isolated container to accomplish the task. Tell the designer to merge it in when you are happy with the sub agent's code, for example via the `/merge-child` command you can call in claude.
+- **Spec design**: if you type `s` on a session from the sidebar, it will open a spec file in your default editor. This is a place to think and write plans which the designer will collaborate with you on before spawning a sub agent.
+- **Pairing mode**, `p` will take the currently focused agent's session and stage its changes on your local code, so you can directly work together and pair program. Unpair via `p` to restore the original state.
 
-### 4. Spawn Executors
+## Full list of sidebar commands
 
-Once you approve the plan, the designer spawns executor agents:
+- **`s`**: Open the spec editor (`designer.md`) to plan and discuss tasks with the designer
+- **`m`**: Open documentation
+- **`p`**: Toggle pairing mode to share your screen with the active session
+- **`t`**: Open a terminal in the selected session's work directory
+- **`Ctrl+d`**: Delete a selected executor session
+- **`Ctrl+q`**: Quit Orchestra
 
-```
-Designer: I'll create three executors:
-- auth-endpoints: Build login/logout API endpoints
-- jwt-middleware: Implement JWT validation middleware
-- auth-tests: Write comprehensive test coverage
+## Example workflows
 
-Each will work in parallel on their isolated branch.
-```
-
-You'll see new sessions appear in the UI's session list.
-
-### 5. Monitor Progress
-
-Watch agents work through the UI:
-
-- **Diff View:** See code changes in real-time
-- **Monitor Tab:** Track high-level progress updates
-- Press `t` on any executor to open a terminal in their worktree
-
-Agents work autonomously but will message you if they need help.
-
-### 6. Respond to Questions
-
-Executors reach out when they hit blockers. You'll see messages like:
-
-```
-[From: auth-endpoints]
-QUESTION: Should login sessions expire after 24 hours or 7 days?
-```
-
-You can respond directly to the executor, and they'll continue with your guidance.
-
-### 7. Review and Merge
-
-When an executor completes their task:
-
-```
-[From: auth-endpoints]
-COMPLETE: Implemented login/logout endpoints with JWT generation.
-All tests passing. Ready for review.
-```
-
-The designer will:
-
-- Show you the changes
-- Run tests if needed
-- Ask for approval
-- Merge the branch into your main codebase
-
-## Workflow Example
-
-Here's a complete workflow from start to finish:
-
-**Initial Request:**
-
-```
-You: Add rate limiting to all API endpoints
-```
-
-**Designer Response:**
-
-```
-Designer: I'll handle this. Let me check the current API structure...
-
-[Analyzes codebase]
-
-I'll create one executor to:
-1. Add Redis-based rate limiting middleware
-2. Apply to all endpoints
-3. Add configuration for limits
-4. Write tests
-
-Does 100 requests/minute per IP sound reasonable?
-```
-
-**You Approve:**
-
-```
-You: Yes, that works.
-```
-
-**Executor Spawned:**
-
-```
-Designer: Created executor 'rate-limiting' working on branch 'rate-limiting'
-You can monitor progress in the UI.
-```
-
-**Executor Works:**
-
-- You see commits appearing in the diff view
-- Monitor tab shows: "Installing redis dependency"
-- Monitor tab shows: "Implementing rate limit middleware"
-
-**Executor Asks Question:**
-
-```
-[From: rate-limiting]
-QUESTION: Should rate limits apply to authenticated API calls, or only public endpoints?
-```
-
-**You Respond:**
-
-```
-You: Apply to all endpoints, but authenticated users can have higher limits.
-```
-
-**Executor Completes:**
-
-```
-[From: rate-limiting]
-COMPLETE: Rate limiting implemented. Public: 100 req/min, Authenticated: 1000 req/min.
-All 34 tests passing, added 12 new rate limit tests. Ready for review.
-```
-
-**Designer Reviews:**
-
-```
-Designer: The executor finished. Here's the diff...
-[Shows changes]
-
-Tests are passing. Should I merge this to main?
-```
-
-**You Merge:**
-
-```
-You: Looks good, merge it.
-
-Designer: Merged 'rate-limiting' branch to main. Rate limiting is now active.
-```
-
-## What to Expect: Executor Communication
-
-Executors work autonomously but will reach out when they need guidance. Here's what you'll experience:
-
-### When Things Go Wrong
-
-**Missing Dependencies**
-If an executor can't find a required tool, you'll receive a message:
-
-```
-[From: test-automation]
-ERROR: Cannot run tests - 'pytest' is not installed.
-Should I install it with pip, or would you prefer a different testing approach?
-```
-
-You can respond directly to the executor, and they'll continue with your guidance.
-
-**Build Issues**
-When executors encounter existing problems in the codebase:
-
-```
-[From: api-feature]
-ERROR: Build failed with TypeScript errors in 3 files (user.ts, auth.ts, api.ts).
-These errors existed before my changes. Should I fix them first or implement my task differently?
-```
-
-**Unclear Requirements**
-If instructions are ambiguous, executors will ask rather than guess:
-
-```
-[From: auth-refactor]
-QUESTION: Instructions say to extend 'UserService' but I cannot find this class.
-Did you mean 'AuthService' or should I create a new UserService?
-```
-
-### When Things Go Right
-
-**Task Completion**
-You'll receive a summary when work is ready for review:
-
-```
-[From: rate-limiting]
-COMPLETE: Added rate limiting to all API endpoints. Implemented using Redis with
-100 requests/minute limit. All 23 existing tests pass, added 8 new tests for
-rate limiting behavior. Ready for review.
-```
-
-At this point, you can review their work in the diff view or jump into their worktree to test the changes before merging.
-
-## How Orchestra Keeps Work Organized
-
-### Isolated Workspaces
-
-Each executor works in its own isolated environment:
-
-- **Separate branches:** No merge conflicts while agents work in parallel
-- **Independent directories:** Changes are isolated at `~/.orchestra/worktrees/`
-- **Full visibility:** You can view, edit, or test executor changes anytime
-- **Safe experimentation:** Executors can't break your main codebase
-
-### Your Files Stay Accessible
-
-While executors work in isolation, all their files are visible on your machine. You can:
-
-- Open executor worktrees in your editor
-- Run tests manually in their directories
-- Review changes before merging
-- Make edits if needed
-
-### Under the Hood
-
-Orchestra combines several technologies to provide safe, parallel development:
-
-**Git Worktrees:**
-
-- Each executor gets its own branch and working directory
-- Changes are tracked independently
-- Merging is straightforward when work completes
-- Located at `~/.orchestra/worktrees/<project>/<session-name>/`
-
-**Docker Containers:**
-
-- Each session runs in an isolated container
-- Agents can't accidentally modify your system
-- Two modes available:
-  - **Unpaired** (default): Agent only accesses their worktree
-  - **Paired** (opt-in): Agent can also access your source project for context
-
-**Model Context Protocol (MCP):**
-
-- Enables communication between designer and executors
-- Handles message passing, task delegation, and status updates
-- Ensures reliable coordination across parallel agents
-
-You don't need to manage any of this manually—Orchestra handles it automatically.
 
 ## Tips for Success
 
@@ -353,22 +83,7 @@ For your first project with Orchestra:
 - Get comfortable with the workflow
 - Gradually increase task complexity
 
-### Review Everything
 
-Always review executor work before merging:
-
-- Check the diff carefully
-- Run tests in the executor's worktree
-- Verify the implementation matches your intent
-
-### Use the Spec Editor
-
-Press `s` to open the spec editor for complex tasks:
-
-- Write design documents
-- List requirements and constraints
-- Break down work into phases
-- The designer will reference this when planning
 
 ### Stay Available
 
@@ -380,40 +95,25 @@ Executors may ask questions:
 
 ## Troubleshooting
 
-**Executor won't start:**
 
-- Check that Docker is running
-- Verify git is installed and working
-- Ensure you have an API key configured
+**Spawning sub agents doesn't work**:
 
-**Can't see executor changes:**
+- check if the orchestra mcp is properly running, via `/mcp` in claude
+- make sure you didn't overwrite the config to remove the MCP
+- check you aren't occupying the MCP port (by default `8090`)
 
-- Navigate to `~/.orchestra/worktrees/` to see all worktrees
-- Check the session list in the UI to find the branch name
-- Use `t` to open a terminal in the executor's directory
+**Executor is created, won't start automatically:**
 
-**Merge conflicts:**
+- Make sure you ran the setup, and properly authenticated
+- Make sure docker is installed.
 
-- Executors work on isolated branches, so conflicts are rare
-- If they occur, resolve them in the executor's worktree before merging
-- The designer can help coordinate resolution
+**Message sending doesn't go through**:
 
-**Agent is stuck:**
+This can be buggy due to differences in user systems sometimes, we're trying to figure out why. Please open an issue with details.
 
-- Check the monitor tab for status updates
-- Press `t` to inspect the executor's worktree
-- The designer can send clarifying messages to unblock them
 
-## Next Steps
+## Contributing
+.
+If you notice an issue or bug, please [open an issue](https://github.com/fulcrumresearch/orchestra). We also welcome contributions, feel free to open a PR to fix an issue.
 
-Now that you understand Orchestra:
-
-1. Install Orchestra and launch it in a project
-2. Start with a simple feature request
-3. Watch how the designer breaks down and delegates work
-4. Review executor output and provide feedback
-5. Gradually tackle more complex tasks
-
----
-
-**Need help?** Open an issue at [github.com/fulcrumresearch/orchestra](https://github.com/fulcrumresearch/orchestra)
+You can join the user community to discuss issues and workflows you find useful, on [discord](https://discord.gg/QmMybVuwWp).
