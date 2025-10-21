@@ -1,43 +1,25 @@
 # Orchestra
 
-Orchestra is a CLI tool
+Orchestra is an experimental multi agent coding system.
 
-an AI coding tool that helps you design and build software faster. Instead of implementing every feature yourself, you define what you want, and Orchestra coordinates multiple AI agents working in parallel to build it for you.
+Coding agents can be massively parallelized, run quickly, and are good at implementing well scoped tasks, but left unchecked they drift from the human designer's intent. Active human oversight prevents this drift both in the quality of the code and its alignment with what the user wants.
 
-The best software development happens when humans and AI each focus on what they do best.
+Orchestra is designed to optimize this asymmetry in capabilities, by making it easy for humans to oversee and design systems as they work with many parallel coding agents.
 
-**Humans excel at:**
+When you start Orchestra, it opens a designer agent, that discusses, and co-writes feature specs with you. When the spec is complete, the designer spawns a sub agent, that runs in a separate git worktree and a local docker container, where it autonomously completes the task.
 
-- Articulating vision and requirements
-- Making architectural decisions
-- Providing context and judgment
+Orchestra agents run in parallel, and are given tools so they can communicate *with each other*, despite their filesystem isolation.
 
-**AI agents excel at:**
-
-- Implementing well-specified tasks
-- Exploring codebases
-- Handling repetitive transformations
-
-Orchestra is a multi-agent development environment that lets you focus on the creative work of software design while coordinating AI agents to handle implementation. You provide the vision, Orchestra manages the execution.
-
-## Why Orchestra?
-
-Traditional AI coding assistants work on one task at a time. Orchestra parallelizes development:
-
-- **Design once, build in parallel:** Break down features into tasks and let multiple agents work simultaneously
-- **Stay in control:** Review all changes before merging, with full visibility into what each agent is doing
-- **Safe experimentation:** Agents work in isolated environments that can't break your main codebase
-- **Intelligent collaboration:** Agents ask questions when blocked and report completion when ready
-- **No context switching:** Focus on high-level design while agents handle implementation details
+communicate with the main designer thread that relays information to you. It is easy to jump into a sub agent's execution, see its work, and even stage its changes in your source directory to pair with it.
 
 ## Prerequisites
 
 Before installing Orchestra, ensure you have:
 
-- **Docker:** Orchestra runs agents in isolated containers
-- **Git:** Orchestra uses git worktrees for parallel development
-- **Python 3.8+:** Required for the Orchestra CLI
-- **A supported AI provider:** Claude API key (or compatible provider)
+- **git** Orchestra uses git worktrees for parallel development
+- **claude-code**
+- **tmux**
+- **docker:** Orchestra runs agents in isolated containers
 
 ## Installation
 
@@ -51,7 +33,7 @@ orchestra --version
 
 ## Core Concepts
 
-### Designer and Executor Sessions
+For each project, you communicate with a designer agent, that drafts and creates specs for various tasks with you.
 
 Orchestra uses two types of AI sessions:
 
