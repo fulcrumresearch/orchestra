@@ -581,6 +581,17 @@ class UnifiedApp(App):
         """Override quit to show shutdown message and run cleanup"""
         self.status_indicator.update("⏳ Quitting...")
         logger.info("Shutting down Orchestra...")
+        
+        # Unpair synchronously if needed
+        paired_session = self.state.get_paired_session()
+        if paired_session:
+            logger.info(f"Unpairing {paired_session.session_name} before shutdown...")
+            success, error_msg = paired_session.toggle_pairing()
+            if not success:
+                logger.error(f"Failed to unpair: {error_msg}")
+            else:
+                self.state.set_paired_session(None)
+        
         asyncio.create_task(self._shutdown_task())
 
     async def _shutdown_task(self) -> None:
