@@ -1,9 +1,10 @@
-from enum import Enum
-from typing import List, Dict, Any, Optional
-from pathlib import Path
+import os
 import json
 import re
 import subprocess
+from enum import Enum
+from typing import List, Dict, Any, Optional
+from pathlib import Path
 
 from orchestra.lib.tmux_protocol import TmuxProtocol
 from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
@@ -313,9 +314,10 @@ def load_sessions(
         root: If specified, only return the session with this ID (+ children). Otherwise return all.
     """
     if project_dir is None:
-        project_dir = Path.cwd()
+        # `Path.cwd()` resolves symlinks, which causes issues with pairing mode
+        # To get the path without resolving symlinks, use `os.getcwd()`
+        project_dir = Path(os.getcwd())
 
-    # Don't resolve - if project_dir is a symlink (from pairing), we want to keep the original path
     project_dir_str = str(project_dir)
     sessions = []
 

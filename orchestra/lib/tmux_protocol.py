@@ -10,7 +10,6 @@ from .helpers import (
     start_docker_container,
     stop_docker_container,
     docker_exec,
-    cleanup_pairing_artifacts,
 )
 from .logger import get_logger
 from .tmux import (
@@ -325,10 +324,6 @@ class TmuxProtocol(AgentProtocol):
 
     def delete(self, session: "Session") -> bool:
         """Delete a tmux session and cleanup (Docker container or local)"""
-        # Clean up pairing artifacts if they exist
-        if session.source_path:
-            cleanup_pairing_artifacts(session)
-
         if self.use_docker:
             # Docker mode: stop and remove container (also kills tmux inside)
             container_name = get_docker_container_name(session.session_id)
@@ -390,10 +385,8 @@ class TmuxProtocol(AgentProtocol):
         """
         Toggle pairing mode using symlinks.
 
-        Paired: Move user's dir aside, symlink source → worktree
-        Unpaired: Remove symlink, restore user's dir
-
-        Uses git worktree repair to fix links after directory moves.
+        Paired: Move user's dir aside, symlink source → worktree, update worktree's .git file
+        Unpaired: Remove symlink, restore user's dir, update worktree's .git file
 
         Returns: (success, error_message)
         """
@@ -409,6 +402,7 @@ class TmuxProtocol(AgentProtocol):
             return False, "Pairing not available for designer sessions (no separate worktree)"
 
         backup = Path(f"{session.source_path}.backup")
+        worktree_git_file = worktree / ".git"
 
         # Switching to paired mode
         if not session.paired:
@@ -423,47 +417,21 @@ class TmuxProtocol(AgentProtocol):
             except Exception as e:
                 return False, f"Failed to backup source directory: {e}"
 
-            # Create symlink
+            # Update worktree's .git file to point to new location
+            # Resolve any symlinks in the .git path
             try:
-                source.symlink_to(worktree)
-                logger.info(f"Created symlink {source} → {worktree}")
+                backup_git = backup / ".git"
+                # Resolve symlink if .git is a symlink
+                resolved_git = backup_git.resolve() if backup_git.is_symlink() else backup_git
+                worktree_git_file.write_text(f"gitdir: {resolved_git}/worktrees/{session.session_id}\n")
+                logger.info(f"Updated {worktree_git_file} to point to {resolved_git}/worktrees/{session.session_id}")
             except Exception as e:
                 # Rollback: restore the directory
-                try:
-                    backup.rename(source)
-                except Exception as rollback_err:
-                    logger.error(f"Failed to rollback during symlink creation: {rollback_err}")
-                return False, f"Failed to create symlink: {e}"
+                backup.rename(source)
+                return False, f"Failed to update worktree .git file: {e}"
 
-            # Repair worktree links (run from backup where real .git is)
-            try:
-                result = subprocess.run(
-                    ["git", "worktree", "repair"],
-                    cwd=backup,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-
-                if result.returncode != 0:
-                    # Rollback: remove symlink and restore directory
-                    try:
-                        source.unlink()
-                        backup.rename(source)
-                    except Exception as rollback_err:
-                        logger.error(f"Failed to rollback after repair failure: {rollback_err}")
-                    return False, f"Failed to repair worktree links: {result.stderr}"
-
-                logger.info("Successfully repaired worktree links after pairing")
-
-            except Exception as e:
-                # Rollback
-                try:
-                    source.unlink()
-                    backup.rename(source)
-                except Exception as rollback_err:
-                    logger.error(f"Failed to rollback after repair exception: {rollback_err}")
-                return False, f"Failed to run git worktree repair: {e}"
+            source.symlink_to(worktree)
+            logger.info(f"Created symlink {source} → {worktree}")
 
             session.paired = True
 
@@ -473,42 +441,25 @@ class TmuxProtocol(AgentProtocol):
             if not backup.exists():
                 return False, f"Backup directory not found: {backup}"
 
-            if not source.is_symlink():
-                return False, f"Expected symlink at {source}, found regular directory"
-
-            # Remove symlink
-            try:
+            if source.is_symlink():
                 source.unlink()
                 logger.info(f"Removed symlink {source}")
-            except Exception as e:
-                return False, f"Failed to remove symlink: {e}"
+            else:
+                return False, f"Expected symlink at {source}, found regular directory"
 
-            # Restore backup
+            backup.rename(source)
+            logger.info(f"Restored {backup} → {source}")
+
+            # Update worktree's .git file to point back to original location
+            # Resolve any symlinks in the .git path
             try:
-                backup.rename(source)
-                logger.info(f"Restored {backup} → {source}")
+                source_git = source / ".git"
+                # Resolve symlink if .git is a symlink
+                resolved_git = source_git.resolve() if source_git.is_symlink() else source_git
+                worktree_git_file.write_text(f"gitdir: {resolved_git}/worktrees/{session.session_id}\n")
+                logger.info(f"Updated {worktree_git_file} to point to {source}/.git/worktrees/{session.session_id}")
             except Exception as e:
-                return False, f"Failed to restore backup: {e}"
-
-            # Repair worktree links (run from restored source where real .git is)
-            try:
-                result = subprocess.run(
-                    ["git", "worktree", "repair"],
-                    cwd=source,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-
-                if result.returncode != 0:
-                    logger.warning(f"git worktree repair returned {result.returncode}: {result.stderr}")
-                    # Don't fail unpairing - the main work is done
-                else:
-                    logger.info("Successfully repaired worktree links after unpairing")
-
-            except Exception as e:
-                logger.error(f"Failed to run git worktree repair: {e}")
-                # Don't fail unpairing - the main work is done
+                return False, f"Failed to update worktree .git file: {e}"
 
             session.paired = False
 
