@@ -553,6 +553,7 @@ class UnifiedApp(App):
     def _attach_to_session(self, session: Session) -> None:
         """Select a session and update monitors to show it"""
         self.state.set_active_session(session.session_name)
+        self.messages_tab.refresh_messages()
         status = session.get_status()
 
         if not status.get("exists", False):

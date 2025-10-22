@@ -240,8 +240,7 @@ class TmuxProtocol(AgentProtocol):
             time.sleep(delay)
             result = self._exec(session, build_tmux_cmd("send-keys", "-t", target, key))
             logger.info(f"send-keys C-m attempt {i + 1}/{attempts}: returncode={result.returncode}")
-            if result.returncode == 0:
-                return True
+            # unfortunately need to keep doing it because doesn't consistently have desired effect
 
         return False
 
