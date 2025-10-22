@@ -17,7 +17,7 @@ from unittest.mock import patch
 import pytest
 
 from orchestra.lib.sessions import Session, AgentType, save_session
-from orchestra.lib.helpers import (
+from orchestra.lib.helpers.docker import (
     start_docker_container,
     get_docker_container_name,
 )

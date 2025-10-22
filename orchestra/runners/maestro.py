@@ -8,8 +8,8 @@ from pathlib import Path
 from orchestra.frontend.app import UnifiedApp
 from orchestra.lib.logger import get_logger
 from orchestra.lib.config import load_config
-from orchestra.lib.tmux import build_tmux_cmd, execute_local
-from orchestra.lib.helpers import kill_process_gracefully
+from orchestra.lib.helpers.tmux import build_tmux_cmd, execute_local
+from orchestra.lib.helpers.process import kill_process_gracefully
 
 logger = get_logger(__name__)
 

@@ -5,14 +5,14 @@ from pathlib import Path
 from typing import Dict, Any, List, Tuple, TYPE_CHECKING
 
 from .agent_protocol import AgentProtocol
-from .helpers import (
+from .helpers.docker import (
     get_docker_container_name,
     start_docker_container,
     stop_docker_container,
     docker_exec,
 )
 from .logger import get_logger
-from .tmux import (
+from .helpers.tmux import (
     build_new_session_cmd,
     build_respawn_pane_cmd,
     build_tmux_cmd,

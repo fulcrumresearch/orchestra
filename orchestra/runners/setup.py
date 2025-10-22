@@ -10,7 +10,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from orchestra.lib.helpers import ensure_docker_image, ensure_shared_claude_config, get_docker_container_name
+from orchestra.lib.helpers.docker import ensure_docker_image, ensure_shared_claude_config, get_docker_container_name
 from orchestra.lib.sessions import Session
 from orchestra.lib.tmux_protocol import TmuxProtocol
 

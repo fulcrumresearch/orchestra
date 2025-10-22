@@ -9,7 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from orchestra.lib.tmux import TMUX_SOCKET, build_tmux_cmd, run_local_tmux_command
+from orchestra.lib.helpers.tmux import TMUX_SOCKET, build_tmux_cmd, run_local_tmux_command
 
 
 TMUX_BIN = shutil.which("tmux") or "tmux"
