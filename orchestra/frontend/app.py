@@ -25,7 +25,7 @@ from orchestra.frontend.widgets.hud import HUD
 from orchestra.frontend.widgets.diff_tab import DiffTab
 from orchestra.frontend.widgets.messages_tab import MessagesTab
 from orchestra.frontend.state import AppState
-from orchestra.lib.message import load_session_messages
+from orchestra.lib.message import load_messages
 
 # Import from lib
 from orchestra.lib.sessions import (
@@ -350,7 +350,6 @@ class UnifiedApp(App):
 
         def messages_filter(path: Path) -> bool:
             """Only notify if message is for root session (designer)"""
-            from orchestra.lib.message import load_messages
 
             all_messages = load_messages(Path.cwd())
             if not all_messages:

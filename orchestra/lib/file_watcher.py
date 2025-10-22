@@ -3,8 +3,8 @@
 import asyncio
 import time
 from pathlib import Path
-from typing import Callable, Awaitable, Dict, Set, TYPE_CHECKING, Optional
-from watchfiles import awatch, Change
+from typing import Callable, Awaitable, Dict, Set, TYPE_CHECKING
+from watchfiles import awatch
 from .logger import get_logger
 
 if TYPE_CHECKING:
