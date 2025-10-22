@@ -2,6 +2,7 @@
 """MCP server for spawning sub-agents in Orchestra system."""
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from mcp.server import FastMCP
@@ -73,7 +74,6 @@ def send_message_to_session(session_name: str, message: str, source_path: str, s
         return f"Error: Session '{session_name}' not found"
 
     # add message to message queue with target, sender, and timestamp
-    from datetime import datetime
 
     messages_path = Path(source_path) / ".orchestra" / "messages.jsonl"
     message_obj = {
