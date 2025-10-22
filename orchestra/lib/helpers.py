@@ -444,9 +444,9 @@ def ensure_orchestra_directory(project_dir: Path) -> tuple[Path, Path]:
     orchestra_dir = project_dir / ".orchestra"
     orchestra_dir.mkdir(exist_ok=True)
 
-    # Create .gitignore inside .orchestra/ to ignore most content but preserve docs and markdown files
+    # Create .gitignore inside .orchestra/ to ignore specific working files
     gitignore_path = orchestra_dir / ".gitignore"
-    gitignore_content = "*"
+    gitignore_content = "designer.md\ndoc.md\nmessages.jsonl\n"
     if not gitignore_path.exists():
         gitignore_path.write_text(gitignore_content)
         logger.info(f"Created .gitignore at {gitignore_path}")
