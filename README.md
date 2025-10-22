@@ -1,25 +1,34 @@
 # Orchestra
 
-Orchestra is an experimental multi-agent coding system.
+Orchestra is an experimental multi-agent coding system, with parallel execution, model-driven coordination, and full visibility of your coding agents.
 
-Agents can implement well-scoped tasks in massive parallelization. Humans are comparatively better at making high level decisions and directing the work so it matches their intentions. Orchestra leverages parallel agents while keeping the human in the loop, so you have the information to keep making those decisions and design a good system.
+Coding agents can implement well-scoped tasks in parallel. Humans are comparatively better at making high level decisions and directing the work so it matches their intentions. Orchestra leverages parallel agents while keeping the human in the loop, to quickly write good code.
 
 ## The flow
 
 You describe what you want, and how it should be designed. A designer agent breaks it into tasks and spawns executor agents for each one. The agents run in parallel, and are given tools to communicate with the designer when they are blocked. You come in to polish gaps in the spec, and decide what code to merge.
 
-You can jump into an Executor's execution, see its work, and even stage its changes in your source directory to pair with it.
+You can jump into an executor's execution, see its work, and even stage its changes in your source directory to pair with it.
 
 <demo video>
 
-## Prerequisites
+At [Fulcrum](https://fulcrumresearch.org), we’ve used Orchestra to:
 
-- **git** Orchestra uses git worktrees for parallel development
-- **claude-code**
-- **tmux**
-- **docker:** Orchestra runs agents in isolated containers
+- Iterate on the plan of a complex feature implementation and decompose it into bite sized subtasks
+- Work on multiple independent features at the same time
+- Implement features in a best-of-n style, where the designer merges the best result in after reviewing the code with you.
+- Quickly review code with higher trust using the orchestra monitor
+
 
 ## Installation
+
+### Dependencies
+
+- **git**
+- **claude-code**
+- **tmux**
+- **python**
+- **docker**
 
 pip:
 ```bash
@@ -33,7 +42,7 @@ uv tool install orchestra-code
 
 ## Usage
 
-Run `orchestra-setup` on initial install to configure things and make sure you have all the dependencies.
+Run `orchestra-setup` on initial install fo the setup flow, to configure things and make sure you have all the dependencies.
 
 Then go to your coding project, and run `orchestra`, launching the interface.
 
@@ -45,9 +54,12 @@ Use `CTRL+S` to shift between the panes.
 
 ## Features
 
-- **Executors**: tell the designer to spawn a executor for a task and it will launch an agent, that will then appear in the sidebar, running in an isolated container to accomplish the task. Tell the designer to merge it in when you are happy with the executor's code, for example via the `/merge-child` command you can call in claude.
+- **Executors**: tell the designer to spawn a executor for a task and it will launch an agent, that will then appear in the sidebar, running in an isolated container to accomplish the task. Tell the designer to merge it in when you are happy with the executor's code, for example via the `/merge-child` command.
 - **Spec design**: if you type `s` on a session from the sidebar, it will open a spec file in your default editor. This is a place to think and write plans which the designer will collaborate with you on before spawning a executor.
+- **Monitoring**: when you set off an executor on a spec, a background monitor will oversee its changes and ensure that it doesn't veer off or go against your spec. This helps you notice issues even if you are not overseeing every action your agents take.
 - **Pairing mode**, `p` will take the currently focused agent's session and stage its changes on your local code, so you can directly work together and pair program. Unpair via `p` to restore the original state.
+
+All of these are designed to make it easy to oversee the swarm of coding agents implementing your vision.
 
 ## Full list of sidebar commands
 
@@ -80,20 +92,14 @@ Orchestra stores configuration in two places:
 - **`mcp_port`** (int): Port for the Orchestra MCP server. Change this if 8765 is already in use.
 - **`ui_theme`** (string): Textual theme for the Orchestra UI. See [Textual themes](https://textual.textualize.io/guide/themes/) for options.
 
-To modify: Edit `~/.orchestra/config/settings.json` and restart Orchestra.
-
 ### Tmux Configuration
 
-`~/.orchestra/config/tmux.conf` — Tmux keybindings and behavior for the Orchestra interface.
-
-Created automatically on first run. Customize this file to change keybindings or tmux behavior. Changes take effect when you restart Orchestra.
+`~/.orchestra/config/tmux.conf` — Tmux keybindings and behavior for the Orchestra interface, feel free to modify/add hotkeys if you want.
 
 **Default keybindings:**
 - **`Ctrl+S`**: Switch between panes (top left, bottom left, right)
 - **`Ctrl+\\`**: Detach from Orchestra session
 - **Mouse wheel**: Scroll through terminal output
-
-## Example workflows
 
 
 ## Troubleshooting
@@ -113,7 +119,6 @@ Created automatically on first run. Customize this file to change keybindings or
 **Message sending doesn't go through**:
 
 This can be buggy due to differences in user systems sometimes, we're trying to figure out why. Please open an issue with details.
-
 
 ## Contributing
 .
