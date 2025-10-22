@@ -17,15 +17,24 @@ class MessagesTab(Container):
         self.messages_log = RichLog(
             highlight=True,
             markup=True,
-            auto_scroll=True,
+            auto_scroll=False,  # Manual scroll control to avoid constant scrolling
             wrap=True,
             min_width=0,
         )
+        self._message_count = 0
         yield self.messages_log
 
     def on_mount(self) -> None:
-        """Start refreshing messages when mounted."""
-        self.set_interval(2.0, self.refresh_messages)
+        """Start watching messages file for changes."""
+        app = self.app
+        if hasattr(app, "state") and hasattr(app.state, "file_watcher"):
+            messages_path = Path(app.state.project_dir) / ".orchestra" / "messages.jsonl"
+
+            async def on_messages_changed(path: Path, last_call_time: float) -> None:
+                self.refresh_messages()
+
+            app.state.file_watcher.register(messages_path, on_messages_changed)
+
         self.refresh_messages()
 
     def refresh_messages(self) -> None:
@@ -52,6 +61,10 @@ class MessagesTab(Container):
         Args:
             messages: List of Message objects to display
         """
+        # Check if we should scroll (only if new messages added)
+        should_scroll = len(messages) > self._message_count
+        self._message_count = len(messages)
+
         self.messages_log.clear()
 
         if not messages:
@@ -76,6 +89,10 @@ class MessagesTab(Container):
             # Add subtle spacing between messages (but not after the last one)
             if i < len(messages) - 1:
                 self.messages_log.write("")
+
+        # Only scroll to bottom when new messages are added
+        if should_scroll:
+            self.messages_log.scroll_end()
 
     def load_and_display_messages(self, project_dir: Path, session_name: str | None = None) -> None:
         """Load messages for a specific session and display them.
