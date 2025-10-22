@@ -138,6 +138,7 @@ def tmux(monkeypatch):
         return ["tmux", "-L", socket_name] + list(args)
 
     monkeypatch.setattr("orchestra.lib.helpers.tmux.build_tmux_cmd", test_build_tmux_cmd)
+    monkeypatch.setattr("orchestra.lib.tmux_protocol.build_tmux_cmd", test_build_tmux_cmd)
 
     yield socket_name
 
