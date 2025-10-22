@@ -76,6 +76,7 @@ def send_message_to_session(session_name: str, message: str, source_path: str, s
     # add message to message queue with target, sender, and timestamp
 
     messages_path = Path(source_path) / ".orchestra" / "messages.jsonl"
+    messages_path.parent.mkdir(parents=True, exist_ok=True)
     message_obj = {
         "source": session_name,  # target/recipient
         "sender": sender_name,
@@ -96,7 +97,7 @@ def send_message_to_session(session_name: str, message: str, source_path: str, s
 def main():
     """Entry point for MCP server."""
     # Override port if provided via command line
-    print(f"Starting MCP server")
+    print("Starting MCP server")
     mcp.run(transport="streamable-http")
 
 
