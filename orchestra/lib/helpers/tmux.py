@@ -133,11 +133,8 @@ def respawn_pane_with_vim(spec_file: Path) -> bool:
         logger.error("No editor found. Please install nano, vim, or VS Code, or set the $EDITOR environment variable.")
         return False
 
-    # Get user's shell, fallback to bash
-    shell = os.environ.get('SHELL', '/bin/bash')
-
     editor_cmd = (
-        f'{shell} -c "{editor} {shlex.quote(str(spec_file))}; clear; echo \\"Press s to open spec editor\\"; exec {shell}"'
+        f'$SHELL -c "{editor} {shlex.quote(str(spec_file))}; clear; echo \\"Press s to open spec editor\\"; exec $SHELL"'
     )
     return respawn_pane(PANE_EDITOR, editor_cmd)
 
@@ -151,8 +148,5 @@ def respawn_pane_with_terminal(work_path: Path) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    # Get user's shell, fallback to bash
-    shell = os.environ.get('SHELL', '/bin/bash')
-
-    bash_cmd = f'{shell} -c "cd {shlex.quote(str(work_path))} && exec {shell}"'
+    bash_cmd = f'$SHELL -c "cd {shlex.quote(str(work_path))} && exec $SHELL"'
     return respawn_pane(PANE_EDITOR, bash_cmd)

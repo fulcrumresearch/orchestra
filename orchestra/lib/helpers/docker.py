@@ -30,7 +30,11 @@ def ensure_docker_image() -> None:
     if not result.stdout.strip():
         # Image doesn't exist, build it
         # Find Dockerfile in the orchestra package
-        dockerfile_path = resources.files("orchestra") / "Dockerfile"
+        try:
+            dockerfile_path = resources.files("orchestra") / "Dockerfile"
+        except (ImportError, AttributeError):
+            # Fallback for older Python or development mode
+            dockerfile_path = Path(__file__).parent.parent.parent / "Dockerfile"
 
         if not Path(dockerfile_path).exists():
             raise RuntimeError(f"Dockerfile not found at {dockerfile_path}")
@@ -188,10 +192,8 @@ def ensure_shared_claude_config(shared_claude_dir: Path, shared_claude_json: Pat
     if shared_claude_json.exists():
         with open(shared_claude_json, "r") as f:
             config = json.load(f)
-        return None
-
     # On Linux, copy auth settings from host's .claude directory and .claude.json
-    if platform.system() == "Linux":
+    elif platform.system() == "Linux":
         host_claude_dir = Path.home() / ".claude"
         host_claude_json = Path.home() / ".claude.json"
 
