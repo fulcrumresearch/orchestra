@@ -145,7 +145,7 @@ class FileWatcher:
             if self._should_stop:
                 break
 
-    def add_session_change_notifier(self, path: Path, session: "Session", filter_fn: Optional[FileChangeFilter]) -> None:
+    def add_session_change_notifier(self, path: Path, session: "Session", filter_fn: FileChangeFilter | None = None) -> None:
         """
         Register a watcher for designer.md that notifies the session when it changes.
 

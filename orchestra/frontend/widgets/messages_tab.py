@@ -58,20 +58,24 @@ class MessagesTab(Container):
             self.messages_log.write("[dim]No messages[/dim]")
             return
 
-        for msg in messages:
+        for i, msg in enumerate(messages):
             # Color code based on sender type
             if "monitor" in msg.sender.lower():
-                sender_color = "yellow"
+                sender_color = "bright_yellow"
             elif "designer" in msg.sender.lower():
-                sender_color = "cyan"
+                sender_color = "bright_magenta"
             else:
-                sender_color = "green"
+                sender_color = "magenta"
 
-            # Format: [SENDER] message with timestamp
-            sender_styled = f"[{sender_color}]{msg.sender}[/{sender_color}]"
-            timestamp = f"[dim]{msg.timestamp}[/dim]"
+            # Sleek minimal format: sender on its own line, message below with padding
+            sender_styled = f"[bold {sender_color}]▸ {msg.sender}[/bold {sender_color}]"
 
-            self.messages_log.write(f"{sender_styled} {msg.message} {timestamp}")
+            self.messages_log.write(sender_styled)
+            self.messages_log.write(f"  {msg.message}")
+
+            # Add subtle spacing between messages (but not after the last one)
+            if i < len(messages) - 1:
+                self.messages_log.write("")
 
     def load_and_display_messages(self, project_dir: Path, session_name: str | None = None) -> None:
         """Load messages for a specific session and display them.
