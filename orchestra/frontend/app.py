@@ -351,11 +351,12 @@ class UnifiedApp(App):
         def messages_filter(path: Path) -> bool:
             """Only notify if message is for root session (designer)"""
             from orchestra.lib.message import load_messages
+
             all_messages = load_messages(Path.cwd())
             if not all_messages:
                 return False
             latest_msg = all_messages[-1]
-            return latest_msg.source == self.state.root_session.session_name
+            return latest_msg.recipient == self.state.root_session.session_name
 
         self.state.file_watcher.add_session_change_notifier(messages_file, self.state.root_session, messages_filter)
 

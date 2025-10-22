@@ -78,7 +78,7 @@ def send_message_to_session(session_name: str, message: str, source_path: str, s
     messages_path = Path(source_path) / ".orchestra" / "messages.jsonl"
     messages_path.parent.mkdir(parents=True, exist_ok=True)
     message_obj = {
-        "source": session_name,  # target/recipient
+        "recipient": session_name,  # target/recipient
         "sender": sender_name,
         "message": message,
         "timestamp": datetime.now().isoformat(),

@@ -10,7 +10,7 @@ import json
 class Message:
     """Represents a message sent between sessions."""
 
-    source: str  # target/recipient session name
+    recipient: str  # target/recipient session name
     sender: str  # sender session name
     message: str  # message content
     timestamp: str  # ISO format timestamp
@@ -39,7 +39,7 @@ def load_messages(project_dir: Path) -> list[Message]:
             try:
                 data = json.loads(line)
                 msg = Message(
-                    source=data.get("source", ""),
+                    recipient=data.get("recipient", ""),
                     sender=data.get("sender", ""),
                     message=data.get("message", ""),
                     timestamp=data.get("timestamp", datetime.now().isoformat()),
@@ -70,4 +70,4 @@ def load_session_messages(project_dir: Path, session_name: str | None = None, is
     if is_designer or session_name is None:
         return all_messages
 
-    return [msg for msg in all_messages if msg.source == session_name or msg.sender == session_name]
+    return [msg for msg in all_messages if msg.recipient == session_name or msg.sender == session_name]
