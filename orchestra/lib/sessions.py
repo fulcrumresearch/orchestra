@@ -276,7 +276,7 @@ class Session:
         """Get status information for this session"""
         return self.protocol.get_status(self)
 
-    def send_message(self, message: str, sender_name: str = "", queue_mode: bool = False) -> None:
+    def send_message(self, message: str, sender_name: str = "") -> None:
         """Send a message to the session directly"""
         sender_name = sender_name.strip() if sender_name else ""
         if sender_name:
