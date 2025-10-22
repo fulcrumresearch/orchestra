@@ -14,8 +14,6 @@ You can jump into an Executor's execution, see its work, and even stage its chan
 
 ## Prerequisites
 
-For each project, you communicate with a designer agent, that drafts and creates specs for various tasks with you.
-
 - **git** Orchestra uses git worktrees for parallel development
 - **claude-code**
 - **tmux**
