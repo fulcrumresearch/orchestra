@@ -122,6 +122,6 @@ This can be buggy due to differences in user systems sometimes, we're trying to 
 
 ## Contributing
 .
-If you notice an issue or bug, please [open an issue](https://github.com/fulcrumresearch/orchestra). We also welcome contributions: feel free to open a PR to fix an issue.
+If you notice an issue or bug, please [open an issue](https://github.com/fulcrumresearch/orchestra/issues). We also welcome contributions: feel free to open a PR to fix an issue.
 
 You can join the user community to discuss issues and workflows you find useful, on [discord](https://discord.gg/QmMybVuwWp).
