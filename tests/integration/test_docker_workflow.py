@@ -133,7 +133,7 @@ class TestFullSpawnWorkflow:
         save_session(designer, project_dir=orchestra_test_env.repo)
 
         # Mock tmux start to avoid actual tmux session creation
-        with patch("orchestra.lib.tmux_agent.TmuxProtocol.start", return_value=True):
+        with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
             # Spawn executor
             child = designer.spawn_executor(
                 session_name="test-executor",
@@ -208,7 +208,7 @@ class TestFullSpawnWorkflow:
         designer.prepare()
         save_session(designer, project_dir=orchestra_test_env.repo)
 
-        with patch("orchestra.lib.tmux_agent.TmuxProtocol.start", return_value=True):
+        with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
             child = designer.spawn_executor(
                 session_name="test-executor",
                 instructions="Test task",

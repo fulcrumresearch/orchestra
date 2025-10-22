@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 import asyncio
+import time
 from pathlib import Path
 
 from textual.app import App, ComposeResult
@@ -65,7 +66,7 @@ class UnifiedApp(App):
         padding: 0 1;
     }
 
-    
+
 
     #hud {
         height: 1;
@@ -108,7 +109,7 @@ class UnifiedApp(App):
         padding: 0;
     }
 
-    
+
 
     TabbedContent {
         height: 1fr;
@@ -170,6 +171,15 @@ class UnifiedApp(App):
         height: 1;
         width: 100%;
         padding: 0 1;
+    }
+
+    #message-indicator {
+        color: $foreground;
+        text-style: none;
+        height: 1;
+        width: 100%;
+        padding: 0 1;
+        text-align: right;
     }
 
     ListView {
@@ -283,6 +293,8 @@ class UnifiedApp(App):
                     yield Static("Sessions", id="sessions-header")
                     self.session_list = ListView(id="session-list")
                     yield self.session_list
+                self.message_indicator = Static("", id="message-indicator")
+                yield self.message_indicator
 
             with Container(id="right-pane"):
                 with Container(id="diff-card"):
@@ -336,20 +348,26 @@ class UnifiedApp(App):
 
         self.set_focus(self.session_list)
 
-        # Watch sessions.json for changes
-        async def on_sessions_file_change(path, change_type):
+        async def on_sessions_file_change(path, last_call_time):
             self.state.load(root_session_name=self.state.root_session_name)
             await self.action_refresh()
 
         self.state.file_watcher.register(SESSIONS_FILE, on_sessions_file_change)
-        await self.state.file_watcher.start()
 
-        # Ensure .orchestra directory and files exist
+        messages_file = Path.cwd() / ".orchestra" / "messages.jsonl"
+
+        async def on_messages_callback(path):
+            self.state.pending_messages_count += 1
+            self._update_message_indicator()
+
+        self.state.file_watcher.add_session_change_notifier(messages_file, self.state.root_session, on_messages_callback)
+
         designer_md, doc_md = ensure_orchestra_directory(self.state.project_dir)
 
-        # Add watcher for designer.md (once root session is ready)
         if self.state.root_session:
-            self.state.file_watcher.add_designer_watcher(designer_md, self.state.root_session)
+            self.state.file_watcher.add_session_change_notifier(designer_md, self.state.root_session)
+
+        await self.state.file_watcher.start()
 
         # Auto-open doc.md on first run, otherwise open designer.md
         if first_run:
@@ -533,6 +551,15 @@ class UnifiedApp(App):
         if not respawn_pane_with_terminal(work_path):
             logger.error(f"Failed to open terminal: {work_path}")
 
+    def _update_message_indicator(self) -> None:
+        """Update the message indicator based on pending count"""
+        count = self.state.pending_messages_count
+        if count > 0:
+            msg_word = "message" if count == 1 else "messages"
+            self.message_indicator.update(f"{count} executor {msg_word} pending")
+        else:
+            self.message_indicator.update("")
+
     def _attach_to_session(self, session: Session) -> None:
         """Select a session and update monitors to show it"""
         self.state.set_active_session(session.session_name)
@@ -556,6 +583,17 @@ class UnifiedApp(App):
         """Override quit to show shutdown message and run cleanup"""
         self.status_indicator.update("⏳ Quitting...")
         logger.info("Shutting down Orchestra...")
+        
+        # Unpair synchronously if needed
+        paired_session = self.state.get_paired_session()
+        if paired_session:
+            logger.info(f"Unpairing {paired_session.session_name} before shutdown...")
+            success, error_msg = paired_session.toggle_pairing()
+            if not success:
+                logger.error(f"Failed to unpair: {error_msg}")
+            else:
+                self.state.set_paired_session(None)
+        
         asyncio.create_task(self._shutdown_task())
 
     async def _shutdown_task(self) -> None:
