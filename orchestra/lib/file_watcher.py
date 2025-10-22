@@ -3,7 +3,7 @@
 import asyncio
 import time
 from pathlib import Path
-from typing import Callable, Awaitable, Dict, Set, TYPE_CHECKING
+from typing import Callable, Awaitable, Dict, Set, TYPE_CHECKING, Optional
 from watchfiles import awatch, Change
 from .logger import get_logger
 
@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 FileChangeHandler = Callable[[Path, float], Awaitable[None]]
+FileChangeFilter = Callable[[Path, float], bool]
 
 
 class FileWatcher:
@@ -95,7 +96,6 @@ class FileWatcher:
         logger.debug("File watcher started")
 
         while not self._should_stop:
-          
             if not self._watchers:
                 # No files to watch, sleep briefly
                 # TODO: fix this unclean logic
@@ -145,7 +145,7 @@ class FileWatcher:
             if self._should_stop:
                 break
 
-    def add_session_change_notifier(self, path: Path, session: "Session", callback=None) -> None:
+    def add_session_change_notifier(self, path: Path, session: "Session", filter_fn: Optional[FileChangeFilter]) -> None:
         """
         Register a watcher for designer.md that notifies the session when it changes.
 
@@ -160,10 +160,7 @@ class FileWatcher:
             """Handler for designer.md changes"""
 
             current_time = time.time()
-            if current_time - last_call_time >= 5:
+            if current_time - last_call_time >= 5 and (not filter_fn or filter_fn(path)):
                 session.send_message(f"[System] {path} has been updated. Please review the changes")
-
-            if callback:
-                await callback(path)
 
         self.register(path, on_file_change)

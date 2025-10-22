@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MCP server for spawning sub-agents in Orchestra system."""
 
-import sys
+import json
 from pathlib import Path
 
 from mcp.server import FastMCP
@@ -72,10 +72,24 @@ def send_message_to_session(session_name: str, message: str, source_path: str, s
     if not target:
         return f"Error: Session '{session_name}' not found"
 
-    # don't interrupt designers for MCP calls
-    queue_mode = target.agent_type == AgentType.DESIGNER
+    # add message to message queue with target, sender, and timestamp
+    from datetime import datetime
 
-    target.send_message(message, sender_name=sender_name, queue_mode=queue_mode)
+    messages_path = Path(source_path) / ".orchestra" / "messages.jsonl"
+    message_obj = {
+        "source": session_name,  # target/recipient
+        "sender": sender_name,
+        "message": message,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    with open(messages_path, "a") as f:
+        f.write(json.dumps(message_obj) + "\n")
+
+    # Send via protocol ONLY if target is an executor (not designer)
+    if target.agent_type == AgentType.EXECUTOR:
+        target.send_message(message, sender_name=sender_name)
+
     return f"Successfully sent message to session '{session_name}'"
 
 

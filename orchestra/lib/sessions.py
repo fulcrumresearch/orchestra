@@ -277,20 +277,11 @@ class Session:
         return self.protocol.get_status(self)
 
     def send_message(self, message: str, sender_name: str = "", queue_mode: bool = False) -> None:
-        """Send a message to the session"""
-        if queue_mode:
-            # queue mode is a less interruptive way of notifiying
-            messages_path = Path(self.work_path) / ".orchestra" / "messages.jsonl"
-            message_obj = {"sender": sender_name, "message": message}
-
-            logger.info(f"Queued message for session {self.session_name}: {message}")
-            with open(messages_path, "a") as f:
-                f.write(json.dumps(message_obj) + "\n")
-
-        else:
-            if sender_name:
-                message = f"[From: {sender_name}] {message}"
-            self.protocol.send_message(self, message)
+        """Send a message to the session directly"""
+        sender_name = sender_name.strip() if sender_name else ""
+        if sender_name:
+            message = f"[From: {sender_name}] {message}"
+        self.protocol.send_message(self, message)
 
     def toggle_pairing(self) -> tuple[bool, str]:
         """

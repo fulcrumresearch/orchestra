@@ -28,6 +28,12 @@ def main():
     # If we get here, no session exists or attach failed - proceed with normal startup
     logger.info("Starting new Orchestra session...")
 
+    # Clear the message queue on startup
+    messages_file = Path.cwd() / ".orchestra" / "messages.jsonl"
+    if messages_file.exists():
+        messages_file.unlink()
+        logger.debug("Cleared messages queue")
+
     # Start the MCP server in the background (HTTP transport)
     mcp_log = Path.home() / ".orchestra" / "mcp-server.log"
     mcp_log.parent.mkdir(parents=True, exist_ok=True)

@@ -25,7 +25,6 @@ class AppState:
         self.paired_session_name: Optional[str] = None
         self.project_dir = project_dir
         self.file_watcher = FileWatcher()
-        self.pending_messages_count = 0
 
     def load(self, root_session_name: str) -> None:
         """Load sessions from disk.

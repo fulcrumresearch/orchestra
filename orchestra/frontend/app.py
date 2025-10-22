@@ -23,7 +23,9 @@ from textual.binding import Binding
 # Import widgets from new locations
 from orchestra.frontend.widgets.hud import HUD
 from orchestra.frontend.widgets.diff_tab import DiffTab
+from orchestra.frontend.widgets.messages_tab import MessagesTab
 from orchestra.frontend.state import AppState
+from orchestra.lib.message import load_session_messages
 
 # Import from lib
 from orchestra.lib.sessions import (
@@ -173,15 +175,6 @@ class UnifiedApp(App):
         padding: 0 1;
     }
 
-    #message-indicator {
-        color: $foreground;
-        text-style: none;
-        height: 1;
-        width: 100%;
-        padding: 0 1;
-        text-align: right;
-    }
-
     ListView {
         height: 1fr;
         width: 1fr;
@@ -291,14 +284,15 @@ class UnifiedApp(App):
                     yield Static("Sessions", id="sessions-header")
                     self.session_list = ListView(id="session-list")
                     yield self.session_list
-                self.message_indicator = Static("", id="message-indicator")
-                yield self.message_indicator
 
             with Container(id="right-pane"):
                 with Container(id="diff-card"):
                     with TabbedContent(initial="diff-tab"):
                         with TabPane("Diff", id="diff-tab"):
                             yield DiffTab()
+                        with TabPane("Messages", id="messages-tab"):
+                            self.messages_tab = MessagesTab()
+                            yield self.messages_tab
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
@@ -354,11 +348,16 @@ class UnifiedApp(App):
 
         messages_file = Path.cwd() / ".orchestra" / "messages.jsonl"
 
-        async def on_messages_callback(path):
-            self.state.pending_messages_count += 1
-            self._update_message_indicator()
+        def messages_filter(path: Path) -> bool:
+            """Only notify if message is for root session (designer)"""
+            from orchestra.lib.message import load_messages
+            all_messages = load_messages(Path.cwd())
+            if not all_messages:
+                return False
+            latest_msg = all_messages[-1]
+            return latest_msg.source == self.state.root_session.session_name
 
-        self.state.file_watcher.add_session_change_notifier(messages_file, self.state.root_session, on_messages_callback)
+        self.state.file_watcher.add_session_change_notifier(messages_file, self.state.root_session, messages_filter)
 
         designer_md, doc_md = ensure_orchestra_directory(self.state.project_dir)
 
@@ -548,15 +547,6 @@ class UnifiedApp(App):
 
         if not respawn_pane_with_terminal(work_path):
             logger.error(f"Failed to open terminal: {work_path}")
-
-    def _update_message_indicator(self) -> None:
-        """Update the message indicator based on pending count"""
-        count = self.state.pending_messages_count
-        if count > 0:
-            msg_word = "message" if count == 1 else "messages"
-            self.message_indicator.update(f"{count} executor {msg_word} pending")
-        else:
-            self.message_indicator.update("")
 
     def _attach_to_session(self, session: Session) -> None:
         """Select a session and update monitors to show it"""
