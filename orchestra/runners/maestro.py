@@ -24,7 +24,6 @@ def main():
 
     # Check if orchestra-main session already exists
 
-
     # If we get here, no session exists or attach failed - proceed with normal startup
     logger.info("Starting new Orchestra session...")
 
@@ -67,7 +66,7 @@ def main():
             )
         logger.info(f"Monitor server started with PID {monitor_proc.pid}")
 
-    def cleanup_servers():
+    def cleanup():
         """Clean up background servers on exit"""
         logger.info("Shutting down MCP server")
         kill_process_gracefully(mcp_proc)
@@ -76,7 +75,11 @@ def main():
             logger.info("Shutting down monitor server")
             kill_process_gracefully(monitor_proc)
 
-        # Kill the tmux server
+        # remove doc injection
+        claude_path = Path.cwd() / ".claude" / "CLAUDE.md"
+        if claude_path.exists():
+            claude_path.write_text(claude_path.read_text().replace("@orchestra.md", ""))
+
         logger.info("Shutting down tmux server")
         try:
             execute_local(build_tmux_cmd("kill-server"))
@@ -84,10 +87,10 @@ def main():
             logger.debug(f"Error killing tmux server: {e}")
 
     try:
-        UnifiedApp(shutdown_callback=cleanup_servers).run()
+        UnifiedApp(shutdown_callback=cleanup).run()
     except Exception as e:
         logger.exception(f"Unexpected error: {e}")
-        cleanup_servers()
+        cleanup()
         raise
 
 

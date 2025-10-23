@@ -119,11 +119,7 @@ class Session:
             existing_content = claude_md_path.read_text()
 
         if import_line not in existing_content:
-            if existing_content:
-                new_content = f"{existing_content}\n# Orchestra Session Configuration\n{import_line}\n"
-            else:
-                new_content = f"# Orchestra Session Configuration\n{import_line}\n"
-
+            new_content = f"{existing_content}\n{import_line}\n"
             claude_md_path.write_text(new_content)
 
     def to_dict(self) -> Dict[str, Any]:

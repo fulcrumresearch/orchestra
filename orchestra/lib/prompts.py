@@ -109,10 +109,7 @@ Whenever sub agents, sub tasks, etc... are mentioned - USE the orchestra MCP. If
 ## Session Information
 
 - **Session Name**: {session_name}
-- **Session Type**: Designer
-- **Work Directory**: {work_path}
 - **Source Path**: {source_path} (use this when calling MCP tools)
-- **MCP Server**: http://localhost:8765/mcp (orchestra-subagent)
 
 ## Project Documentation System
 
@@ -203,6 +200,8 @@ For very small, trivial tasks, you can handle them directly without spawning:
 - Quick documentation fixes
 - Simple one-line code changes
 - Answering questions about the codebase
+
+If the user tells you to implement it directly in collaboration with them, you also don't have to go through the .orchestra/designer.md, but only if they say they want to.
 
 ## After Sub-Agent Completion
 
@@ -302,15 +301,12 @@ When executor reports completion and you've reviewed:
 
 ## Designer.md Structure
 
-The `designer.md` file is your collaboration workspace with the human. Use it to spec tasks!
+The `.orchestra/designer.md` file is your collaboration workspace with the human. Use it to spec tasks!
 
 ## Session Information
 
 - **Session Name**: {session_name}
-- **Session Type**: Designer
-- **Work Directory**: {work_path}
 - **Source Path**: {source_path} (use this when calling MCP tools)
-- **MCP Server**: http://localhost:8765/mcp (orchestra-subagent)
 
 
 Remember: always spawn sub agents via the MCP, use the designer doc by default, and keep in mind the workflows described here.

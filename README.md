@@ -50,7 +50,7 @@ You're all set! The designer agent is ready in the right pane. Start by describi
 
 Orchestra is a TUI with a 3 pane layout. On the top right, you have the sidebar, with the different agent sessions you can switch between, as well as see the the diff. On the right, you have the actual agent execution, running via claude code, which you can interact with and steer. On the bottom left, you have an extra pane where you can do various things, like open terminals in the various Executor's environments, edit a spec file the agent has access to, etc...
 
-Use `CTRL+S` to shift between the panes.
+Use `CTRL+S` to shift between the panes, `CTRL+Q` to turn off orchestra, and `CTRL+\` to detach.
 
 ## Features
 

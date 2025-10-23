@@ -338,6 +338,8 @@ class UnifiedApp(App):
         await self.action_refresh()
 
         if self.state.root_session:
+            # Regenerate instructions to ensure session context is current
+            self.state.root_session.add_instructions()
             self._attach_to_session(self.state.root_session)
 
         self.set_focus(self.session_list)
