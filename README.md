@@ -1,8 +1,15 @@
 # Orchestra
 
+
 Orchestra is an experimental multi-agent coding system, with parallel execution, model-driven coordination, and full visibility of your coding agents.
 
-Coding agents can implement well-scoped tasks in parallel. Humans are comparatively better at making high level decisions and directing the work so it matches their intentions. Orchestra leverages parallel agents while keeping the human in the loop, to quickly write good code.
+Coding agents can implement well-scoped tasks in parallel. Humans are comparatively better at making high level decisions and directing the work so it matches their intentions.
+
+Orchestra's oversight features -- model to model orchestration and monitoring -- are what actually makes it possible for parallelization to be useful, and not destructive, by making it easier to scale those human decisions.
+
+Check out the [demo](https://www.youtube.com/watch?v=jEMFEJIvGs0) explainer of Orchestra.
+
+[![Orchestra demo](https://img.youtube.com/vi/jEMFEJIvGs0/0.jpg)](https://www.youtube.com/watch?v=jEMFEJIvGs0)
 
 ## The flow
 
