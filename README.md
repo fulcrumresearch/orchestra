@@ -20,7 +20,7 @@ Orchestra's oversight features -- model to model orchestration and monitoring --
 
 <demo video>
 
-At [Fulcrum](https://fulcrumresearch.org), we’ve used Orchestra to:
+At [Fulcrum](https://fulcrumresearch.ai/), we’ve used Orchestra to:
 
 - Iterate on the plan of a complex feature implementation and decompose it into bite sized subtasks
 - Work on multiple independent features at the same time
