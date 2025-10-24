@@ -1,7 +1,9 @@
 from abc import ABC
-from typing import TYPE_CHECKING, Optional, Dict, List, Any, Callable
+from typing import TYPE_CHECKING, Optional, Dict, List, Any
 from pathlib import Path
 import subprocess
+import yaml
+import importlib.util
 
 if TYPE_CHECKING:
     from .sessions import Session
@@ -13,10 +15,7 @@ class Agent(ABC):
     This allows customization of agent behavior, setup, and configuration.
     Subclass this to create custom agent types for different workflows.
 
-    For simple customization (e.g., custom prompt), you can pass a setup_fn:
-        my_agent = Agent(name="custom", prompt="...", setup_fn=some_setup_function)
-
-    For complex customization, subclass and implement setup():
+    Example:
         class MyAgent(Agent):
             def __init__(self):
                 super().__init__(name="my-agent", prompt="...")
@@ -32,7 +31,6 @@ class Agent(ABC):
         use_docker: bool = False,
         mcp_config: Optional[Dict[str, Any]] = None,
         tools: Optional[List[str]] = None,
-        setup_fn: Optional[Callable[["Session"], None]] = None,
     ):
         """Initialize an agent
 
@@ -42,42 +40,35 @@ class Agent(ABC):
             use_docker: Whether this agent runs in Docker by default
             mcp_config: MCP server configuration (optional)
             tools: List of allowed tool names (optional, None = no restrictions)
-            setup_fn: Setup function to call instead of overriding setup() (optional)
         """
         self.name = name
         self.prompt = prompt
         self.use_docker = use_docker
         self.mcp_config = mcp_config
         self.tools = tools
-        self._setup_fn = setup_fn
 
     def setup(self, session: "Session") -> None:
         """Setup work environment for this agent type
 
-        Called during Session.prepare(). Either:
-        - Override this method in a subclass for complex setup logic, OR
-        - Pass setup_fn to __init__ for simple cases
+        Called during Session.prepare(). Subclasses must override this method.
 
         Args:
             session: Session object being prepared
         """
-        if self._setup_fn:
-            self._setup_fn(session)
-        else:
-            raise NotImplementedError(
-                f"Agent '{self.name}' must implement setup() or provide setup_fn"
-            )
+        raise NotImplementedError(
+            f"Agent '{self.name}' must implement setup()"
+        )
 
 
 class DesignerAgent(Agent):
     """Designer agent - orchestrator that works in source directory"""
 
-    def __init__(self):
+    def __init__(self, prompt: Optional[str] = None):
         from .prompts import DESIGNER_PROMPT
 
         super().__init__(
             name="designer",
-            prompt=DESIGNER_PROMPT,
+            prompt=prompt or DESIGNER_PROMPT,
             use_docker=False,
         )
 
@@ -102,13 +93,22 @@ class DesignerAgent(Agent):
 class ExecutorAgent(Agent):
     """Executor agent - worker that runs in isolated git worktree"""
 
-    def __init__(self):
+    def __init__(
+        self,
+        prompt: Optional[str] = None,
+        name: str = "executor",
+        use_docker: bool = True,
+        mcp_config: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[str]] = None,
+    ):
         from .prompts import EXECUTOR_PROMPT
 
         super().__init__(
-            name="executor",
-            prompt=EXECUTOR_PROMPT,
-            use_docker=True,
+            name=name,
+            prompt=prompt or EXECUTOR_PROMPT,
+            use_docker=use_docker,
+            mcp_config=mcp_config,
+            tools=tools,
         )
 
     def setup(self, session: "Session") -> None:
@@ -160,3 +160,166 @@ class ExecutorAgent(Agent):
 # Default instances for Orchestra's built-in agent types
 DESIGNER_AGENT = DesignerAgent()
 EXECUTOR_AGENT = ExecutorAgent()
+
+
+def load_agent(name: str, config_dir: Optional[Path] = None) -> Agent:
+    """Load agent by name from agents.yaml
+
+    Args:
+        name: Agent name to load
+        config_dir: Path to .orchestra/config/ (defaults to cwd/.orchestra/config)
+
+    Returns:
+        Agent instance
+
+    Raises:
+        ValueError: If agent not found or config invalid
+    """
+    # Default to project .orchestra/config
+    if config_dir is None:
+        config_dir = Path.cwd() / ".orchestra" / "config"
+
+    # Check for agents.yaml
+    agents_file = config_dir / "agents.yaml"
+    if not agents_file.exists():
+        # Fall back to built-in agents
+        return _get_builtin_agent(name)
+
+    # Load config
+    try:
+        with open(agents_file) as f:
+            config = yaml.safe_load(f)
+            if config is None:
+                config = {}
+    except Exception as e:
+        raise ValueError(f"Failed to load agents.yaml: {e}")
+
+    agents_config = config.get("agents", {})
+    if agents_config is None:
+        agents_config = {}
+
+    if name not in agents_config:
+        # Fall back to built-in
+        return _get_builtin_agent(name)
+
+    agent_config = agents_config[name]
+
+    # Delegate to helper functions
+    if "module" in agent_config:
+        return _load_module_agent(name, agent_config["module"], config_dir)
+    elif name in ("designer", "executor"):
+        return _override_builtin_agent(name, agent_config, config_dir)
+    else:
+        return _create_simple_agent(name, agent_config, config_dir)
+
+
+def _get_builtin_agent(name: str) -> Agent:
+    """Get built-in agent by name"""
+    if name == "designer":
+        return DESIGNER_AGENT
+    elif name == "executor":
+        return EXECUTOR_AGENT
+    else:
+        raise ValueError(f"Unknown agent: {name}")
+
+
+def _load_module_agent(name: str, module_spec: str, config_dir: Path) -> Agent:
+    """Load agent from Python module
+
+    Args:
+        module_spec: "path/to/file.py:ClassName"
+        config_dir: Base directory for relative paths
+    """
+    try:
+        module_path, class_name = module_spec.split(":")
+        module_path = Path(module_path)
+
+        # Module paths relative to config_dir
+        if not module_path.is_absolute():
+            module_path = config_dir / module_path
+
+        if not module_path.exists():
+            raise ValueError(f"Module file not found: {module_path}")
+
+        # Load module dynamically
+        spec = importlib.util.spec_from_file_location(f"agent_{name}", module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        # Get class and instantiate
+        agent_class = getattr(module, class_name)
+        return agent_class()
+
+    except Exception as e:
+        raise ValueError(f"Failed to load module agent {name}: {e}")
+
+
+def _override_builtin_agent(name: str, config: dict, config_dir: Path) -> Agent:
+    """Override built-in agent prompt
+
+    Args:
+        name: "designer" or "executor"
+        config: Agent configuration with prompt override
+        config_dir: Base directory for relative paths
+    """
+    # Load prompt
+    prompt = _load_prompt(config, config_dir)
+    if not prompt:
+        # Keep original if prompt loading fails
+        return _get_builtin_agent(name)
+
+    # Create new agent instance with overridden prompt
+    if name == "designer":
+        return DesignerAgent(prompt=prompt)
+    else:  # executor
+        return ExecutorAgent(prompt=prompt)
+
+
+def _create_simple_agent(name: str, config: dict, config_dir: Path) -> Agent:
+    """Create simple config-based agent (always executor-like)
+
+    Args:
+        name: Agent name
+        config: Agent configuration
+        config_dir: Base directory for relative paths
+    """
+    # Load prompt
+    prompt = _load_prompt(config, config_dir)
+    if not prompt:
+        raise ValueError(f"Agent {name} missing prompt or prompt_file")
+
+    # Create an ExecutorAgent with custom configuration
+    return ExecutorAgent(
+        prompt=prompt,
+        name=name,
+        use_docker=config.get("use_docker", False),
+        mcp_config=config.get("mcp_config"),
+        tools=config.get("tools"),
+    )
+
+
+def _load_prompt(config: dict, config_dir: Path) -> Optional[str]:
+    """Load prompt from config (inline or file)
+
+    Args:
+        config: Agent configuration
+        config_dir: Base directory for relative paths
+    """
+    # Inline prompt
+    if "prompt" in config:
+        return config["prompt"]
+
+    # Prompt file
+    if "prompt_file" in config:
+        prompt_path = Path(config["prompt_file"])
+
+        # Paths relative to config_dir
+        if not prompt_path.is_absolute():
+            prompt_path = config_dir / prompt_path
+
+        if not prompt_path.exists():
+            raise ValueError(f"Prompt file not found: {prompt_path}")
+
+        return prompt_path.read_text()
+
+    return None
