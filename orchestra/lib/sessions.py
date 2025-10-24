@@ -238,6 +238,9 @@ class Session:
 
         # No need to wait or send message separately - it's passed to claude command directly
 
+        # Save the parent session (with all children) to persist to disk
+        save_session(self, project_dir=Path(self.source_path))
+
         return new_session
 
     def get_status(self) -> Dict[str, Any]:
