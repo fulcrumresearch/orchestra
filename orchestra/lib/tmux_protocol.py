@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -18,7 +19,7 @@ from .helpers.tmux import (
     build_tmux_cmd,
     tmux_env,
 )
-from .config import get_tmux_server_name
+from .config import get_tmux_server_name, get_orchestra_home
 
 if TYPE_CHECKING:
     from .sessions import Session
@@ -366,11 +367,16 @@ class TmuxProtocol(AgentProtocol):
         claude_dir = Path(session.work_path) / ".claude"
         claude_dir.mkdir(parents=True, exist_ok=True)
 
+        # Get orchestra home and create regex pattern for it
+        orchestra_home = str(get_orchestra_home())
+        # Escape special regex characters in the path
+        escaped_home = re.escape(orchestra_home)
+
         settings_path = claude_dir / "settings.json"
         settings_config = {
             "permissions": {
                 "allow": ["mcp__orchestra-mcp__spawn_subagent", "mcp__orchestra-mcp__send_message_to_session"],
-                "allowPathRegex": ["^~/.orchestra/.*"],
+                "allowPathRegex": [f"^{escaped_home}/.*"],
             }
         }
 

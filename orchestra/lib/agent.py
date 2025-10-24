@@ -77,12 +77,19 @@ class DesignerAgent(Agent):
         # work_path already set to source_path by prepare()
         # Create .claude/commands directory and add merge-child command
         from .prompts import MERGE_CHILD_COMMAND
+        from .config import get_orchestra_home
 
         claude_commands_dir = Path(session.work_path) / ".claude" / "commands"
         claude_commands_dir.mkdir(parents=True, exist_ok=True)
 
+        # Format the merge command with dynamic orchestra subagents directory
+        orchestra_subagents_dir = str(get_orchestra_home() / "subagents")
+        formatted_merge_command = MERGE_CHILD_COMMAND.format(
+            orchestra_subagents_dir=orchestra_subagents_dir
+        )
+
         merge_command_path = claude_commands_dir / "merge-child.md"
-        merge_command_path.write_text(MERGE_CHILD_COMMAND)
+        merge_command_path.write_text(formatted_merge_command)
 
 
 class ExecutorAgent(Agent):

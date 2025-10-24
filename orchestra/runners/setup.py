@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 from orchestra.lib.helpers.docker import ensure_docker_image, ensure_shared_claude_config, get_docker_container_name
-from orchestra.lib.config import get_tmux_server_name
+from orchestra.lib.config import get_tmux_server_name, get_orchestra_home
 from orchestra.lib.sessions import Session
 from orchestra.lib.tmux_protocol import TmuxProtocol
 
@@ -149,8 +149,8 @@ def main() -> int:
         print("-" * 60)
 
         # Create shared Claude config directory
-        shared_claude_dir = Path.home() / ".orchestra" / "shared-claude"
-        shared_claude_json = Path.home() / ".orchestra" / "shared-claude.json"
+        shared_claude_dir = get_orchestra_home() / "shared-claude"
+        shared_claude_json = get_orchestra_home() / "shared-claude.json"
 
         print("\nCreating shared Claude configuration...")
         print(f"  Location: {shared_claude_dir}")
@@ -312,7 +312,7 @@ def main() -> int:
     print(f"  - Mode: {'Docker' if use_docker else 'Local'}")
     if use_docker:
         print(f"  - Docker image: orchestra-image")
-        print(f"  - Shared config: ~/.orchestra/shared-claude/")
+        print(f"  - Shared config: {get_orchestra_home() / 'shared-claude'}/")
     print(f"  - Claude CLI: {shutil.which('claude')}")
 
     print("\nYou're all set! Run 'orchestra' to start using Orchestra.")
