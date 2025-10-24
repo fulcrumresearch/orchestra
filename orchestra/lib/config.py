@@ -16,6 +16,7 @@ DEFAULT_CONFIG = {
     "use_docker": True,
     "mcp_port": 8765,
     "ui_theme": "textual-dark",
+    "tmux_server_name": "orchestra",
 }
 
 # Default tmux configuration for all Orchestra sessions
@@ -134,6 +135,16 @@ def get_tmux_config_path() -> Path:
     """
     ensure_config_dir()
     return Path.home() / ".orchestra" / "config" / "tmux.conf"
+
+
+def get_tmux_server_name() -> str:
+    """Get configured tmux server name.
+
+    Returns:
+        Configured tmux server name (defaults to "orchestra")
+    """
+    config = load_config()
+    return config.get("tmux_server_name", "orchestra")
 
 
 def claude_settings_builder(

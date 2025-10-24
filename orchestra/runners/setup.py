@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 
 from orchestra.lib.helpers.docker import ensure_docker_image, ensure_shared_claude_config, get_docker_container_name
+from orchestra.lib.config import get_tmux_server_name
 from orchestra.lib.sessions import Session
 from orchestra.lib.tmux_protocol import TmuxProtocol
 
@@ -35,7 +36,7 @@ def main() -> int:
     try:
         # Kill orchestra tmux server
         subprocess.run(
-            ["tmux", "-L", "orchestra", "kill-server"],
+            ["tmux", "-L", get_tmux_server_name(), "kill-server"],
             capture_output=True,
             text=True,
         )
@@ -224,7 +225,7 @@ def main() -> int:
             attach_result = subprocess.run([
                 "docker", "exec", "-it",
                 container_name,
-                "tmux", "-L", "orchestra", "attach-session", "-t", session.session_id
+                "tmux", "-L", get_tmux_server_name(), "attach-session", "-t", session.session_id
             ])
 
             # Clean up the session

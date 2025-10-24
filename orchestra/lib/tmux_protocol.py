@@ -18,6 +18,7 @@ from .helpers.tmux import (
     build_tmux_cmd,
     tmux_env,
 )
+from .config import get_tmux_server_name
 
 if TYPE_CHECKING:
     from .sessions import Session
@@ -120,7 +121,7 @@ class TmuxProtocol(AgentProtocol):
                 logger.info(f"Sending acceptance keys for executor {session.session_id}")
 
                 # Send Down arrow to select "Yes, I accept" option
-                self._exec(session, ["tmux", "-L", "orchestra", "send-keys", "-t", f"{session.session_id}:0.0", "Down"])
+                self._exec(session, ["tmux", "-L", get_tmux_server_name(), "send-keys", "-t", f"{session.session_id}:0.0", "Down"])
                 time.sleep(0.2)
 
                 # Send Enter to accept
@@ -297,7 +298,7 @@ class TmuxProtocol(AgentProtocol):
                         container_name,
                         "tmux",
                         "-L",
-                        "orchestra",
+                        get_tmux_server_name(),
                         *build_tmux_cmd("attach-session", "-t", session.session_id)[3:],
                     ],
                 ),
@@ -312,7 +313,7 @@ class TmuxProtocol(AgentProtocol):
                     [
                         "sh",
                         "-c",
-                        f"TMUX= tmux -L orchestra attach-session -t {session.session_id}",
+                        f"TMUX= tmux -L {get_tmux_server_name()} attach-session -t {session.session_id}",
                     ],
                 ),
                 capture_output=True,

@@ -137,8 +137,13 @@ def tmux(monkeypatch):
     def test_build_tmux_cmd(*args):
         return ["tmux", "-L", socket_name] + list(args)
 
+    # Patch get_tmux_server_name to return test socket name
+    def test_get_tmux_server_name():
+        return socket_name
+
     monkeypatch.setattr("orchestra.lib.helpers.tmux.build_tmux_cmd", test_build_tmux_cmd)
     monkeypatch.setattr("orchestra.lib.tmux_protocol.build_tmux_cmd", test_build_tmux_cmd)
+    monkeypatch.setattr("orchestra.lib.config.get_tmux_server_name", test_get_tmux_server_name)
 
     yield socket_name
 
