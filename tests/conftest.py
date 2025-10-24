@@ -212,7 +212,7 @@ def designer_session(orchestra_test_env):
             assert designer_session.work_path is not None
 
             # Spawn a child
-            designer_session.spawn_executor("child", "Task instructions")
+            designer_session.spawn_child("child", "Task instructions")
     """
     from orchestra.lib.sessions import Session, save_session
     from orchestra.lib.agent import DESIGNER_AGENT

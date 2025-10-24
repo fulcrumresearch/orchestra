@@ -170,21 +170,38 @@ class Session:
         # Always add instructions after setup completes
         self.add_instructions()
 
-    def spawn_executor(self, session_name: str, instructions: str) -> "Session":
-        """Spawn an executor session as a child of this session"""
+    def spawn_child(
+        self,
+        session_name: str,
+        instructions: str,
+        agent_type: str = "executor"
+    ) -> "Session":
+        """Spawn a child session with specified agent type
+
+        Args:
+            session_name: Name for child session
+            instructions: Instructions to write to instructions.md
+            agent_type: Agent type name (defaults to "executor")
+
+        Returns:
+            New child Session
+        """
         if not self.work_path:
             raise ValueError("Work path is not set")
 
-        # Load config to determine if executors should use Docker
-        # Config setting overrides agent default
+        # Load agent by name
+        from .agent import load_agent
+        agent = load_agent(agent_type)
+
+        # Config overrides agent default for use_docker
         config = load_config()
-        executor_use_docker = config.get("use_docker", EXECUTOR_AGENT.use_docker)
+        child_use_docker = config.get("use_docker", agent.use_docker)
 
         new_session = Session(
             session_name=session_name,
-            agent=EXECUTOR_AGENT,
+            agent=agent,
             source_path=self.work_path,  # Child's source is parent's work directory
-            use_docker=executor_use_docker,  # Config overrides agent default
+            use_docker=child_use_docker,  # Config overrides agent default
             parent_session_name=self.session_name,
         )
 
