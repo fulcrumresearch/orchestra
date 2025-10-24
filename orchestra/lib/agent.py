@@ -5,7 +5,7 @@ import subprocess
 import yaml
 import importlib.util
 
-from orchestra.lib.config import get_config_dir
+from orchestra.lib.config import get_orchestra_home
 
 if TYPE_CHECKING:
     from .sessions import Session
@@ -84,9 +84,7 @@ class DesignerAgent(Agent):
 
         # Format the merge command with dynamic orchestra subagents directory
         orchestra_subagents_dir = str(get_orchestra_home() / "subagents")
-        formatted_merge_command = MERGE_CHILD_COMMAND.format(
-            orchestra_subagents_dir=orchestra_subagents_dir
-        )
+        formatted_merge_command = MERGE_CHILD_COMMAND.format(orchestra_subagents_dir=orchestra_subagents_dir)
 
         merge_command_path = claude_commands_dir / "merge-child.md"
         merge_command_path.write_text(formatted_merge_command)
@@ -140,7 +138,7 @@ def load_agent(name: str) -> Agent:
     """
 
     # Check for agents.yaml
-    config_dir = get_config_dir()
+    config_dir = get_orchestra_home() / "config"
     agents_file = config_dir / "agents.yaml"
     if not agents_file.exists():
         return _get_builtin_agent(name)

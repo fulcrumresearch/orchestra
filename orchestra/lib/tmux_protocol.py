@@ -90,9 +90,6 @@ class TmuxProtocol(AgentProtocol):
                 paired=session.paired,
             ):
                 return False
-        else:
-            # Configure MCP for local (non-Docker) session
-            self._configure_mcp_for_local_session(session)
 
         # Determine working directory
         work_dir = "/workspace" if self.use_docker else session.work_path
@@ -338,54 +335,6 @@ class TmuxProtocol(AgentProtocol):
             )
         return True
 
-    def _configure_mcp_for_local_session(self, session: "Session") -> None:
-        """Configure MCP for local (non-Docker) session using .mcp.json and settings.json
-
-        Creates a project-specific .mcp.json and .claude/settings.json with pre-approved MCP permissions.
-        """
-        logger.info(f"Configuring MCP for local session {session.session_id}")
-
-        if not session.work_path:
-            logger.warning("Cannot configure MCP: work_path not set")
-            return
-
-        # MCP URL for local sessions (localhost, not host.docker.internal)
-        mcp_url = f"http://localhost:{self.mcp_port}/mcp"
-
-        # Create .mcp.json in the session's worktree
-        mcp_config = {"mcpServers": {"orchestra-mcp": {"url": mcp_url, "type": "http"}}}
-
-        mcp_config_path = Path(session.work_path) / ".mcp.json"
-        try:
-            with open(mcp_config_path, "w") as f:
-                json.dump(mcp_config, f, indent=2)
-            logger.info(f"Created .mcp.json at {mcp_config_path} (URL: {mcp_url})")
-        except Exception as e:
-            logger.error(f"Failed to create .mcp.json: {e}")
-
-        # Create .claude/settings.json with pre-approved MCP permissions
-        claude_dir = Path(session.work_path) / ".claude"
-        claude_dir.mkdir(parents=True, exist_ok=True)
-
-        # Get orchestra home and create regex pattern for it
-        orchestra_home = str(get_orchestra_home())
-        # Escape special regex characters in the path
-        escaped_home = re.escape(orchestra_home)
-
-        settings_path = claude_dir / "settings.json"
-        settings_config = {
-            "permissions": {
-                "allow": ["mcp__orchestra-mcp__spawn_subagent", "mcp__orchestra-mcp__send_message_to_session"],
-                "allowPathRegex": [f"^{escaped_home}/.*"],
-            }
-        }
-
-        try:
-            with open(settings_path, "w") as f:
-                json.dump(settings_config, f, indent=2)
-            logger.info(f"Created settings.json with MCP permissions at {settings_path}")
-        except Exception as e:
-            logger.error(f"Failed to create settings.json: {e}")
 
     def toggle_pairing(self, session: "Session") -> tuple[bool, str]:
         """

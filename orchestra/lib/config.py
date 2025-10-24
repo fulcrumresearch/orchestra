@@ -72,7 +72,7 @@ bind-key -n WheelDownPane select-pane -t= \\; send-keys -M
 
 def load_config() -> Dict[str, Any]:
     """Load global configuration"""
-    orchestra_config = get_config_dir() / "settings.json"
+    orchestra_config = get_orchestra_home() / "config" / "settings.json"
     if orchestra_config.exists():
         try:
             with open(orchestra_config, "r") as f:
@@ -86,7 +86,7 @@ def load_config() -> Dict[str, Any]:
 
 def save_config(config: Dict[str, Any]) -> None:
     """Save global configuration"""
-    orchestra_config = get_config_dir() / "settings.json"
+    orchestra_config = get_orchestra_home() / "config" / "settings.json"
     orchestra_config.parent.mkdir(parents=True, exist_ok=True)
     with open(orchestra_config, "w") as f:
         json.dump(config, f, indent=2)
@@ -138,25 +138,22 @@ def get_tmux_server_name() -> str:
 def claude_settings_builder(
     session_id: str,
     source_path: str,
-    mcp_config: Dict[str, Any] = None,
     allowed_tools: list[str] = None,
     is_monitored: bool = True,
 ) -> Dict[str, Any]:
     """Build Claude settings.json configuration
 
+    Note: MCP servers should be configured in .mcp.json, not settings.json
+
     Args:
         session_id: Session ID for hook commands
         source_path: Source path for hook commands
-        mcp_config: Extra MCP servers to add (merged with orchestra-mcp)
         allowed_tools: List of allowed tools (None = bypass all permissions)
         is_monitored: Whether to include orchestra-hook monitoring
 
     Returns:
         Settings dict ready to write as JSON
     """
-    config = load_config()
-    mcp_port = config.get("mcp_port", 8765)
-
     settings = {
         "permissions": {
             "defaultMode": "bypassPermissions" if not allowed_tools else "requireApproval",
@@ -181,16 +178,11 @@ def claude_settings_builder(
                 "mcp__orchestra-mcp",
             ],
         },
-        "mcpServers": {"orchestra-mcp": {"url": f"http://localhost:{mcp_port}/mcp", "type": "http"}},
     }
 
     # Ensure mcp__orchestra-mcp is always in allow list
     if allowed_tools and "mcp__orchestra-mcp" not in settings["permissions"]["allow"]:
         settings["permissions"]["allow"].append("mcp__orchestra-mcp")
-
-    # Add extra MCP servers
-    if mcp_config:
-        settings["mcpServers"].update(mcp_config)
 
     # Add monitoring hooks if enabled
     if is_monitored:

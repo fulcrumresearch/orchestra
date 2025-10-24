@@ -50,9 +50,8 @@ class Session:
         # Load config for use_docker and protocol settings
         config = load_config()
 
-
         if not config.get("use_docker", True):
-          use_docker = False
+            use_docker = False
         elif use_docker is None:
             use_docker = agent.use_docker or config.get("use_docker", True)
         else:
@@ -181,19 +180,31 @@ class Session:
             if isinstance(self.agent, ExecutorAgent):
                 create_worktree(self.work_path, self.session_id, self.source_path)
 
-        # 2. Create .claude/settings.json using agent.mcp_config and agent.tools
+        # 2. Create .mcp.json and .claude/settings.json
         import json
-        from .config import claude_settings_builder
+        from .config import claude_settings_builder, load_config
 
         claude_dir = Path(self.work_path) / ".claude"
         claude_dir.mkdir(parents=True, exist_ok=True)
 
+        # Create .mcp.json with MCP servers
+        config = load_config()
+        mcp_port = config.get("mcp_port", 8765)
+        mcp_config = {"mcpServers": {"orchestra-mcp": {"url": f"http://localhost:{mcp_port}/mcp", "type": "http"}}}
+
+        # Add agent's custom MCP servers
+        if self.agent.mcp_config:
+            mcp_config["mcpServers"].update(self.agent.mcp_config)
+
+        mcp_json_path = Path(self.work_path) / ".claude" / ".mcp.json"
+        mcp_json_path.write_text(json.dumps(mcp_config, indent=2))
+
+        # Create settings.json with permissions (no MCP servers)
         settings = claude_settings_builder(
             session_id=self.session_id,
             source_path=self.source_path,
-            mcp_config=self.agent.mcp_config,
             allowed_tools=self.agent.tools,
-            is_monitored=not self.is_root  # Only monitor non-root agents
+            is_monitored=not self.is_root,  # Only monitor non-root agents
         )
 
         (claude_dir / "settings.json").write_text(json.dumps(settings, indent=2))
@@ -204,12 +215,7 @@ class Session:
         # 4. Add agent instructions
         self.add_instructions()
 
-    def spawn_child(
-        self,
-        session_name: str,
-        instructions: str,
-        agent_type: str = "executor"
-    ) -> "Session":
+    def spawn_child(self, session_name: str, instructions: str, agent_type: str = "executor") -> "Session":
         """Spawn a child session with specified agent type
 
         Args:
@@ -225,6 +231,7 @@ class Session:
 
         # Load agent by name
         from .agent import load_agent
+
         agent = load_agent(agent_type)
 
         new_session = Session(
