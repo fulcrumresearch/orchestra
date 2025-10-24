@@ -32,19 +32,19 @@ class TestSpawnSubagentIntegration:
         # Verify success
         assert "Successfully spawned child session 'test-child'" in result
 
-        # Verify worktree was created (use actual repo name, not hardcoded)
+        # Verify subagent directory was created
         repo_name = orchestra_test_env.repo.name
         session_id = f"{repo_name}-test-child"
-        worktree_path = Path.home() / ".orchestra" / "worktrees" / repo_name / session_id
-        assert worktree_path.exists(), f"Worktree should exist at {worktree_path}"
+        subagent_path = Path.home() / ".orchestra" / "subagents" / session_id
+        assert subagent_path.exists(), f"Subagent directory should exist at {subagent_path}"
 
         # Verify instructions.md was created
-        instructions_file = worktree_path / "instructions.md"
+        instructions_file = subagent_path / "instructions.md"
         assert instructions_file.exists()
         assert "Build the login feature" in instructions_file.read_text()
 
         # Verify .claude/orchestra.md was created
-        orchestra_md = worktree_path / ".claude" / "orchestra.md"
+        orchestra_md = subagent_path / ".claude" / "orchestra.md"
         assert orchestra_md.exists()
 
 

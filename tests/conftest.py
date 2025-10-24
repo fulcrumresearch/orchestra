@@ -352,6 +352,7 @@ def executor_session(orchestra_test_env):
         agent=EXECUTOR_AGENT,
         source_path=str(orchestra_test_env.repo),
         use_docker=False,
+        parent_session_name="test-parent",  # Make it non-root
     )
     session.prepare()
     save_session(session, project_dir=orchestra_test_env.repo)

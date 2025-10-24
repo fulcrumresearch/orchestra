@@ -5,10 +5,10 @@ import re
 import subprocess
 
 from orchestra.lib.tmux_protocol import TmuxProtocol
-from .prompts import PROJECT_CONF
 from .config import load_config
 from .logger import get_logger
-from .agent import Agent, DESIGNER_AGENT, EXECUTOR_AGENT, load_agent
+from .agent import Agent, DESIGNER_AGENT, EXECUTOR_AGENT, load_agent, ExecutorAgent
+from .helpers.git import create_worktree
 
 logger = get_logger(__name__)
 
@@ -152,22 +152,51 @@ class Session:
         return session
 
     def prepare(self):
-        """Prepare the session work directory by calling agent.setup()
+        """Prepare the session work directory
 
         This method:
-        1. Calls agent.setup() to create the work environment
-        2. Automatically calls add_instructions() to create .claude/orchestra.md
-
-        This ensures all agents (including custom ones) get their instructions
-        properly written, without requiring manual add_instructions() calls.
+        1. Sets work_path based on root vs non-root
+        2. Creates .claude/settings.json with orchestra MCP + agent config
+        3. Calls agent.setup() for custom setup (worktrees, etc)
+        4. Calls add_instructions() to create .claude/orchestra.md
         """
         if not self.source_path:
             raise ValueError("Source path is not set")
 
-        # Delegate setup to agent
+        # 1. Set work_path based on root vs non-root
+        if self.is_root:
+            self.work_path = self.source_path
+        else:
+            # Create base directory for non-root agents
+            subagent_dir = Path.home() / ".orchestra" / "subagents" / self.session_id
+            subagent_dir.mkdir(parents=True, exist_ok=True)
+            self.work_path = str(subagent_dir)
+
+            # Special case: ExecutorAgent needs git worktree before .claude/ is created
+            if isinstance(self.agent, ExecutorAgent):
+                create_worktree(self.work_path, self.session_id, self.source_path)
+
+        # 2. Create .claude/settings.json using agent.mcp_config and agent.tools
+        import json
+        from .config import claude_settings_builder
+
+        claude_dir = Path(self.work_path) / ".claude"
+        claude_dir.mkdir(parents=True, exist_ok=True)
+
+        settings = claude_settings_builder(
+            session_id=self.session_id,
+            source_path=self.source_path,
+            mcp_config=self.agent.mcp_config,
+            allowed_tools=self.agent.tools,
+            is_monitored=not self.is_root  # Only monitor non-root agents
+        )
+
+        (claude_dir / "settings.json").write_text(json.dumps(settings, indent=2))
+
+        # 3. Let agent do custom setup (create worktree, etc)
         self.agent.setup(self)
 
-        # Always add instructions after setup completes
+        # 4. Add agent instructions
         self.add_instructions()
 
     def spawn_child(
@@ -205,20 +234,10 @@ class Session:
             parent_session_name=self.session_name,
         )
 
-        # Prepare the child session (creates its own worktree)
+        # Prepare the child session (sets work_path, creates settings.json, sets up worktree)
         new_session.prepare()
 
-        # Create .claude/settings.json with hook configuration for monitoring
-        claude_dir = Path(new_session.work_path) / ".claude"
-        claude_dir.mkdir(parents=True, exist_ok=True)
-
-        settings_path = claude_dir / "settings.json"
-        # PROJECT_CONF is already a JSON string, just replace the placeholders
-        settings_json = PROJECT_CONF.replace("{session_id}", new_session.session_id).replace(
-            "{source_path}", self.source_path
-        )
-        settings_path.write_text(settings_json)
-
+        # Create instructions.md
         instructions_path = Path(new_session.work_path) / "instructions.md"
         instructions_path.write_text(instructions)
 

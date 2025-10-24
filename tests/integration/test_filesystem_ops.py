@@ -142,8 +142,8 @@ class TestFilesystemStructure:
         """Test that executor session has correct file structure"""
         work_path = Path(executor_session.work_path)
 
-        # Should be in separate worktree
-        assert ".orchestra/worktrees" in str(work_path)
+        # Should be in separate subagent directory
+        assert ".orchestra/subagents" in str(work_path)
         assert work_path != Path(executor_session.source_path)
 
         # Should have .claude directory

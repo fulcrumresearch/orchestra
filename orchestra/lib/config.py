@@ -134,3 +134,76 @@ def get_tmux_config_path() -> Path:
     """
     ensure_config_dir()
     return Path.home() / ".orchestra" / "config" / "tmux.conf"
+
+
+def claude_settings_builder(
+    session_id: str,
+    source_path: str,
+    mcp_config: Dict[str, Any] = None,
+    allowed_tools: list[str] = None,
+    is_monitored: bool = True
+) -> Dict[str, Any]:
+    """Build Claude settings.json configuration
+
+    Args:
+        session_id: Session ID for hook commands
+        source_path: Source path for hook commands
+        mcp_config: Extra MCP servers to add (merged with orchestra-mcp)
+        allowed_tools: List of allowed tools (None = bypass all permissions)
+        is_monitored: Whether to include orchestra-hook monitoring
+
+    Returns:
+        Settings dict ready to write as JSON
+    """
+    config = load_config()
+    mcp_port = config.get("mcp_port", 8765)
+
+    settings = {
+        "permissions": {
+            "defaultMode": "bypassPermissions" if not allowed_tools else "requireApproval",
+            "allow": allowed_tools or [
+                "Edit", "Glob", "Grep", "LS", "MultiEdit", "Read", "Write",
+                "Bash(cat:*)", "Bash(cp:*)", "Bash(grep:*)", "Bash(head:*)",
+                "Bash(mkdir:*)", "Bash(pwd:*)", "Bash(rg:*)", "Bash(tail:*)",
+                "Bash(tree:*)", "mcp__orchestra-mcp"
+            ]
+        },
+        "mcpServers": {
+            "orchestra-mcp": {
+                "url": f"http://localhost:{mcp_port}/mcp",
+                "type": "http"
+            }
+        }
+    }
+
+    # Ensure mcp__orchestra-mcp is always in allow list
+    if allowed_tools and "mcp__orchestra-mcp" not in settings["permissions"]["allow"]:
+        settings["permissions"]["allow"].append("mcp__orchestra-mcp")
+
+    # Add extra MCP servers
+    if mcp_config:
+        settings["mcpServers"].update(mcp_config)
+
+    # Add monitoring hooks if enabled
+    if is_monitored:
+        hook_command = f"orchestra-hook {session_id} {source_path}"
+        settings["hooks"] = {
+            "PostToolUse": [
+                {
+                    "matcher": "*",
+                    "hooks": [{"type": "command", "command": hook_command}]
+                }
+            ],
+            "UserPromptSubmit": [
+                {
+                    "hooks": [{"type": "command", "command": hook_command}]
+                }
+            ],
+            "Stop": [
+                {
+                    "hooks": [{"type": "command", "command": hook_command}]
+                }
+            ]
+        }
+
+    return settings

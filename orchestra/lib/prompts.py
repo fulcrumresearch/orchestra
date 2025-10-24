@@ -465,66 +465,6 @@ Remember: You are working in a child worktree branch. Your changes will be revie
 If you can't see the mcp send_message tool initially, just refresh the list, it will appear.
 """
 
-PROJECT_CONF = """
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "orchestra-hook {session_id} {source_path}"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "orchestra-hook {session_id} {source_path}"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "orchestra-hook {session_id} {source_path}"
-          }
-        ]
-      }
-    ]
-  },
-  "permissions": {
-    "defaultMode": "bypassPermissions",
-    "allow": [
-      "Edit",
-      "Glob",
-      "Grep",
-      "LS",
-      "MultiEdit",
-      "Read",
-      "Write",
-      "Bash(cat:*)",
-      "Bash(cp:*)",
-      "Bash(grep:*)",
-      "Bash(head:*)",
-      "Bash(mkdir:*)",
-      "Bash(pwd:*)",
-      "Bash(rg:*)",
-      "Bash(tail:*)",
-      "Bash(tree:*)",
-      "mcp__orchestra-subagent"
-    ]
-  }
-}
-"""
-
 
 def get_monitor_prompt(session_id: str, agent_type: str, parent_session_id: str, source_path: str) -> str:
     """

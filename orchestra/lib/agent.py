@@ -73,13 +73,8 @@ class DesignerAgent(Agent):
         )
 
     def setup(self, session: "Session") -> None:
-        """Setup designer workspace in source directory"""
-        if not session.source_path:
-            raise ValueError("Source path is not set")
-
-        # Designer works directly in source directory
-        session.work_path = session.source_path
-
+        """Setup designer workspace"""
+        # work_path already set to source_path by prepare()
         # Create .claude/commands directory and add merge-child command
         from .prompts import MERGE_CHILD_COMMAND
 
@@ -112,49 +107,10 @@ class ExecutorAgent(Agent):
         )
 
     def setup(self, session: "Session") -> None:
-        """Setup executor workspace in git worktree"""
-        if not session.source_path:
-            raise ValueError("Source path is not set")
-
-        # Executor uses worktree
-        source_dir_name = Path(session.source_path).name
-        worktree_base = Path.home() / ".orchestra" / "worktrees" / source_dir_name
-        session.work_path = str(worktree_base / session.session_id)
-
-        if Path(session.work_path).exists():
-            # Worktree already exists, no need to create it
-            return
-
-        worktree_base.mkdir(parents=True, exist_ok=True)
-
-        # Create new worktree on a new branch
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "--verify", f"refs/heads/{session.session_id}"],
-                cwd=session.source_path,
-                capture_output=True,
-                text=True,
-            )
-
-            if result.returncode == 0:
-                subprocess.run(
-                    ["git", "worktree", "add", session.work_path, session.session_id],
-                    cwd=session.source_path,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
-            else:
-                subprocess.run(
-                    ["git", "worktree", "add", "-b", session.session_id, session.work_path],
-                    cwd=session.source_path,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
-
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to create worktree: {e.stderr}")
+        """Setup executor workspace"""
+        # work_path already set and worktree already created by prepare()
+        # Nothing extra needed for executor setup
+        pass
 
 
 # Default instances for Orchestra's built-in agent types
