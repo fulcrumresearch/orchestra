@@ -16,18 +16,12 @@ class HelloAgent(Agent):
         )
 
     def setup(self, session):
-        """Setup workspace - create work directory in subagents"""
-        if not session.source_path:
-            raise ValueError("Source path is not set")
-
-        # Custom agents use ~/.orchestra/subagents/ directory
-        source_dir_name = Path(session.source_path).name
-        subagents_base = Path.home() / ".orchestra" / "subagents" / source_dir_name
-        session.work_path = str(subagents_base / session.session_id)
-
-        # Create the work directory
+        """Setup workspace - just verify directory exists and create marker"""
+        # work_path is already set by prepare()
         work_path = Path(session.work_path)
-        work_path.mkdir(parents=True, exist_ok=True)
+
+        # Verify work directory exists (should already be created by prepare)
+        assert work_path.exists(), f"Work path should exist: {work_path}"
 
         # Create a marker file to prove this agent ran
         marker = work_path / "hello_marker.txt"
