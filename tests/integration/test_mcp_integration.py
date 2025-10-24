@@ -13,6 +13,7 @@ from unittest.mock import patch
 from orchestra.backend.mcp_server import spawn_subagent, send_message_to_session
 from orchestra.lib.sessions import Session, save_session
 from orchestra.lib.agent import DESIGNER_AGENT, EXECUTOR_AGENT
+from orchestra.lib.config import get_orchestra_home
 
 
 class TestSpawnSubagentIntegration:
@@ -35,7 +36,7 @@ class TestSpawnSubagentIntegration:
         # Verify subagent directory was created
         repo_name = orchestra_test_env.repo.name
         session_id = f"{repo_name}-test-child"
-        subagent_path = Path.home() / ".orchestra" / "subagents" / session_id
+        subagent_path = get_orchestra_home() / "subagents" / session_id
         assert subagent_path.exists(), f"Subagent directory should exist at {subagent_path}"
 
         # Verify instructions.md was created

@@ -5,14 +5,14 @@ import re
 import subprocess
 
 from orchestra.lib.tmux_protocol import TmuxProtocol
-from .config import load_config
+from .config import load_config, get_orchestra_home
 from .logger import get_logger
 from .agent import Agent, DESIGNER_AGENT, EXECUTOR_AGENT, load_agent, ExecutorAgent
 from .helpers.git import create_worktree
 
 logger = get_logger(__name__)
 
-SESSIONS_FILE = Path.home() / ".orchestra" / "sessions.json"
+SESSIONS_FILE = get_orchestra_home() / "sessions.json"
 
 
 def sanitize_session_name(name: str) -> str:
@@ -102,10 +102,15 @@ class Session:
         prompt_template = self.agent.prompt
 
         orchestra_md_path = claude_dir / "orchestra.md"
+
+        # Get orchestra subagents directory for prompts
+        orchestra_subagents_dir = str(get_orchestra_home() / "subagents")
+
         formatted_prompt = prompt_template.format(
             session_name=self.session_name,
             work_path=self.work_path,
             source_path=self.source_path,
+            orchestra_subagents_dir=orchestra_subagents_dir,
         ).strip()
         orchestra_md_path.write_text(formatted_prompt)
 
@@ -168,7 +173,7 @@ class Session:
             self.work_path = self.source_path
         else:
             # Create base directory for non-root agents
-            subagent_dir = Path.home() / ".orchestra" / "subagents" / self.session_id
+            subagent_dir = get_orchestra_home() / "subagents" / self.session_id
             subagent_dir.mkdir(parents=True, exist_ok=True)
             self.work_path = str(subagent_dir)
 

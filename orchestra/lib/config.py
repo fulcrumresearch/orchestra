@@ -3,6 +3,7 @@
 # Test pairing: Added comment to test pairing functionality
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict
 
@@ -10,7 +11,23 @@ from .logger import get_logger
 
 logger = get_logger(__name__)
 
-CONFIG_FILE = Path.home() / ".orchestra" / "config" / "settings.json"
+
+def get_orchestra_home() -> Path:
+    """Get the Orchestra home directory.
+
+    Checks for ORCHESTRA_HOME_DIR environment variable first.
+    If not set, defaults to ~/.orchestra
+
+    Returns:
+        Path to the Orchestra home directory
+    """
+    home_dir = os.environ.get("ORCHESTRA_HOME_DIR")
+    if home_dir:
+        return Path(home_dir).expanduser()
+    return Path.home() / ".orchestra"
+
+
+CONFIG_FILE = get_orchestra_home() / "config" / "settings.json"
 
 DEFAULT_CONFIG = {
     "use_docker": True,
@@ -105,7 +122,7 @@ def save_config(config: Dict[str, Any]) -> None:
 
 
 def ensure_config_dir() -> Path:
-    """Ensure ~/.orchestra/config/ directory exists with default config files.
+    """Ensure {ORCHESTRA_HOME}/config/ directory exists with default config files.
 
     Creates the config directory and writes default config files ONLY if they don't exist.
     Never overwrites existing user configs.
@@ -113,7 +130,7 @@ def ensure_config_dir() -> Path:
     Returns:
         Path to the config directory
     """
-    config_dir = Path.home() / ".orchestra" / "config"
+    config_dir = get_orchestra_home() / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
 
     # Create tmux.conf if it doesn't exist
@@ -131,10 +148,10 @@ def get_tmux_config_path() -> Path:
     Ensures config directory exists before returning path.
 
     Returns:
-        Path to ~/.orchestra/config/tmux.conf
+        Path to {ORCHESTRA_HOME}/config/tmux.conf
     """
     ensure_config_dir()
-    return Path.home() / ".orchestra" / "config" / "tmux.conf"
+    return get_orchestra_home() / "config" / "tmux.conf"
 
 
 def get_tmux_server_name() -> str:
