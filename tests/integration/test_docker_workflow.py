@@ -126,7 +126,6 @@ class TestFullSpawnWorkflow:
             session_name="designer",
             agent=DESIGNER_AGENT,
             source_path=str(orchestra_test_env.repo),
-            use_docker=False,
         )
         designer.prepare()
         save_session(designer, project_dir=orchestra_test_env.repo)
@@ -150,7 +149,6 @@ class TestFullSpawnWorkflow:
         assert child.session_name == "test-executor"
         assert child.agent.name == "executor"
         assert child.parent_session_name == "designer"
-        assert child.use_docker == True  # Should use Docker based on config
         assert child.work_path is not None
 
         worktree_path = Path(child.work_path)

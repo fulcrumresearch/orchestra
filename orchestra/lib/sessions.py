@@ -50,16 +50,18 @@ class Session:
         # Load config for use_docker and protocol settings
         config = load_config()
 
-        # Priority: explicit param > config setting > agent default
-        if use_docker is None:
-            self.use_docker = config.get("use_docker", agent.use_docker)
+
+        if not config.get("use_docker", True):
+          use_docker = False
+        elif use_docker is None:
+            use_docker = agent.use_docker or config.get("use_docker", True)
         else:
-            self.use_docker = use_docker
+            use_docker = use_docker
 
         self.protocol = TmuxProtocol(
             default_command="claude",
             mcp_port=config.get("mcp_port", 8765),
-            use_docker=self.use_docker,
+            use_docker=use_docker,
         )
 
     @property
@@ -127,7 +129,6 @@ class Session:
             "agent_type": self.agent.name,
             "source_path": self.source_path,
             "work_path": self.work_path,
-            "use_docker": self.use_docker,
             "parent_session_name": self.parent_session_name,
             "children": [child.to_dict() for child in self.children],
         }
@@ -144,7 +145,6 @@ class Session:
             source_path=data.get("source_path", ""),
             work_path=data.get("work_path"),
             active=data.get("active", False),
-            use_docker=data.get("use_docker"),
             parent_session_name=data.get("parent_session_name"),
         )
         # Recursively load children (each creates its own protocol)
@@ -222,15 +222,10 @@ class Session:
         from .agent import load_agent
         agent = load_agent(agent_type)
 
-        # Config overrides agent default for use_docker
-        config = load_config()
-        child_use_docker = config.get("use_docker", agent.use_docker)
-
         new_session = Session(
             session_name=session_name,
             agent=agent,
             source_path=self.work_path,  # Child's source is parent's work directory
-            use_docker=child_use_docker,  # Config overrides agent default
             parent_session_name=self.session_name,
         )
 

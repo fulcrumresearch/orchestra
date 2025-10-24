@@ -5,6 +5,8 @@ import subprocess
 import yaml
 import importlib.util
 
+from orchestra.lib.config import get_config_dir
+
 if TYPE_CHECKING:
     from .sessions import Session
 
@@ -55,9 +57,7 @@ class Agent(ABC):
         Args:
             session: Session object being prepared
         """
-        raise NotImplementedError(
-            f"Agent '{self.name}' must implement setup()"
-        )
+        raise NotImplementedError(f"Agent '{self.name}' must implement setup()")
 
 
 class DesignerAgent(Agent):
@@ -118,7 +118,7 @@ DESIGNER_AGENT = DesignerAgent()
 EXECUTOR_AGENT = ExecutorAgent()
 
 
-def load_agent(name: str, config_dir: Optional[Path] = None) -> Agent:
+def load_agent(name: str) -> Agent:
     """Load agent by name from agents.yaml
 
     Args:
@@ -131,19 +131,11 @@ def load_agent(name: str, config_dir: Optional[Path] = None) -> Agent:
     Raises:
         ValueError: If agent not found or config invalid
     """
-    # Default to project .orchestra/config
-    if config_dir is None:
-        import os
-        env_config_dir = os.getenv("ORCHESTRA_CONFIG_DIR")
-        if env_config_dir:
-            config_dir = Path(env_config_dir)
-        else:
-            config_dir = Path.cwd() / ".orchestra" / "config"
 
     # Check for agents.yaml
+    config_dir = get_config_dir()
     agents_file = config_dir / "agents.yaml"
     if not agents_file.exists():
-        # Fall back to built-in agents
         return _get_builtin_agent(name)
 
     # Load config

@@ -5,12 +5,20 @@
 import json
 from pathlib import Path
 from typing import Any, Dict
+import os
+
+import orchestra
 
 from .logger import get_logger
 
 logger = get_logger(__name__)
 
-CONFIG_FILE = Path.home() / ".orchestra" / "config" / "settings.json"
+
+def get_config_dir():
+    if os.getenv("ORCHESTRA_CONFIG_DIR"):
+        return Path(os.getenv("ORCHESTRA_CONFIG_DIR"))
+    return Path.home() / ".orchestra" / "config"
+
 
 DEFAULT_CONFIG = {
     "use_docker": True,
@@ -52,43 +60,13 @@ bind-key -n WheelDownPane select-pane -t= \\; send-keys -M
 # Press 'q' or Esc to exit copy mode
 """
 
-# Default tmux configuration for main layout (host tmux session)
-DEFAULT_TMUX_MAIN_CONF = """# Orchestra main layout tmux configuration
-# This config is used for the host tmux session that displays the orchestra layout
-
-# Disable status bar
-set-option -g status off
-
-# Enable mouse support
-set-option -g mouse on
-
-# Disable all default key bindings
-unbind-key -a
-
-# Ctrl+S for pane switching
-bind-key -n C-s select-pane -t :.+
-
-# Ctrl+\\ for detaching without killing session
-bind-key -n C-\\\\ detach-client
-
-# Re-enable mouse wheel scrolling bindings for copy mode
-bind-key -n WheelUpPane if-shell -F -t = "#{mouse_any_flag}" "send-keys -M" "if -Ft= '#{pane_in_mode}' 'send-keys -M' 'copy-mode -e; send-keys -M'"
-bind-key -n WheelDownPane select-pane -t= \\; send-keys -M
-
-# Minimal pane border styling
-set-option -g pane-border-style fg=colour240
-set-option -g pane-active-border-style fg=colour33
-
-# Copy mode usage:
-# Mouse wheel up to scroll
-# Press 'q' or Esc to exit copy mode
-"""
 
 def load_config() -> Dict[str, Any]:
     """Load global configuration"""
-    if CONFIG_FILE.exists():
+    orchestra_config = get_config_dir() / "settings.json"
+    if orchestra_config.exists():
         try:
-            with open(CONFIG_FILE, "r") as f:
+            with open(orchestra_config, "r") as f:
                 config = json.load(f)
                 return {**DEFAULT_CONFIG, **config}
         except (json.JSONDecodeError, IOError):
@@ -99,8 +77,9 @@ def load_config() -> Dict[str, Any]:
 
 def save_config(config: Dict[str, Any]) -> None:
     """Save global configuration"""
-    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG_FILE, "w") as f:
+    orchestra_config = get_config_dir() / "settings.json"
+    orchestra_config.parent.mkdir(parents=True, exist_ok=True)
+    with open(orchestra_config, "w") as f:
         json.dump(config, f, indent=2)
 
 
@@ -113,7 +92,7 @@ def ensure_config_dir() -> Path:
     Returns:
         Path to the config directory
     """
-    config_dir = Path.home() / ".orchestra" / "config"
+    config_dir = get_config_dir()
     config_dir.mkdir(parents=True, exist_ok=True)
 
     # Create tmux.conf if it doesn't exist
@@ -152,7 +131,7 @@ def claude_settings_builder(
     source_path: str,
     mcp_config: Dict[str, Any] = None,
     allowed_tools: list[str] = None,
-    is_monitored: bool = True
+    is_monitored: bool = True,
 ) -> Dict[str, Any]:
     """Build Claude settings.json configuration
 
@@ -172,19 +151,28 @@ def claude_settings_builder(
     settings = {
         "permissions": {
             "defaultMode": "bypassPermissions" if not allowed_tools else "requireApproval",
-            "allow": allowed_tools or [
-                "Edit", "Glob", "Grep", "LS", "MultiEdit", "Read", "Write",
-                "Bash(cat:*)", "Bash(cp:*)", "Bash(grep:*)", "Bash(head:*)",
-                "Bash(mkdir:*)", "Bash(pwd:*)", "Bash(rg:*)", "Bash(tail:*)",
-                "Bash(tree:*)", "mcp__orchestra-mcp"
-            ]
+            "allow": allowed_tools
+            or [
+                "Edit",
+                "Glob",
+                "Grep",
+                "LS",
+                "MultiEdit",
+                "Read",
+                "Write",
+                "Bash(cat:*)",
+                "Bash(cp:*)",
+                "Bash(grep:*)",
+                "Bash(head:*)",
+                "Bash(mkdir:*)",
+                "Bash(pwd:*)",
+                "Bash(rg:*)",
+                "Bash(tail:*)",
+                "Bash(tree:*)",
+                "mcp__orchestra-mcp",
+            ],
         },
-        "mcpServers": {
-            "orchestra-mcp": {
-                "url": f"http://localhost:{mcp_port}/mcp",
-                "type": "http"
-            }
-        }
+        "mcpServers": {"orchestra-mcp": {"url": f"http://localhost:{mcp_port}/mcp", "type": "http"}},
     }
 
     # Ensure mcp__orchestra-mcp is always in allow list
@@ -199,22 +187,9 @@ def claude_settings_builder(
     if is_monitored:
         hook_command = f"orchestra-hook {session_id} {source_path}"
         settings["hooks"] = {
-            "PostToolUse": [
-                {
-                    "matcher": "*",
-                    "hooks": [{"type": "command", "command": hook_command}]
-                }
-            ],
-            "UserPromptSubmit": [
-                {
-                    "hooks": [{"type": "command", "command": hook_command}]
-                }
-            ],
-            "Stop": [
-                {
-                    "hooks": [{"type": "command", "command": hook_command}]
-                }
-            ]
+            "PostToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": hook_command}]}],
+            "UserPromptSubmit": [{"hooks": [{"type": "command", "command": hook_command}]}],
+            "Stop": [{"hooks": [{"type": "command", "command": hook_command}]}],
         }
 
     return settings
