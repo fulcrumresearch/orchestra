@@ -46,13 +46,16 @@ class Session:
         self.paired = False  # Runtime only, not persisted
         self.children: List[Session] = []
         self.parent_session_name = parent_session_name
-        # Default use_docker from agent
+
+        # Load config for use_docker and protocol settings
+        config = load_config()
+
+        # Priority: explicit param > config setting > agent default
         if use_docker is None:
-            self.use_docker = agent.use_docker
+            self.use_docker = config.get("use_docker", agent.use_docker)
         else:
             self.use_docker = use_docker
 
-        config = load_config()
         self.protocol = TmuxProtocol(
             default_command="claude",
             mcp_port=config.get("mcp_port", 8765),
