@@ -167,7 +167,7 @@ def load_agent(name: str, config_dir: Optional[Path] = None) -> Agent:
 
     Args:
         name: Agent name to load
-        config_dir: Path to .orchestra/config/ (defaults to cwd/.orchestra/config)
+        config_dir: Path to .orchestra/config/ (defaults to ORCHESTRA_CONFIG_DIR env var or cwd/.orchestra/config)
 
     Returns:
         Agent instance
@@ -177,7 +177,12 @@ def load_agent(name: str, config_dir: Optional[Path] = None) -> Agent:
     """
     # Default to project .orchestra/config
     if config_dir is None:
-        config_dir = Path.cwd() / ".orchestra" / "config"
+        import os
+        env_config_dir = os.getenv("ORCHESTRA_CONFIG_DIR")
+        if env_config_dir:
+            config_dir = Path(env_config_dir)
+        else:
+            config_dir = Path.cwd() / ".orchestra" / "config"
 
     # Check for agents.yaml
     agents_file = config_dir / "agents.yaml"

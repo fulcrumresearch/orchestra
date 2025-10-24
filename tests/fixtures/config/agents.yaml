@@ -1,0 +1,4 @@
+agents:
+  hello-agent:
+    module: "../custom_agents/hello_agent.py:HelloAgent"
+    # Inherits prompt and setup from the Python class
