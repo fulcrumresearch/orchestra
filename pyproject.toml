@@ -1,6 +1,6 @@
 [project]
 name = "orchestra-code"
-version = "0.2.2"
+version = "0.2.3"
 description = "Terminal UI for managing multiple Claude sessions with tmux"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -24,7 +24,7 @@ orchestra-mcp = "orchestra.backend.mcp_server:main"
 orchestra-hook = "orchestra.runners.hook_monitor:main"
 
 [tool.setuptools]
-packages = ["orchestra", "orchestra.lib", "orchestra.runners", "orchestra.backend", "orchestra.frontend", "orchestra.frontend.widgets"]
+packages = ["orchestra", "orchestra.lib", "orchestra.runners", "orchestra.backend", "orchestra.frontend", "orchestra.frontend.widgets", "orchestra.lib.helpers"]
 
 [tool.setuptools.package-data]
 orchestra = ["Dockerfile"]
