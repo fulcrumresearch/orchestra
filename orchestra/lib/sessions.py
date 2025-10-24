@@ -8,7 +8,7 @@ from orchestra.lib.tmux_protocol import TmuxProtocol
 from .prompts import PROJECT_CONF
 from .config import load_config
 from .logger import get_logger
-from .agent import Agent, DESIGNER_AGENT, EXECUTOR_AGENT
+from .agent import Agent, DESIGNER_AGENT, EXECUTOR_AGENT, load_agent
 
 logger = get_logger(__name__)
 
@@ -136,7 +136,7 @@ class Session:
     def from_dict(cls, data: Dict[str, Any]) -> "Session":
         """Deserialize session from dictionary"""
         agent_name = data["agent_type"]
-        agent = _resolve_agent(agent_name)
+        agent = load_agent(agent_name)
 
         session = cls(
             session_name=data["session_name"],
@@ -368,23 +368,3 @@ def find_session(sessions: List[Session], session_name: str) -> Optional[Session
         if child_result:
             return child_result
     return None
-
-
-def _resolve_agent(agent_identifier: str) -> Agent:
-    """Resolve agent identifier to Agent instance
-
-    Args:
-        agent_identifier: Agent name string
-
-    Returns:
-        Agent instance
-
-    Raises:
-        ValueError: If agent name is not recognized
-    """
-    if agent_identifier == "designer":
-        return DESIGNER_AGENT
-    elif agent_identifier == "executor":
-        return EXECUTOR_AGENT
-    else:
-        raise ValueError(f"Unknown agent type: {agent_identifier}")
