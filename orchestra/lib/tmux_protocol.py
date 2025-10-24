@@ -115,7 +115,7 @@ class TmuxProtocol(AgentProtocol):
         )
 
         if result.returncode == 0:
-            if session.agent_type.value == "executor":
+            if session.agent.name == "executor":
                 # For executors in bypass mode, send Down arrow then Enter to accept bypass warning
                 logger.info(f"Sending acceptance keys for executor {session.session_id}")
 
@@ -274,7 +274,7 @@ class TmuxProtocol(AgentProtocol):
     def send_message(self, session: "Session", message: str) -> bool:
         """Send a message to a tmux session using paste buffer with retry logic (Docker or local mode)"""
         # Send message using buffer with retry logic
-        if session.agent_type.value == "designer" and self.is_in_permission_prompt(session):
+        if session.agent.name == "designer" and self.is_in_permission_prompt(session):
             self._send_key("Esc", session)
 
         if not self._send_with_retry(session, message + "\n"):

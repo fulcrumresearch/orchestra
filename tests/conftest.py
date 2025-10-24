@@ -208,17 +208,18 @@ def designer_session(orchestra_test_env):
     Usage:
         def test_something(designer_session):
             # Session is ready to use
-            assert designer_session.agent_type == AgentType.DESIGNER
+            assert designer_session.agent.name == "designer"
             assert designer_session.work_path is not None
 
             # Spawn a child
             designer_session.spawn_executor("child", "Task instructions")
     """
-    from orchestra.lib.sessions import Session, AgentType, save_session
+    from orchestra.lib.sessions import Session, save_session
+    from orchestra.lib.agent import DESIGNER_AGENT
 
     session = Session(
         session_name="designer",
-        agent_type=AgentType.DESIGNER,
+        agent=DESIGNER_AGENT,
         source_path=str(orchestra_test_env.repo),
         use_docker=False,
     )
@@ -336,18 +337,19 @@ def executor_session(orchestra_test_env):
     Usage:
         def test_something(executor_session):
             # Session is ready to use
-            assert executor_session.agent_type == AgentType.EXECUTOR
+            assert executor_session.agent.name == "executor"
             assert executor_session.work_path is not None
             assert executor_session.work_path != executor_session.source_path
 
             # Test pairing
             executor_session.toggle_pairing()
     """
-    from orchestra.lib.sessions import Session, AgentType, save_session
+    from orchestra.lib.sessions import Session, save_session
+    from orchestra.lib.agent import EXECUTOR_AGENT
 
     session = Session(
         session_name="executor",
-        agent_type=AgentType.EXECUTOR,
+        agent=EXECUTOR_AGENT,
         source_path=str(orchestra_test_env.repo),
         use_docker=False,
     )

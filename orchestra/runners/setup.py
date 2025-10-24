@@ -190,12 +190,12 @@ def main() -> int:
 
             # Create a temporary session for authentication
             temp_work_dir = tempfile.mkdtemp(prefix="orchestra-setup-")
-            from orchestra.lib.sessions import AgentType
+            from orchestra.lib.agent import EXECUTOR_AGENT
 
             # Create a temporary session object
             session = Session(
                 session_name="setup-auth",
-                agent_type=AgentType.EXECUTOR,
+                agent=EXECUTOR_AGENT,
                 source_path=temp_work_dir,
                 work_path=temp_work_dir,
                 use_docker=True

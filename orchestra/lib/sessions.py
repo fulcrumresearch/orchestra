@@ -1,4 +1,3 @@
-from enum import Enum
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 import json
@@ -6,9 +5,10 @@ import re
 import subprocess
 
 from orchestra.lib.tmux_protocol import TmuxProtocol
-from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
+from .prompts import PROJECT_CONF
 from .config import load_config
 from .logger import get_logger
+from .agent import Agent, DESIGNER_AGENT, EXECUTOR_AGENT
 
 logger = get_logger(__name__)
 
@@ -27,22 +27,11 @@ def sanitize_session_name(name: str) -> str:
     return name.strip("-")
 
 
-class AgentType(Enum):
-    DESIGNER = "designer"
-    EXECUTOR = "executor"
-
-
-AGENT_TEMPLATES = {
-    AgentType.DESIGNER: DESIGNER_PROMPT,
-    AgentType.EXECUTOR: EXECUTOR_PROMPT,
-}
-
-
 class Session:
     def __init__(
         self,
         session_name: str,
-        agent_type: AgentType,
+        agent: Agent,
         source_path: str = "",
         work_path: Optional[str] = None,
         active: bool = False,
@@ -50,16 +39,16 @@ class Session:
         parent_session_name: Optional[str] = None,
     ):
         self.session_name = session_name
-        self.agent_type = agent_type
+        self.agent = agent
         self.source_path = source_path
         self.work_path = work_path
         self.active = active
         self.paired = False  # Runtime only, not persisted
         self.children: List[Session] = []
         self.parent_session_name = parent_session_name
-        # Default use_docker based on agent type: DESIGNER=False, EXECUTOR=True
+        # Default use_docker from agent
         if use_docker is None:
-            self.use_docker = agent_type == AgentType.EXECUTOR
+            self.use_docker = agent.use_docker
         else:
             self.use_docker = use_docker
 
@@ -77,6 +66,11 @@ class Session:
         dir_name = Path(self.source_path).name if self.source_path else "unknown"
         combined = f"{dir_name}-{self.session_name}"
         return sanitize_session_name(combined)
+
+    @property
+    def is_root(self) -> bool:
+        """Whether this is a root session (no parent)"""
+        return self.parent_session_name is None
 
     def start(self, initial_message: str = "") -> bool:
         """Start the agent using the configured protocol
@@ -101,7 +95,8 @@ class Session:
         claude_dir = Path(self.work_path) / ".claude"
         claude_dir.mkdir(parents=True, exist_ok=True)
 
-        prompt_template = AGENT_TEMPLATES[self.agent_type]
+        # Use agent's prompt directly
+        prompt_template = self.agent.prompt
 
         orchestra_md_path = claude_dir / "orchestra.md"
         formatted_prompt = prompt_template.format(
@@ -126,7 +121,7 @@ class Session:
         """Serialize session to dictionary for JSON storage"""
         return {
             "session_name": self.session_name,
-            "agent_type": self.agent_type.value,
+            "agent_type": self.agent.name,
             "source_path": self.source_path,
             "work_path": self.work_path,
             "use_docker": self.use_docker,
@@ -137,9 +132,12 @@ class Session:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Session":
         """Deserialize session from dictionary"""
+        agent_name = data["agent_type"]
+        agent = _resolve_agent(agent_name)
+
         session = cls(
             session_name=data["session_name"],
-            agent_type=AgentType(data["agent_type"]),
+            agent=agent,
             source_path=data.get("source_path", ""),
             work_path=data.get("work_path"),
             active=data.get("active", False),
@@ -151,85 +149,39 @@ class Session:
         return session
 
     def prepare(self):
-        """
-        Prepare the session work directory.
-        - Designer: works directly in source_path (no worktree)
-        - Executor: creates a git worktree
+        """Prepare the session work directory by calling agent.setup()
+
+        This method:
+        1. Calls agent.setup() to create the work environment
+        2. Automatically calls add_instructions() to create .claude/orchestra.md
+
+        This ensures all agents (including custom ones) get their instructions
+        properly written, without requiring manual add_instructions() calls.
         """
         if not self.source_path:
             raise ValueError("Source path is not set")
 
-        # Designer works directly in source directory
-        if self.agent_type == AgentType.DESIGNER:
-            self.work_path = self.source_path
+        # Delegate setup to agent
+        self.agent.setup(self)
 
-            # Create .claude/commands directory and add merge-child command
-            claude_commands_dir = Path(self.work_path) / ".claude" / "commands"
-            claude_commands_dir.mkdir(parents=True, exist_ok=True)
-
-            merge_command_path = claude_commands_dir / "merge-child.md"
-            merge_command_path.write_text(MERGE_CHILD_COMMAND)
-
-            self.add_instructions()
-            return
-
-        # Executor uses worktree
-        source_dir_name = Path(self.source_path).name
-        worktree_base = Path.home() / ".orchestra" / "worktrees" / source_dir_name
-        self.work_path = str(worktree_base / self.session_id)
-
-        if Path(self.work_path).exists():
-            # Refresh instructions to reflect current session metadata
-            self.add_instructions()
-            return
-
-        worktree_base.mkdir(parents=True, exist_ok=True)
-
-        # Create new worktree on a new branch
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "--verify", f"refs/heads/{self.session_id}"],
-                cwd=self.source_path,
-                capture_output=True,
-                text=True,
-            )
-
-            if result.returncode == 0:
-                subprocess.run(
-                    ["git", "worktree", "add", self.work_path, self.session_id],
-                    cwd=self.source_path,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
-            else:
-                subprocess.run(
-                    ["git", "worktree", "add", "-b", self.session_id, self.work_path],
-                    cwd=self.source_path,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
-
-            self.add_instructions()
-
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to create worktree: {e.stderr}")
+        # Always add instructions after setup completes
+        self.add_instructions()
 
     def spawn_executor(self, session_name: str, instructions: str) -> "Session":
         """Spawn an executor session as a child of this session"""
         if not self.work_path:
             raise ValueError("Work path is not set")
 
-        # Load config to get use_docker setting for executors
+        # Load config to determine if executors should use Docker
+        # Config setting overrides agent default
         config = load_config()
-        executor_use_docker = config.get("use_docker", True)
+        executor_use_docker = config.get("use_docker", EXECUTOR_AGENT.use_docker)
 
         new_session = Session(
             session_name=session_name,
-            agent_type=AgentType.EXECUTOR,
+            agent=EXECUTOR_AGENT,
             source_path=self.work_path,  # Child's source is parent's work directory
-            use_docker=executor_use_docker,  # Use config value
+            use_docker=executor_use_docker,  # Config overrides agent default
             parent_session_name=self.session_name,
         )
 
@@ -396,3 +348,23 @@ def find_session(sessions: List[Session], session_name: str) -> Optional[Session
         if child_result:
             return child_result
     return None
+
+
+def _resolve_agent(agent_identifier: str) -> Agent:
+    """Resolve agent identifier to Agent instance
+
+    Args:
+        agent_identifier: Agent name string
+
+    Returns:
+        Agent instance
+
+    Raises:
+        ValueError: If agent name is not recognized
+    """
+    if agent_identifier == "designer":
+        return DESIGNER_AGENT
+    elif agent_identifier == "executor":
+        return EXECUTOR_AGENT
+    else:
+        raise ValueError(f"Unknown agent type: {agent_identifier}")

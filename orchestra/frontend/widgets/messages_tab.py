@@ -6,7 +6,6 @@ from textual.widgets import RichLog
 from textual.containers import Container
 
 from orchestra.lib.message import load_session_messages, Message
-from orchestra.lib.sessions import AgentType
 
 
 class MessagesTab(Container):
@@ -51,8 +50,8 @@ class MessagesTab(Container):
             self.messages_log.write("[dim]No session selected[/dim]")
             return
 
-        # Pass None for designer (shows all), or session name for executor (filtered)
-        session_name = None if active_session.agent_type == AgentType.DESIGNER else active_session.session_name
+        # Pass None for root session (shows all), or session name for child sessions (filtered)
+        session_name = None if active_session.is_root else active_session.session_name
         self.load_and_display_messages(Path(app.state.project_dir), session_name)
 
     def update_messages(self, messages: list[Message]) -> None:

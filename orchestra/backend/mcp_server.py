@@ -7,7 +7,7 @@ from pathlib import Path
 
 from mcp.server import FastMCP
 
-from orchestra.lib.sessions import load_sessions, save_session, find_session, AgentType
+from orchestra.lib.sessions import load_sessions, save_session, find_session
 from orchestra.lib.config import load_config
 
 # Create FastMCP server instance with default port
@@ -87,8 +87,8 @@ def send_message_to_session(session_name: str, message: str, source_path: str, s
     with open(messages_path, "a") as f:
         f.write(json.dumps(message_obj) + "\n")
 
-    # Send via protocol ONLY if target is an executor (not designer)
-    if target.agent_type == AgentType.EXECUTOR:
+    # Send via protocol ONLY if target is a non-root session (child sessions)
+    if not target.is_root:
         target.send_message(message, sender_name=sender_name)
 
     return f"Successfully sent message to session '{session_name}'"

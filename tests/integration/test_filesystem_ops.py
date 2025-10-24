@@ -12,7 +12,8 @@ import pytest
 import subprocess
 import shutil
 from pathlib import Path
-from orchestra.lib.sessions import Session, AgentType, save_session, load_sessions
+from orchestra.lib.sessions import Session, save_session, load_sessions
+from orchestra.lib.agent import DESIGNER_AGENT, EXECUTOR_AGENT
 
 
 class TestPairingMode:
@@ -96,11 +97,9 @@ class TestSessionPreparation:
 
     def test_designer_uses_source_path(self, temp_git_repo):
         """Test that designer session works directly in source directory"""
-        from orchestra.lib.sessions import Session, AgentType
-
         session = Session(
             session_name="designer",
-            agent_type=AgentType.DESIGNER,
+            agent=DESIGNER_AGENT,
             source_path=str(temp_git_repo),
             use_docker=False,
         )
@@ -196,7 +195,7 @@ class TestSessionInstructionRefresh:
         subprocess.run(["git", "checkout", "-b", "old"], cwd=repo, capture_output=True, check=True)
         old_session = Session(
             session_name="old",
-            agent_type=AgentType.DESIGNER,
+            agent=DESIGNER_AGENT,
             source_path=str(repo),
             use_docker=False,
         )
@@ -213,7 +212,7 @@ class TestSessionInstructionRefresh:
 
         new_session = Session(
             session_name="new",
-            agent_type=AgentType.DESIGNER,
+            agent=DESIGNER_AGENT,
             source_path=str(repo),
             use_docker=False,
         )

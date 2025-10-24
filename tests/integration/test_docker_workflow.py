@@ -16,7 +16,8 @@ from pathlib import Path
 from unittest.mock import patch
 import pytest
 
-from orchestra.lib.sessions import Session, AgentType, save_session
+from orchestra.lib.sessions import Session, save_session, load_sessions
+from orchestra.lib.agent import DESIGNER_AGENT, EXECUTOR_AGENT
 from orchestra.lib.helpers.docker import (
     start_docker_container,
     get_docker_container_name,
@@ -120,12 +121,10 @@ class TestFullSpawnWorkflow:
         self, orchestra_test_env, mock_config_with_docker, docker_setup, cleanup_containers
     ):
         """Test that spawn_executor creates all required files and structures"""
-        from orchestra.lib.sessions import Session, AgentType, save_session
-
         # Create parent designer session
         designer = Session(
             session_name="designer",
-            agent_type=AgentType.DESIGNER,
+            agent=DESIGNER_AGENT,
             source_path=str(orchestra_test_env.repo),
             use_docker=False,
         )
@@ -149,7 +148,7 @@ class TestFullSpawnWorkflow:
 
         # Verify child session properties
         assert child.session_name == "test-executor"
-        assert child.agent_type == AgentType.EXECUTOR
+        assert child.agent.name == "executor"
         assert child.parent_session_name == "designer"
         assert child.use_docker == True  # Should use Docker based on config
         assert child.work_path is not None
@@ -187,8 +186,6 @@ class TestFullSpawnWorkflow:
         assert designer.children[0].session_name == "test-executor"
 
         # 7. Verify session saved (persists relationship)
-        from orchestra.lib.sessions import load_sessions
-
         loaded_sessions = load_sessions(project_dir=orchestra_test_env.repo)
         assert len(loaded_sessions) == 1
         assert loaded_sessions[0].session_name == "designer"
@@ -197,11 +194,9 @@ class TestFullSpawnWorkflow:
 
     def test_spawn_creates_git_worktree(self, orchestra_test_env, mock_config_with_docker, docker_setup, cleanup_containers):
         """Test that spawn creates a proper git worktree on a new branch"""
-        from orchestra.lib.sessions import Session, AgentType, save_session
-
         designer = Session(
             session_name="designer",
-            agent_type=AgentType.DESIGNER,
+            agent=DESIGNER_AGENT,
             source_path=str(orchestra_test_env.repo),
             use_docker=False,
         )

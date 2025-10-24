@@ -11,7 +11,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from orchestra.backend.mcp_server import spawn_subagent, send_message_to_session
-from orchestra.lib.sessions import Session, AgentType, save_session
+from orchestra.lib.sessions import Session, save_session
+from orchestra.lib.agent import DESIGNER_AGENT, EXECUTOR_AGENT
 
 
 class TestSpawnSubagentIntegration:
@@ -98,17 +99,15 @@ class TestSendMessageIntegration:
 
         assert "Error: Session 'nonexistent' not found" in result
 
-    def test_send_message_to_executor(self, orchestra_test_env):
+    def test_send_message_to_executor(self, designer_session, orchestra_test_env):
         """Test that messages to executor sessions are sent via tmux with [From: sender_name] prefix"""
-        # Create an executor session (not designer)
-        target = Session(
-            session_name="target",
-            agent_type=AgentType.EXECUTOR,
-            source_path=str(orchestra_test_env.repo),
-            use_docker=False,
-        )
-        target.prepare()
-        save_session(target, project_dir=orchestra_test_env.repo)
+        # Create an executor as a child of designer (real scenario)
+        with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
+            target = designer_session.spawn_executor(
+                session_name="target",
+                instructions="Test task",
+            )
+        save_session(designer_session, project_dir=orchestra_test_env.repo)
 
         # Start a real tmux session for the target
         subprocess.run(
