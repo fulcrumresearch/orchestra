@@ -103,7 +103,7 @@ class TestSendMessageIntegration:
         """Test that messages to executor sessions are sent via tmux with [From: sender_name] prefix"""
         # Create an executor as a child of designer (real scenario)
         with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
-            target = designer_session.spawn_executor(
+            target = designer_session.spawn_child(
                 session_name="target",
                 instructions="Test task",
             )

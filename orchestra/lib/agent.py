@@ -160,3 +160,23 @@ class ExecutorAgent(Agent):
 # Default instances for Orchestra's built-in agent types
 DESIGNER_AGENT = DesignerAgent()
 EXECUTOR_AGENT = ExecutorAgent()
+
+
+def load_agent(agent_type: str) -> Agent:
+    """Load an agent by name
+
+    Args:
+        agent_type: Agent type name (e.g., "designer", "executor")
+
+    Returns:
+        Agent instance
+
+    Raises:
+        ValueError: If agent type is not recognized
+    """
+    if agent_type == "designer":
+        return DESIGNER_AGENT
+    elif agent_type == "executor":
+        return EXECUTOR_AGENT
+    else:
+        raise ValueError(f"Unknown agent type: {agent_type}")
