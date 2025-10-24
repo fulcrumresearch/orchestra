@@ -63,7 +63,7 @@ I'll help you merge changes from child session `$1` into your current branch.
 Let's navigate to the child worktree and check for any uncommitted or untracked files:
 
 ```bash
-cd ~/.orchestra/worktrees/$(basename $(pwd))/orchestra-$1 && git status
+cd ~/.orchestra/subagents/orchestra-$1 && git status
 ```
 
 This will show:
@@ -73,8 +73,8 @@ This will show:
 
 If there are any uncommitted changes or untracked files, I'll need to commit them from within the worktree:
 1. Review what was changed
-2. Stage files: `cd ~/.orchestra/worktrees/$(basename $(pwd))/orchestra-$1 && git add <files>`
-3. Commit with message: `cd ~/.orchestra/worktrees/$(basename $(pwd))/orchestra-$1 && git commit -m "message"`
+2. Stage files: `cd ~/.orchestra/subagents/orchestra-$1 && git add <files>`
+3. Commit with message: `cd ~/.orchestra/subagents/orchestra-$1 && git commit -m "message"`
 
 Let me check the worktree now...
 
@@ -218,8 +218,8 @@ When an executor completes their work:
 
 ## Executor Workspaces
 When you spawn executors, they work in **isolated git worktrees**:
-- Location: `~/.orchestra/worktrees/<repo>/<repo-name>-<session-name>/`
-- Each executor gets their own branch named `<repo>-<session-name>`
+- Location: `~/.orchestra/subagents/<session-id>/`
+- Each executor gets their own branch named `<session-id>`
 - Executors run in Docker containers with worktree mounted at `/workspace`
 - Worktrees persist after session deletion for review
 
@@ -290,7 +290,7 @@ When executors reach out with questions, respond promptly with clarifications.
 Executors work on feature branches in isolated worktrees. To review their work:
 
 1. **View the diff**: `git diff HEAD...<session-branch-name>`
-2. **Check out their worktree**: Navigate to `~/.orchestra/worktrees/<repo>/<session-id>/`
+2. **Check out their worktree**: Navigate to `~/.orchestra/subagents/<session-id>/`
 3. **Run tests**: Execute tests in their worktree to verify changes
 
 ### Merging Completed Work
@@ -327,7 +327,7 @@ You are running in an **isolated Docker container**. You have access to an MCP s
 
 ### Git Worktree
 You are working in a dedicated git worktree:
-- **Host Location**: `~/.orchestra/worktrees/<repo>/{session_name}/`
+- **Host Location**: `~/.orchestra/subagents/{session_name}/`
 - **Container Path**: `/workspace` (mounted from host location)
 - **Persistence**: Your worktree persists after session ends for review
 - **Independence**: Changes don't affect other sessions or main branch
