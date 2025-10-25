@@ -342,8 +342,8 @@ class Session:
         if not new_session.start(initial_message=initial_message):
             raise RuntimeError(f"Failed to start child session {name}")
 
-        # Save the session to persist to disk
-        save_session(new_session, project_dir=Path(source_path))
+        # Add the session to the tree (ensures proper parent-child relationship)
+        add_session(new_session, project_dir=Path(source_path))
 
         return new_session
 
@@ -444,6 +444,44 @@ def save_session(session: Session, project_dir: Optional[Path] = None) -> None:
     # Write back
     with open(SESSIONS_FILE, "w") as f:
         json.dump(sessions_dict, f, indent=2)
+
+
+def add_session(session: Session, project_dir: Optional[Path] = None) -> None:
+    """
+    Add a session to the session tree, ensuring proper parent-child relationships.
+    If session has a parent, it will be added to parent's children array.
+    Otherwise it will be added as a root session.
+
+    Args:
+        session: Session to add
+        project_dir: Project directory (defaults to cwd)
+    """
+    if project_dir is None:
+        project_dir = Path.cwd()
+
+    # Load existing sessions
+    existing_sessions = load_sessions(project_dir=project_dir)
+
+    # If session has a parent, find the parent and add as child
+    if session.parent_session_name:
+        parent = find_session(existing_sessions, session.parent_session_name)
+        if not parent:
+            raise ValueError(f"Parent session '{session.parent_session_name}' not found")
+
+        # Check if child already exists
+        existing_child = find_session(parent.children, session.session_name)
+        if existing_child:
+            # Update existing child
+            parent.children = [session if c.session_name == session.session_name else c for c in parent.children]
+        else:
+            # Add new child
+            parent.children.append(session)
+
+        # Save the parent (which includes all children)
+        save_session(parent, project_dir)
+    else:
+        # Session is a root session, save directly
+        save_session(session, project_dir)
 
 
 def find_session(sessions: List[Session], session_name: str) -> Optional[Session]:

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from mcp.server import FastMCP
 
-from orchestra.lib.sessions import load_sessions, save_session, find_session
+from orchestra.lib.sessions import load_sessions, save_session, find_session, add_session
 from orchestra.lib.config import load_config
 
 # Create FastMCP server instance with default port
