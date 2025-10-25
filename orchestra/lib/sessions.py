@@ -196,13 +196,16 @@ class Session:
         if self.agent.mcp_config:
             mcp_config["mcpServers"].update(self.agent.mcp_config)
 
-        mcp_json_path = Path(self.work_path) / ".claude" / ".mcp.json"
+        mcp_json_path = Path(self.work_path) / ".mcp.json"
         mcp_json_path.write_text(json.dumps(mcp_config, indent=2))
 
-        # Create settings.json with permissions (no MCP servers)
+        logger.info(f"Created .mcp.json with MCP servers: {self.agent.mcp_config}")
+
+        # Create settings.json with permissions and enabled MCP servers
         settings = claude_settings_builder(
             session_id=self.session_id,
             source_path=self.source_path,
+            mcp_config=self.agent.mcp_config,
             allowed_tools=self.agent.tools,
             is_monitored=not self.is_root,  # Only monitor non-root agents
         )

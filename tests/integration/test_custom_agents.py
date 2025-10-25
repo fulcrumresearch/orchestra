@@ -36,7 +36,7 @@ class TestCustomAgentModule:
         shutil.copy(test_config, config_dir / "agents.yaml")
 
         # Load the custom agent
-        agent = load_agent("hello-agent", config_dir=config_dir)
+        agent = load_agent("hello-agent")
 
         assert agent.name == "hello-agent"
         assert "hello" in agent.prompt.lower()
@@ -65,9 +65,7 @@ class TestCustomAgentModule:
         # Mock tmux start
         with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
             child = designer_session.spawn_child(
-                session_name="hello-child",
-                instructions="Say hello",
-                agent_type="hello-agent"
+                session_name="hello-child", instructions="Say hello", agent_type="hello-agent"
             )
 
         # Verify child was created with custom agent
@@ -104,9 +102,7 @@ class TestCustomAgentModule:
         # Mock tmux start
         with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
             child = designer_session.spawn_child(
-                session_name="hello-child",
-                instructions="Say hello",
-                agent_type="hello-agent"
+                session_name="hello-child", instructions="Say hello", agent_type="hello-agent"
             )
 
         # Verify settings.json exists with proper hook configuration
@@ -147,9 +143,7 @@ class TestCustomAgentModule:
         # Mock tmux start
         with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
             child = designer_session.spawn_child(
-                session_name="hello-child",
-                instructions="Say hello",
-                agent_type="hello-agent"
+                session_name="hello-child", instructions="Say hello", agent_type="hello-agent"
             )
 
         # Verify work_path is set and directory exists
@@ -183,9 +177,7 @@ class TestCustomAgentModule:
         # Mock tmux start
         with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
             child = designer_session.spawn_child(
-                session_name="hello-child",
-                instructions="Say hello to the world",
-                agent_type="hello-agent"
+                session_name="hello-child", instructions="Say hello to the world", agent_type="hello-agent"
             )
 
         # Verify instructions.md exists with correct content
@@ -217,9 +209,7 @@ class TestCustomAgentModule:
         # Mock tmux start
         with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
             child = designer_session.spawn_child(
-                session_name="hello-child",
-                instructions="Say hello",
-                agent_type="hello-agent"
+                session_name="hello-child", instructions="Say hello", agent_type="hello-agent"
             )
 
         # Verify orchestra.md exists with custom agent prompt

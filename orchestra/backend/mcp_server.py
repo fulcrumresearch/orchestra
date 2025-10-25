@@ -28,8 +28,7 @@ def spawn_subagent(parent_session_name: str, child_session_name: str, instructio
         child_session_name: Name for the new child session (user-facing identifier)
         instructions: Instructions to give to the child session
         source_path: Source path of the parent session's project
-        agent_type: Agent type name (defaults to "executor" for backward compatibility)
-
+        agent_type: Agent type name
     Returns:
         Success message with child session name, or error message
     """

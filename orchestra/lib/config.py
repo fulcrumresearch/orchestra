@@ -138,16 +138,18 @@ def get_tmux_server_name() -> str:
 def claude_settings_builder(
     session_id: str,
     source_path: str,
+    mcp_config: Dict[str, Any] = None,
     allowed_tools: list[str] = None,
     is_monitored: bool = True,
 ) -> Dict[str, Any]:
     """Build Claude settings.json configuration
 
-    Note: MCP servers should be configured in .mcp.json, not settings.json
+    Note: MCP servers are configured in .mcp.json, but we need to enable them here
 
     Args:
         session_id: Session ID for hook commands
         source_path: Source path for hook commands
+        mcp_config: MCP servers dict to enable (keys are server names)
         allowed_tools: List of allowed tools (None = bypass all permissions)
         is_monitored: Whether to include orchestra-hook monitoring
 
@@ -179,6 +181,10 @@ def claude_settings_builder(
             ],
         },
     }
+
+    # Enable MCP servers from .mcp.json
+    if mcp_config:
+        settings["enabledMcpjsonServers"] = list(mcp_config.keys()) + ["orchestra-mcp"]
 
     # Ensure mcp__orchestra-mcp is always in allow list
     if allowed_tools and "mcp__orchestra-mcp" not in settings["permissions"]["allow"]:

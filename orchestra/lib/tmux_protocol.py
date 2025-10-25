@@ -1,9 +1,7 @@
-import json
-import re
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict, Any, List, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, TYPE_CHECKING
 
 from .agent_protocol import AgentProtocol
 from .helpers.docker import (
@@ -19,7 +17,7 @@ from .helpers.tmux import (
     build_tmux_cmd,
     tmux_env,
 )
-from .config import get_tmux_server_name, get_orchestra_home
+from .config import get_tmux_server_name
 
 if TYPE_CHECKING:
     from .sessions import Session
@@ -119,7 +117,9 @@ class TmuxProtocol(AgentProtocol):
                 logger.info(f"Sending acceptance keys for executor {session.session_id}")
 
                 # Send Down arrow to select "Yes, I accept" option
-                self._exec(session, ["tmux", "-L", get_tmux_server_name(), "send-keys", "-t", f"{session.session_id}:0.0", "Down"])
+                self._exec(
+                    session, ["tmux", "-L", get_tmux_server_name(), "send-keys", "-t", f"{session.session_id}:0.0", "Down"]
+                )
                 time.sleep(0.2)
 
                 # Send Enter to accept
@@ -334,7 +334,6 @@ class TmuxProtocol(AgentProtocol):
                 text=True,
             )
         return True
-
 
     def toggle_pairing(self, session: "Session") -> tuple[bool, str]:
         """
