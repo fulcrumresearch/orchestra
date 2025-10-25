@@ -8,33 +8,17 @@ These tests verify:
 """
 
 import json
-import shutil
 import pytest
 from pathlib import Path
 from unittest.mock import patch
-from orchestra.lib.sessions import Session, save_session
 from orchestra.lib.agent import load_agent
 
 
 class TestCustomAgentModule:
     """Test custom agents defined via Python modules"""
 
-    def test_load_custom_agent_from_module(self, temp_git_repo):
+    def test_load_custom_agent_from_module(self, orchestra_test_env_with_custom_agents):
         """Test loading a custom agent from Python module"""
-        # Setup test config directory
-        config_dir = temp_git_repo / ".orchestra" / "config"
-        config_dir.mkdir(parents=True, exist_ok=True)
-
-        # Copy custom_agents directory
-        fixtures_dir = Path(__file__).parent.parent / "fixtures"
-        custom_agents_src = fixtures_dir / "custom_agents"
-        custom_agents_dst = temp_git_repo / ".orchestra" / "custom_agents"
-        shutil.copytree(custom_agents_src, custom_agents_dst)
-
-        # Copy test agents.yaml
-        test_config = fixtures_dir / "config" / "agents.yaml"
-        shutil.copy(test_config, config_dir / "agents.yaml")
-
         # Load the custom agent
         agent = load_agent("hello-agent")
 
@@ -42,29 +26,12 @@ class TestCustomAgentModule:
         assert "hello" in agent.prompt.lower()
         assert agent.use_docker == False
 
-    def test_spawn_custom_agent_child(self, temp_git_repo, designer_session, monkeypatch):
+    def test_spawn_custom_agent_child(self, designer_session_with_custom_agents):
         """Test spawning a child session with custom agent type"""
-        # Setup config with custom agent
-        config_dir = Path(designer_session.work_path) / ".orchestra" / "config"
-        config_dir.mkdir(parents=True, exist_ok=True)
-
-        fixtures_dir = Path(__file__).parent.parent / "fixtures"
-
-        # Copy custom_agents directory
-        custom_agents_src = fixtures_dir / "custom_agents"
-        custom_agents_dst = Path(designer_session.work_path) / ".orchestra" / "custom_agents"
-        shutil.copytree(custom_agents_src, custom_agents_dst)
-
-        # Copy test agents.yaml
-        test_config = fixtures_dir / "config" / "agents.yaml"
-        shutil.copy(test_config, config_dir / "agents.yaml")
-
-        # Set environment variable to point to config directory
-        monkeypatch.setenv("ORCHESTRA_CONFIG_DIR", str(config_dir))
 
         # Mock tmux start
         with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
-            child = designer_session.spawn_child(
+            child = designer_session_with_custom_agents.spawn_child(
                 session_name="hello-child", instructions="Say hello", agent_type="hello-agent"
             )
 
@@ -79,29 +46,11 @@ class TestCustomAgentModule:
         content = marker.read_text()
         assert "Hello from hello-child" in content
 
-    def test_custom_agent_settings_json(self, temp_git_repo, designer_session, monkeypatch):
+    def test_custom_agent_settings_json(self, designer_session_with_custom_agents):
         """Test that custom agent gets proper settings.json"""
-        # Setup config
-        config_dir = Path(designer_session.work_path) / ".orchestra" / "config"
-        config_dir.mkdir(parents=True, exist_ok=True)
-
-        fixtures_dir = Path(__file__).parent.parent / "fixtures"
-
-        # Copy custom_agents directory
-        custom_agents_src = fixtures_dir / "custom_agents"
-        custom_agents_dst = Path(designer_session.work_path) / ".orchestra" / "custom_agents"
-        shutil.copytree(custom_agents_src, custom_agents_dst)
-
-        # Copy test agents.yaml
-        test_config = fixtures_dir / "config" / "agents.yaml"
-        shutil.copy(test_config, config_dir / "agents.yaml")
-
-        # Set environment variable to point to config directory
-        monkeypatch.setenv("ORCHESTRA_CONFIG_DIR", str(config_dir))
-
         # Mock tmux start
         with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
-            child = designer_session.spawn_child(
+            child = designer_session_with_custom_agents.spawn_child(
                 session_name="hello-child", instructions="Say hello", agent_type="hello-agent"
             )
 
@@ -120,29 +69,11 @@ class TestCustomAgentModule:
         # Should have permissions configured
         assert "permissions" in settings
 
-    def test_custom_agent_work_path_in_subagents(self, temp_git_repo, designer_session, monkeypatch):
+    def test_custom_agent_work_path_in_subagents(self, designer_session_with_custom_agents):
         """Test that custom agents use ~/.orchestra/subagents/ directory"""
-        # Setup config
-        config_dir = Path(designer_session.work_path) / ".orchestra" / "config"
-        config_dir.mkdir(parents=True, exist_ok=True)
-
-        fixtures_dir = Path(__file__).parent.parent / "fixtures"
-
-        # Copy custom_agents directory
-        custom_agents_src = fixtures_dir / "custom_agents"
-        custom_agents_dst = Path(designer_session.work_path) / ".orchestra" / "custom_agents"
-        shutil.copytree(custom_agents_src, custom_agents_dst)
-
-        # Copy test agents.yaml
-        test_config = fixtures_dir / "config" / "agents.yaml"
-        shutil.copy(test_config, config_dir / "agents.yaml")
-
-        # Set environment variable to point to config directory
-        monkeypatch.setenv("ORCHESTRA_CONFIG_DIR", str(config_dir))
-
         # Mock tmux start
         with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
-            child = designer_session.spawn_child(
+            child = designer_session_with_custom_agents.spawn_child(
                 session_name="hello-child", instructions="Say hello", agent_type="hello-agent"
             )
 
@@ -154,29 +85,11 @@ class TestCustomAgentModule:
         # Custom agents should use subagents directory
         assert ".orchestra/subagents" in str(work_path)
 
-    def test_custom_agent_instructions_file(self, temp_git_repo, designer_session, monkeypatch):
+    def test_custom_agent_instructions_file(self, designer_session_with_custom_agents):
         """Test that custom agent gets instructions.md file"""
-        # Setup config
-        config_dir = Path(designer_session.work_path) / ".orchestra" / "config"
-        config_dir.mkdir(parents=True, exist_ok=True)
-
-        fixtures_dir = Path(__file__).parent.parent / "fixtures"
-
-        # Copy custom_agents directory
-        custom_agents_src = fixtures_dir / "custom_agents"
-        custom_agents_dst = Path(designer_session.work_path) / ".orchestra" / "custom_agents"
-        shutil.copytree(custom_agents_src, custom_agents_dst)
-
-        # Copy test agents.yaml
-        test_config = fixtures_dir / "config" / "agents.yaml"
-        shutil.copy(test_config, config_dir / "agents.yaml")
-
-        # Set environment variable to point to config directory
-        monkeypatch.setenv("ORCHESTRA_CONFIG_DIR", str(config_dir))
-
         # Mock tmux start
         with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
-            child = designer_session.spawn_child(
+            child = designer_session_with_custom_agents.spawn_child(
                 session_name="hello-child", instructions="Say hello to the world", agent_type="hello-agent"
             )
 
@@ -186,29 +99,11 @@ class TestCustomAgentModule:
         content = instructions_file.read_text()
         assert "Say hello to the world" in content
 
-    def test_custom_agent_orchestra_md(self, temp_git_repo, designer_session, monkeypatch):
+    def test_custom_agent_orchestra_md(self, designer_session_with_custom_agents):
         """Test that custom agent gets proper orchestra.md with custom prompt"""
-        # Setup config
-        config_dir = Path(designer_session.work_path) / ".orchestra" / "config"
-        config_dir.mkdir(parents=True, exist_ok=True)
-
-        fixtures_dir = Path(__file__).parent.parent / "fixtures"
-
-        # Copy custom_agents directory
-        custom_agents_src = fixtures_dir / "custom_agents"
-        custom_agents_dst = Path(designer_session.work_path) / ".orchestra" / "custom_agents"
-        shutil.copytree(custom_agents_src, custom_agents_dst)
-
-        # Copy test agents.yaml
-        test_config = fixtures_dir / "config" / "agents.yaml"
-        shutil.copy(test_config, config_dir / "agents.yaml")
-
-        # Set environment variable to point to config directory
-        monkeypatch.setenv("ORCHESTRA_CONFIG_DIR", str(config_dir))
-
         # Mock tmux start
         with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
-            child = designer_session.spawn_child(
+            child = designer_session_with_custom_agents.spawn_child(
                 session_name="hello-child", instructions="Say hello", agent_type="hello-agent"
             )
 

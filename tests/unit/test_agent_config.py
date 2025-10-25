@@ -2,6 +2,7 @@ import pytest
 from pathlib import Path
 import tempfile
 import yaml
+import os
 
 from orchestra.lib.agent import load_agent, Agent, DESIGNER_AGENT
 
@@ -12,9 +13,16 @@ def test_load_builtin_agent_no_config():
         config_dir = Path(tmpdir) / ".orchestra" / "config"
         config_dir.mkdir(parents=True)
 
-        agent = load_agent("designer", config_dir)
-        assert agent.name == "designer"
-        assert agent == DESIGNER_AGENT
+        # Set ORCHESTRA_HOME_DIR to use the temp directory
+        os.environ["ORCHESTRA_HOME_DIR"] = str(Path(tmpdir) / ".orchestra")
+        try:
+            agent = load_agent("designer")
+            assert agent.name == "designer"
+            assert agent == DESIGNER_AGENT
+        finally:
+            # Clean up environment variable
+            if "ORCHESTRA_HOME_DIR" in os.environ:
+                del os.environ["ORCHESTRA_HOME_DIR"]
 
 
 def test_override_builtin_prompt():
@@ -37,9 +45,16 @@ def test_override_builtin_prompt():
             }
         }))
 
-        agent = load_agent("designer", config_dir)
-        assert agent.name == "designer"
-        assert agent.prompt == "Custom designer prompt"
+        # Set ORCHESTRA_HOME_DIR to use the temp directory
+        os.environ["ORCHESTRA_HOME_DIR"] = str(Path(tmpdir) / ".orchestra")
+        try:
+            agent = load_agent("designer")
+            assert agent.name == "designer"
+            assert agent.prompt == "Custom designer prompt"
+        finally:
+            # Clean up environment variable
+            if "ORCHESTRA_HOME_DIR" in os.environ:
+                del os.environ["ORCHESTRA_HOME_DIR"]
 
 
 def test_simple_config_agent():
@@ -59,12 +74,19 @@ def test_simple_config_agent():
             }
         }))
 
-        agent = load_agent("code-reviewer", config_dir)
-        assert agent.name == "code-reviewer"
-        assert agent.prompt == "You are a code reviewer"
-        assert agent.use_docker == False
-        # Should have executor setup behavior
-        assert hasattr(agent, 'setup')
+        # Set ORCHESTRA_HOME_DIR to use the temp directory
+        os.environ["ORCHESTRA_HOME_DIR"] = str(Path(tmpdir) / ".orchestra")
+        try:
+            agent = load_agent("code-reviewer")
+            assert agent.name == "code-reviewer"
+            assert agent.prompt == "You are a code reviewer"
+            assert agent.use_docker == False
+            # Should have executor setup behavior
+            assert hasattr(agent, 'setup')
+        finally:
+            # Clean up environment variable
+            if "ORCHESTRA_HOME_DIR" in os.environ:
+                del os.environ["ORCHESTRA_HOME_DIR"]
 
 
 def test_unknown_agent_raises():
@@ -73,5 +95,12 @@ def test_unknown_agent_raises():
         config_dir = Path(tmpdir) / ".orchestra" / "config"
         config_dir.mkdir(parents=True)
 
-        with pytest.raises(ValueError, match="Unknown agent"):
-            load_agent("nonexistent", config_dir)
+        # Set ORCHESTRA_HOME_DIR to use the temp directory
+        os.environ["ORCHESTRA_HOME_DIR"] = str(Path(tmpdir) / ".orchestra")
+        try:
+            with pytest.raises(ValueError, match="Unknown agent"):
+                load_agent("nonexistent")
+        finally:
+            # Clean up environment variable
+            if "ORCHESTRA_HOME_DIR" in os.environ:
+                del os.environ["ORCHESTRA_HOME_DIR"]
