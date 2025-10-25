@@ -108,10 +108,10 @@ def main() -> int:
     if docker_available and docker_daemon_running:
         while True:
             response = input("\nDo you want to use Docker for sub-agents? (y/n): ").strip().lower()
-            if response in ['y', 'yes']:
+            if response in ["y", "yes"]:
                 use_docker = True
                 break
-            elif response in ['n', 'no']:
+            elif response in ["n", "no"]:
                 use_docker = False
                 break
             else:
@@ -178,9 +178,9 @@ def main() -> int:
 
             while True:
                 response = input("\nReady to start authentication session? (y/n): ").strip().lower()
-                if response in ['y', 'yes']:
+                if response in ["y", "yes"]:
                     break
-                elif response in ['n', 'no']:
+                elif response in ["n", "no"]:
                     print("\nAuthentication is required for Orchestra to work.")
                     print("Please run setup again when ready.")
                     return 1
@@ -199,7 +199,6 @@ def main() -> int:
                 agent=EXECUTOR_AGENT,
                 source_path=temp_work_dir,
                 work_path=temp_work_dir,
-                use_docker=True
             )
 
             # Create TmuxProtocol in Docker mode
@@ -222,11 +221,20 @@ def main() -> int:
             # Attach to the session interactively (this blocks until user exits)
             container_name = get_docker_container_name(session.session_id)
 
-            attach_result = subprocess.run([
-                "docker", "exec", "-it",
-                container_name,
-                "tmux", "-L", get_tmux_server_name(), "attach-session", "-t", session.session_id
-            ])
+            attach_result = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "-it",
+                    container_name,
+                    "tmux",
+                    "-L",
+                    get_tmux_server_name(),
+                    "attach-session",
+                    "-t",
+                    session.session_id,
+                ]
+            )
 
             # Clean up the session
             print("\n" + "=" * 60)
@@ -266,9 +274,9 @@ def main() -> int:
 
                     while True:
                         response = input("\nHave you set up authentication? (y/n): ").strip().lower()
-                        if response in ['y', 'yes']:
+                        if response in ["y", "yes"]:
                             break
-                        elif response in ['n', 'no']:
+                        elif response in ["n", "no"]:
                             print("\nPlease set up authentication and run setup again.")
                             return 1
                         else:
@@ -292,13 +300,13 @@ def main() -> int:
 
             while True:
                 response = input("\nAre you authenticated with Claude CLI? (y/n): ").strip().lower()
-                if response in ['y', 'yes']:
+                if response in ["y", "yes"]:
                     if claude_config.exists():
                         print("✓ Authentication successful!")
                         break
                     else:
                         print("⚠️  Config file still not found. Please verify your authentication.")
-                elif response in ['n', 'no']:
+                elif response in ["n", "no"]:
                     print("\nPlease authenticate with Claude CLI and run setup again.")
                     return 1
                 else:
