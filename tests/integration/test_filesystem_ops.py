@@ -95,13 +95,12 @@ class TestPairingMode:
 class TestSessionPreparation:
     """Tests for session preparation differences between agent types"""
 
-    def test_designer_uses_source_path(self, temp_git_repo):
+    def test_designer_uses_source_path(self, temp_git_repo, mock_config):
         """Test that designer session works directly in source directory"""
         session = Session(
             session_name="designer",
             agent=DESIGNER_AGENT,
             source_path=str(temp_git_repo),
-            use_docker=False,
         )
         session.prepare()
 
@@ -197,7 +196,6 @@ class TestSessionInstructionRefresh:
             session_name="old",
             agent=DESIGNER_AGENT,
             source_path=str(repo),
-            use_docker=False,
         )
         old_session.prepare()
         save_session(old_session, project_dir=repo)
@@ -214,7 +212,6 @@ class TestSessionInstructionRefresh:
             session_name="new",
             agent=DESIGNER_AGENT,
             source_path=str(repo),
-            use_docker=False,
         )
         new_session.prepare()
         save_session(new_session, project_dir=repo)
