@@ -7,7 +7,7 @@ import subprocess
 from orchestra.lib.tmux_protocol import TmuxProtocol
 from .config import load_config, get_orchestra_home
 from .logger import get_logger
-from .agent import Agent, DESIGNER_AGENT, EXECUTOR_AGENT, load_agent, ExecutorAgent
+from .agent import Agent, DESIGNER_AGENT, EXECUTOR_AGENT, load_agent, ExecutorAgent, StaleAgent
 from .helpers.git import create_worktree
 
 logger = get_logger(__name__)
@@ -133,7 +133,16 @@ class Session:
     def from_dict(cls, data: Dict[str, Any]) -> "Session":
         """Deserialize session from dictionary"""
         agent_name = data["agent_type"]
-        agent = load_agent(agent_name)
+
+        # Try to load the agent, fall back to StaleAgent if not found
+        try:
+            agent = load_agent(agent_name)
+        except ValueError:
+            logger.warning(
+                f"Agent '{agent_name}' not found. Creating StaleAgent placeholder. "
+                f"Session '{data['session_name']}' cannot be restarted."
+            )
+            agent = StaleAgent(original_name=agent_name)
 
         session = cls(
             session_name=data["session_name"],
@@ -281,6 +290,62 @@ class Session:
         Returns: (success, error_message)
         """
         return self.protocol.toggle_pairing(self)
+
+    @classmethod
+    def create_from_agent(
+        cls,
+        agent: Agent,
+        name: str,
+        instructions: str,
+        parent_session_name: str,
+        source_path: str,
+    ) -> "Session":
+        """Start a new agent session using this agent instance
+
+        This method allows any agent instance to spawn a new session using itself
+        as the agent, similar to spawn_child but passing the agent instance directly.
+
+        Args:
+            child_session_name: Name for the new child session
+            instructions: Instructions to give to the child session
+            parent_session_name: Name of the parent session
+            source_path: Source path for the parent session
+
+        Returns:
+            New child Session instance
+        """
+        # TODO: clean this up a bit
+
+        # Create new session with this agent instance
+        new_session = cls(
+            session_name=name,
+            agent=agent,
+            source_path=source_path,
+            parent_session_name=parent_session_name,
+        )
+
+        # Prepare the child session (sets work_path, creates settings.json, sets up worktree)
+        new_session.prepare()
+
+        # Create instructions.md
+        instructions_path = Path(new_session.work_path) / "instructions.md"
+        instructions_path.write_text(instructions)
+
+        # Build initial message to pass directly to claude command
+        initial_message = (
+            f"[System] Please review your task instructions in @instructions.md, and then start implementing the task. "
+            f"Your parent session name is: {parent_session_name}. "
+            f"Your source path is: {source_path}. "
+            f'When you\'re done or need help, use: send_message_to_session(session_name="{parent_session_name}", message="your summary/question here", source_path="{source_path}", sender_name="{name}")'
+        )
+
+        if not new_session.start(initial_message=initial_message):
+            raise RuntimeError(f"Failed to start child session {name}")
+
+        # Save the session to persist to disk
+        save_session(new_session, project_dir=Path(source_path))
+
+        return new_session
 
 
 def load_sessions(

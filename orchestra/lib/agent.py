@@ -1,7 +1,6 @@
 from abc import ABC
 from typing import TYPE_CHECKING, Optional, Dict, List, Any
 from pathlib import Path
-import subprocess
 import yaml
 import importlib.util
 
@@ -58,6 +57,29 @@ class Agent(ABC):
             session: Session object being prepared
         """
         raise NotImplementedError(f"Agent '{self.name}' must implement setup()")
+
+
+class StaleAgent(Agent):
+    """Placeholder agent for sessions that can't be restored
+
+    Used when a session's agent type is no longer available (e.g., dynamic agents
+    created via create_from_agent that weren't persisted properly).
+    """
+
+    def __init__(self, original_name: str = "unknown"):
+        super().__init__(
+            name=f"stale-{original_name}",
+            prompt="# Stale Agent\n\nThis session could not be restored.",
+            use_docker=False,
+        )
+        self.original_name = original_name
+
+    def setup(self, session: "Session") -> None:
+        """Raise an error if someone tries to use a stale agent"""
+        raise RuntimeError(
+            f"Cannot setup stale agent. Original agent '{self.original_name}' "
+            f"is no longer available. This session cannot be restarted."
+        )
 
 
 class DesignerAgent(Agent):
