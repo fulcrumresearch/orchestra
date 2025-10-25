@@ -4,12 +4,13 @@ from pathlib import Path
 
 from ..logger import get_logger
 from ..prompts import DESIGNER_MD_TEMPLATE, DOC_MD_TEMPLATE, ARCHITECTURE_MD_TEMPLATE
+from ..config import get_orchestra_home
 
 logger = get_logger(__name__)
 
 
 # Sessions file path (shared constant)
-SESSIONS_FILE = Path.home() / ".orchestra" / "sessions.json"
+SESSIONS_FILE = get_orchestra_home() / "sessions.json"
 
 
 def ensure_orchestra_directory(project_dir: Path) -> tuple[Path, Path]:

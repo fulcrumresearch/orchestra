@@ -30,9 +30,9 @@ from orchestra.lib.message import load_messages
 # Import from lib
 from orchestra.lib.sessions import (
     Session,
-    AgentType,
     save_session,
 )
+from orchestra.lib.agent import DESIGNER_AGENT
 from orchestra.lib.logger import get_logger
 from orchestra.lib.config import load_config
 from orchestra.lib.helpers.process import check_dependencies
@@ -319,7 +319,7 @@ class UnifiedApp(App):
 
                 new_session = Session(
                     session_name=branch_name,
-                    agent_type=AgentType.DESIGNER,
+                    agent=DESIGNER_AGENT,
                     source_path=str(Path.cwd()),
                 )
                 new_session.prepare()

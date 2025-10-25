@@ -1,9 +1,16 @@
 import logging
+import os
 from pathlib import Path
 from datetime import datetime
 
-# Create ~/.orchestra directory if it doesn't exist
-LOG_DIR = Path.home() / ".orchestra"
+# Create Orchestra home directory if it doesn't exist
+# Note: We use os.environ directly here to avoid circular import with config.py
+home_dir = os.environ.get("ORCHESTRA_HOME_DIR")
+if home_dir:
+    LOG_DIR = Path(home_dir).expanduser()
+else:
+    LOG_DIR = Path.home() / ".orchestra"
+
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Configure logging

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from orchestra.frontend.app import UnifiedApp
 from orchestra.lib.logger import get_logger
-from orchestra.lib.config import load_config
+from orchestra.lib.config import load_config, get_orchestra_home
 from orchestra.lib.helpers.tmux import build_tmux_cmd, execute_local
 from orchestra.lib.helpers.process import kill_process_gracefully
 
@@ -34,7 +34,7 @@ def main():
         logger.debug("Cleared messages queue")
 
     # Start the MCP server in the background (HTTP transport)
-    mcp_log = Path.home() / ".orchestra" / "mcp-server.log"
+    mcp_log = get_orchestra_home() / "mcp-server.log"
     mcp_log.parent.mkdir(parents=True, exist_ok=True)
 
     logger.info(f"MCP server logs: {mcp_log}")
@@ -51,7 +51,7 @@ def main():
     # Start the monitoring server in the background
     if START_MONITOR:
         monitor_port = 8081
-        monitor_log = Path.home() / ".orchestra" / "monitor-server.log"
+        monitor_log = get_orchestra_home() / "monitor-server.log"
         monitor_log.parent.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"Starting monitor server on port {monitor_port}")
