@@ -35,7 +35,6 @@ class Session:
         source_path: str = "",
         work_path: Optional[str] = None,
         active: bool = False,
-        use_docker: Optional[bool] = None,
         parent_session_name: Optional[str] = None,
     ):
         self.session_name = session_name
@@ -47,20 +46,13 @@ class Session:
         self.children: List[Session] = []
         self.parent_session_name = parent_session_name
 
-        # Load config for use_docker and protocol settings
         config = load_config()
-
-        if not config.get("use_docker", True):
-            use_docker = False
-        elif use_docker is None:
-            use_docker = agent.use_docker or config.get("use_docker", True)
-        else:
-            use_docker = use_docker
+        allow_docker = config.get("use_docker", True)  # this should renamed
 
         self.protocol = TmuxProtocol(
             default_command="claude",
             mcp_port=config.get("mcp_port", 8765),
-            use_docker=use_docker,
+            use_docker=(allow_docker and agent.use_docker),
         )
 
     @property
