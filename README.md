@@ -1,10 +1,11 @@
 # Orchestra
 
 
-Orchestra is an interface to usefully run coding agents in parallel.
+Orchestra is a multi agent system and interface to usefully run coding agents in parallel, by making them communicate and monitor each other, receiving your feedback when needed.
 
 Coding agents can implement well-scoped tasks in parallel. Humans are comparatively better at making high level decisions and directing the work so it matches their intentions.
 
+Orchestra's model to model orchestration and monitoring features aim to make model parallelization actually useful for coding, by making it easier to get human input only when needed.
 
 Check out the [demo](https://www.youtube.com/watch?v=jEMFEJIvGs0) explainer of Orchestra.
 
@@ -14,9 +15,7 @@ Check out the [demo](https://www.youtube.com/watch?v=jEMFEJIvGs0) explainer of O
 
 You describe what you want, and how it should be designed. A designer agent breaks it into tasks and spawns executor agents for each one. The agents run in parallel, and are given tools to communicate with the designer when they are blocked. You come in to polish gaps in the spec, and decide what code to merge.
 
-You can jump into an executor's execution, see its work, and even stage its changes in your source directory to pair with it.
-
-Orchestra's oversight features -- model to model orchestration and monitoring -- are what actually makes it possible for parallelization to be useful, and not destructive, by making it easier to scale those human decisions.
+You can jump into an executor's execution, see its work, and even stage its changes in your source directory to pair with it. Executor work is automonitored and checked by a monitoring agent to see if it matches your spec. If it doesn't, it will be nudged automatically to make it correct.
 
 <demo video>
 
