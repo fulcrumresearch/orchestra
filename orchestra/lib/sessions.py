@@ -1,4 +1,3 @@
-from enum import Enum
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 import json
@@ -6,13 +5,14 @@ import re
 import subprocess
 
 from orchestra.lib.tmux_protocol import TmuxProtocol
-from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
-from .config import load_config
+from .config import load_config, get_orchestra_home
 from .logger import get_logger
+from .agent import Agent, DESIGNER_AGENT, EXECUTOR_AGENT, load_agent, ExecutorAgent, StaleAgent
+from .helpers.git import create_worktree
 
 logger = get_logger(__name__)
 
-SESSIONS_FILE = Path.home() / ".orchestra" / "sessions.json"
+SESSIONS_FILE = get_orchestra_home() / "sessions.json"
 
 
 def sanitize_session_name(name: str) -> str:
@@ -27,47 +27,32 @@ def sanitize_session_name(name: str) -> str:
     return name.strip("-")
 
 
-class AgentType(Enum):
-    DESIGNER = "designer"
-    EXECUTOR = "executor"
-
-
-AGENT_TEMPLATES = {
-    AgentType.DESIGNER: DESIGNER_PROMPT,
-    AgentType.EXECUTOR: EXECUTOR_PROMPT,
-}
-
-
 class Session:
     def __init__(
         self,
         session_name: str,
-        agent_type: AgentType,
+        agent: Agent,
         source_path: str = "",
         work_path: Optional[str] = None,
         active: bool = False,
-        use_docker: Optional[bool] = None,
         parent_session_name: Optional[str] = None,
     ):
         self.session_name = session_name
-        self.agent_type = agent_type
+        self.agent = agent
         self.source_path = source_path
         self.work_path = work_path
         self.active = active
         self.paired = False  # Runtime only, not persisted
         self.children: List[Session] = []
         self.parent_session_name = parent_session_name
-        # Default use_docker based on agent type: DESIGNER=False, EXECUTOR=True
-        if use_docker is None:
-            self.use_docker = agent_type == AgentType.EXECUTOR
-        else:
-            self.use_docker = use_docker
 
         config = load_config()
+        allow_docker = config.get("use_docker", True)  # this should renamed
+
         self.protocol = TmuxProtocol(
             default_command="claude",
             mcp_port=config.get("mcp_port", 8765),
-            use_docker=self.use_docker,
+            use_docker=(allow_docker and agent.use_docker),
         )
 
     @property
@@ -77,6 +62,11 @@ class Session:
         dir_name = Path(self.source_path).name if self.source_path else "unknown"
         combined = f"{dir_name}-{self.session_name}"
         return sanitize_session_name(combined)
+
+    @property
+    def is_root(self) -> bool:
+        """Whether this is a root session (no parent)"""
+        return self.parent_session_name is None
 
     def start(self, initial_message: str = "") -> bool:
         """Start the agent using the configured protocol
@@ -101,13 +91,19 @@ class Session:
         claude_dir = Path(self.work_path) / ".claude"
         claude_dir.mkdir(parents=True, exist_ok=True)
 
-        prompt_template = AGENT_TEMPLATES[self.agent_type]
+        # Use agent's prompt directly
+        prompt_template = self.agent.prompt
 
         orchestra_md_path = claude_dir / "orchestra.md"
+
+        # Get orchestra subagents directory for prompts
+        orchestra_subagents_dir = str(get_orchestra_home() / "subagents")
+
         formatted_prompt = prompt_template.format(
             session_name=self.session_name,
             work_path=self.work_path,
             source_path=self.source_path,
+            orchestra_subagents_dir=orchestra_subagents_dir,
         ).strip()
         orchestra_md_path.write_text(formatted_prompt)
 
@@ -126,10 +122,9 @@ class Session:
         """Serialize session to dictionary for JSON storage"""
         return {
             "session_name": self.session_name,
-            "agent_type": self.agent_type.value,
+            "agent_type": self.agent.name,
             "source_path": self.source_path,
             "work_path": self.work_path,
-            "use_docker": self.use_docker,
             "parent_session_name": self.parent_session_name,
             "children": [child.to_dict() for child in self.children],
         }
@@ -137,13 +132,24 @@ class Session:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Session":
         """Deserialize session from dictionary"""
+        agent_name = data["agent_type"]
+
+        # Try to load the agent, fall back to StaleAgent if not found
+        try:
+            agent = load_agent(agent_name)
+        except ValueError:
+            logger.warning(
+                f"Agent '{agent_name}' not found. Creating StaleAgent placeholder. "
+                f"Session '{data['session_name']}' cannot be restarted."
+            )
+            agent = StaleAgent(original_name=agent_name)
+
         session = cls(
             session_name=data["session_name"],
-            agent_type=AgentType(data["agent_type"]),
+            agent=agent,
             source_path=data.get("source_path", ""),
             work_path=data.get("work_path"),
             active=data.get("active", False),
-            use_docker=data.get("use_docker"),
             parent_session_name=data.get("parent_session_name"),
         )
         # Recursively load children (each creates its own protocol)
@@ -151,102 +157,98 @@ class Session:
         return session
 
     def prepare(self):
-        """
-        Prepare the session work directory.
-        - Designer: works directly in source_path (no worktree)
-        - Executor: creates a git worktree
+        """Prepare the session work directory
+
+        This method:
+        1. Sets work_path based on root vs non-root
+        2. Creates .claude/settings.json with orchestra MCP + agent config
+        3. Calls agent.setup() for custom setup (worktrees, etc)
+        4. Calls add_instructions() to create .claude/orchestra.md
         """
         if not self.source_path:
             raise ValueError("Source path is not set")
 
-        # Designer works directly in source directory
-        if self.agent_type == AgentType.DESIGNER:
+        # 1. Set work_path based on root vs non-root
+        if self.is_root:
             self.work_path = self.source_path
+        else:
+            # Create base directory for non-root agents
+            subagent_dir = get_orchestra_home() / "subagents" / self.session_id
+            subagent_dir.mkdir(parents=True, exist_ok=True)
+            self.work_path = str(subagent_dir)
 
-            # Create .claude/commands directory and add merge-child command
-            claude_commands_dir = Path(self.work_path) / ".claude" / "commands"
-            claude_commands_dir.mkdir(parents=True, exist_ok=True)
+            # Special case: ExecutorAgent needs git worktree before .claude/ is created
+            if isinstance(self.agent, ExecutorAgent):
+                create_worktree(self.work_path, self.session_id, self.source_path)
 
-            merge_command_path = claude_commands_dir / "merge-child.md"
-            merge_command_path.write_text(MERGE_CHILD_COMMAND)
+        # 2. Create .mcp.json and .claude/settings.json
+        import json
+        from .config import claude_settings_builder, load_config
 
-            self.add_instructions()
-            return
+        claude_dir = Path(self.work_path) / ".claude"
+        claude_dir.mkdir(parents=True, exist_ok=True)
 
-        # Executor uses worktree
-        source_dir_name = Path(self.source_path).name
-        worktree_base = Path.home() / ".orchestra" / "worktrees" / source_dir_name
-        self.work_path = str(worktree_base / self.session_id)
+        # Create .mcp.json with MCP servers
+        config = load_config()
+        mcp_port = config.get("mcp_port", 8765)
+        mcp_config = {"mcpServers": {"orchestra-mcp": {"url": f"http://localhost:{mcp_port}/mcp", "type": "http"}}}
 
-        if Path(self.work_path).exists():
-            # Refresh instructions to reflect current session metadata
-            self.add_instructions()
-            return
+        # Add agent's custom MCP servers
+        if self.agent.mcp_config:
+            mcp_config["mcpServers"].update(self.agent.mcp_config)
 
-        worktree_base.mkdir(parents=True, exist_ok=True)
+        mcp_json_path = Path(self.work_path) / ".mcp.json"
+        mcp_json_path.write_text(json.dumps(mcp_config, indent=2))
 
-        # Create new worktree on a new branch
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "--verify", f"refs/heads/{self.session_id}"],
-                cwd=self.source_path,
-                capture_output=True,
-                text=True,
-            )
+        logger.info(f"Created .mcp.json with MCP servers: {self.agent.mcp_config}")
 
-            if result.returncode == 0:
-                subprocess.run(
-                    ["git", "worktree", "add", self.work_path, self.session_id],
-                    cwd=self.source_path,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
-            else:
-                subprocess.run(
-                    ["git", "worktree", "add", "-b", self.session_id, self.work_path],
-                    cwd=self.source_path,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
+        # Create settings.json with permissions and enabled MCP servers
+        settings = claude_settings_builder(
+            session_id=self.session_id,
+            source_path=self.source_path,
+            mcp_config=self.agent.mcp_config,
+            allowed_tools=self.agent.tools,
+            is_monitored=not self.is_root,  # Only monitor non-root agents
+        )
 
-            self.add_instructions()
+        (claude_dir / "settings.json").write_text(json.dumps(settings, indent=2))
 
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to create worktree: {e.stderr}")
+        # 3. Let agent do custom setup (create worktree, etc)
+        self.agent.setup(self)
 
-    def spawn_executor(self, session_name: str, instructions: str) -> "Session":
-        """Spawn an executor session as a child of this session"""
+        # 4. Add agent instructions
+        self.add_instructions()
+
+    def spawn_child(self, session_name: str, instructions: str, agent_type: str = "executor") -> "Session":
+        """Spawn a child session with specified agent type
+
+        Args:
+            session_name: Name for child session
+            instructions: Instructions to write to instructions.md
+            agent_type: Agent type name (defaults to "executor")
+
+        Returns:
+            New child Session
+        """
         if not self.work_path:
             raise ValueError("Work path is not set")
 
-        # Load config to get use_docker setting for executors
-        config = load_config()
-        executor_use_docker = config.get("use_docker", True)
+        # Load agent by name
+        from .agent import load_agent
+
+        agent = load_agent(agent_type)
 
         new_session = Session(
             session_name=session_name,
-            agent_type=AgentType.EXECUTOR,
+            agent=agent,
             source_path=self.work_path,  # Child's source is parent's work directory
-            use_docker=executor_use_docker,  # Use config value
             parent_session_name=self.session_name,
         )
 
-        # Prepare the child session (creates its own worktree)
+        # Prepare the child session (sets work_path, creates settings.json, sets up worktree)
         new_session.prepare()
 
-        # Create .claude/settings.json with hook configuration for monitoring
-        claude_dir = Path(new_session.work_path) / ".claude"
-        claude_dir.mkdir(parents=True, exist_ok=True)
-
-        settings_path = claude_dir / "settings.json"
-        # PROJECT_CONF is already a JSON string, just replace the placeholders
-        settings_json = PROJECT_CONF.replace("{session_id}", new_session.session_id).replace(
-            "{source_path}", self.source_path
-        )
-        settings_path.write_text(settings_json)
-
+        # Create instructions.md
         instructions_path = Path(new_session.work_path) / "instructions.md"
         instructions_path.write_text(instructions)
 
@@ -265,6 +267,9 @@ class Session:
             raise RuntimeError(f"Failed to start child session {session_name}")
 
         # No need to wait or send message separately - it's passed to claude command directly
+
+        # Save the parent session (with all children) to persist to disk
+        save_session(self, project_dir=Path(self.source_path))
 
         return new_session
 
@@ -285,6 +290,62 @@ class Session:
         Returns: (success, error_message)
         """
         return self.protocol.toggle_pairing(self)
+
+    @classmethod
+    def create_from_agent(
+        cls,
+        agent: Agent,
+        name: str,
+        instructions: str,
+        parent_session_name: str,
+        source_path: str,
+    ) -> "Session":
+        """Start a new agent session using this agent instance
+
+        This method allows any agent instance to spawn a new session using itself
+        as the agent, similar to spawn_child but passing the agent instance directly.
+
+        Args:
+            child_session_name: Name for the new child session
+            instructions: Instructions to give to the child session
+            parent_session_name: Name of the parent session
+            source_path: Source path for the parent session
+
+        Returns:
+            New child Session instance
+        """
+        # TODO: clean this up a bit
+
+        # Create new session with this agent instance
+        new_session = cls(
+            session_name=name,
+            agent=agent,
+            source_path=source_path,
+            parent_session_name=parent_session_name,
+        )
+
+        # Prepare the child session (sets work_path, creates settings.json, sets up worktree)
+        new_session.prepare()
+
+        # Create instructions.md
+        instructions_path = Path(new_session.work_path) / "instructions.md"
+        instructions_path.write_text(instructions)
+
+        # Build initial message to pass directly to claude command
+        initial_message = (
+            f"[System] Please review your task instructions in @instructions.md, and then start implementing the task. "
+            f"Your parent session name is: {parent_session_name}. "
+            f"Your source path is: {source_path}. "
+            f'When you\'re done or need help, use: send_message_to_session(session_name="{parent_session_name}", message="your summary/question here", source_path="{source_path}", sender_name="{name}")'
+        )
+
+        if not new_session.start(initial_message=initial_message):
+            raise RuntimeError(f"Failed to start child session {name}")
+
+        # Add the session to the tree (ensures proper parent-child relationship)
+        add_session(new_session, project_dir=Path(source_path))
+
+        return new_session
 
 
 def load_sessions(
@@ -383,6 +444,44 @@ def save_session(session: Session, project_dir: Optional[Path] = None) -> None:
     # Write back
     with open(SESSIONS_FILE, "w") as f:
         json.dump(sessions_dict, f, indent=2)
+
+
+def add_session(session: Session, project_dir: Optional[Path] = None) -> None:
+    """
+    Add a session to the session tree, ensuring proper parent-child relationships.
+    If session has a parent, it will be added to parent's children array.
+    Otherwise it will be added as a root session.
+
+    Args:
+        session: Session to add
+        project_dir: Project directory (defaults to cwd)
+    """
+    if project_dir is None:
+        project_dir = Path.cwd()
+
+    # Load existing sessions
+    existing_sessions = load_sessions(project_dir=project_dir)
+
+    # If session has a parent, find the parent and add as child
+    if session.parent_session_name:
+        parent = find_session(existing_sessions, session.parent_session_name)
+        if not parent:
+            raise ValueError(f"Parent session '{session.parent_session_name}' not found")
+
+        # Check if child already exists
+        existing_child = find_session(parent.children, session.session_name)
+        if existing_child:
+            # Update existing child
+            parent.children = [session if c.session_name == session.session_name else c for c in parent.children]
+        else:
+            # Add new child
+            parent.children.append(session)
+
+        # Save the parent (which includes all children)
+        save_session(parent, project_dir)
+    else:
+        # Session is a root session, save directly
+        save_session(session, project_dir)
 
 
 def find_session(sessions: List[Session], session_name: str) -> Optional[Session]:

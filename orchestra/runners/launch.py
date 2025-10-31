@@ -9,7 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from orchestra.lib.helpers.tmux import TMUX_SOCKET, build_tmux_cmd, run_local_tmux_command
+from orchestra.lib.helpers.tmux import build_tmux_cmd, run_local_tmux_command
+from orchestra.lib.config import get_tmux_server_name
 
 
 TMUX_BIN = shutil.which("tmux") or "tmux"
@@ -98,7 +99,7 @@ def main() -> int:
                     "send-keys",
                     "-t",
                     f"orchestra-{repo}",
-                    f"TMUX= tmux -L {TMUX_SOCKET} attach-session -t {session}",
+                    f"TMUX= tmux -L {get_tmux_server_name()} attach-session -t {session}",
                     "C-m",
                 ],
                 check=True,
