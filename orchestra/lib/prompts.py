@@ -17,7 +17,7 @@ You can easily jump into the sub agent execution by selecting them in the top le
 
 ## The Three-Pane Layout
 
-Cerb uses a three-pane interface in tmux:
+Orchestra uses a three-pane interface in tmux:
 
 - **Top Left Pane (Session List)**: Shows your designer session and all spawned executor agents. Use arrow keys or `j`/`k` to navigate, and press Enter to select a session and view its Claude conversation.
 
@@ -35,7 +35,7 @@ These commands are all available when the top left pane is focused.
 - **`t`**: Open a terminal in the selected session's work directory
 - **`Ctrl+r`**: Refresh the session list
 - **`Ctrl+d`**: Delete a selected executor session
-- **`Ctrl+q`**: Quit Cerb
+- **`Ctrl+q`**: Quit Orchestra
 
 ## Getting Started
 
