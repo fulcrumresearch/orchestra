@@ -229,6 +229,8 @@ def _load_module_agent(name: str, module_spec: str, config_dir: Path) -> Agent:
         spec.loader.exec_module(module)
 
         # Get class and instantiate
+        if not hasattr(module, class_name):
+            raise ValueError(f"Class '{class_name}' not found in module {module_path}")
         agent_class = getattr(module, class_name)
         return agent_class()
 
