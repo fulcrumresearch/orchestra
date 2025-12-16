@@ -7,7 +7,7 @@ from pathlib import Path
 
 from mcp.server import FastMCP
 
-from orchestra.lib.sessions import load_sessions, save_session, find_session, AgentType
+from orchestra.lib.sessions import load_sessions, save_session, find_session, add_session
 from orchestra.lib.config import load_config
 
 # Create FastMCP server instance with default port
@@ -19,7 +19,7 @@ mcp = FastMCP("orchestra-subagent", port=default_port, host=host)
 
 
 @mcp.tool()
-def spawn_subagent(parent_session_name: str, child_session_name: str, instructions: str, source_path: str) -> str:
+def spawn_subagent(parent_session_name: str, child_session_name: str, instructions: str, source_path: str, agent_type: str = "executor") -> str:
     """
     Spawn a child Claude session with specific instructions.
 
@@ -28,7 +28,7 @@ def spawn_subagent(parent_session_name: str, child_session_name: str, instructio
         child_session_name: Name for the new child session (user-facing identifier)
         instructions: Instructions to give to the child session
         source_path: Source path of the parent session's project
-
+        agent_type: Agent type name
     Returns:
         Success message with child session name, or error message
     """
@@ -41,8 +41,8 @@ def spawn_subagent(parent_session_name: str, child_session_name: str, instructio
     if not parent:
         return f"Error: Parent session '{parent_session_name}' not found"
 
-    # Spawn the executor (this adds child to parent.children in memory)
-    child = parent.spawn_executor(child_session_name, instructions)
+    # Spawn child with specified agent type (this adds child to parent.children in memory)
+    child = parent.spawn_child(child_session_name, instructions, agent_type=agent_type)
 
     # Save updated parent session
     save_session(parent, project_dir=Path(source_path))
@@ -87,8 +87,8 @@ def send_message_to_session(session_name: str, message: str, source_path: str, s
     with open(messages_path, "a") as f:
         f.write(json.dumps(message_obj) + "\n")
 
-    # Send via protocol ONLY if target is an executor (not designer)
-    if target.agent_type == AgentType.EXECUTOR:
+    # Send via protocol ONLY if target is a non-root session (child sessions)
+    if not target.is_root:
         target.send_message(message, sender_name=sender_name)
 
     return f"Successfully sent message to session '{session_name}'"

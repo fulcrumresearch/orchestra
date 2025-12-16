@@ -11,7 +11,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from orchestra.backend.mcp_server import spawn_subagent, send_message_to_session
-from orchestra.lib.sessions import Session, AgentType, save_session
+from orchestra.lib.sessions import Session, save_session
+from orchestra.lib.agent import DESIGNER_AGENT, EXECUTOR_AGENT
+from orchestra.lib.config import get_orchestra_home
 
 
 class TestSpawnSubagentIntegration:
@@ -31,19 +33,19 @@ class TestSpawnSubagentIntegration:
         # Verify success
         assert "Successfully spawned child session 'test-child'" in result
 
-        # Verify worktree was created (use actual repo name, not hardcoded)
+        # Verify subagent directory was created
         repo_name = orchestra_test_env.repo.name
         session_id = f"{repo_name}-test-child"
-        worktree_path = Path.home() / ".orchestra" / "worktrees" / repo_name / session_id
-        assert worktree_path.exists(), f"Worktree should exist at {worktree_path}"
+        subagent_path = get_orchestra_home() / "subagents" / session_id
+        assert subagent_path.exists(), f"Subagent directory should exist at {subagent_path}"
 
         # Verify instructions.md was created
-        instructions_file = worktree_path / "instructions.md"
+        instructions_file = subagent_path / "instructions.md"
         assert instructions_file.exists()
         assert "Build the login feature" in instructions_file.read_text()
 
         # Verify .claude/orchestra.md was created
-        orchestra_md = worktree_path / ".claude" / "orchestra.md"
+        orchestra_md = subagent_path / ".claude" / "orchestra.md"
         assert orchestra_md.exists()
 
 
@@ -98,17 +100,15 @@ class TestSendMessageIntegration:
 
         assert "Error: Session 'nonexistent' not found" in result
 
-    def test_send_message_to_executor(self, orchestra_test_env):
+    def test_send_message_to_executor(self, designer_session, orchestra_test_env):
         """Test that messages to executor sessions are sent via tmux with [From: sender_name] prefix"""
-        # Create an executor session (not designer)
-        target = Session(
-            session_name="target",
-            agent_type=AgentType.EXECUTOR,
-            source_path=str(orchestra_test_env.repo),
-            use_docker=False,
-        )
-        target.prepare()
-        save_session(target, project_dir=orchestra_test_env.repo)
+        # Create an executor as a child of designer (real scenario)
+        with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
+            target = designer_session.spawn_child(
+                session_name="target",
+                instructions="Test task",
+            )
+        save_session(designer_session, project_dir=orchestra_test_env.repo)
 
         # Start a real tmux session for the target
         subprocess.run(

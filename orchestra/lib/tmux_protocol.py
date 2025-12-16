@@ -1,8 +1,7 @@
-import json
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict, Any, List, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, TYPE_CHECKING
 
 from .agent_protocol import AgentProtocol
 from .helpers.docker import (
@@ -18,6 +17,7 @@ from .helpers.tmux import (
     build_tmux_cmd,
     tmux_env,
 )
+from .config import get_tmux_server_name
 
 if TYPE_CHECKING:
     from .sessions import Session
@@ -88,9 +88,6 @@ class TmuxProtocol(AgentProtocol):
                 paired=session.paired,
             ):
                 return False
-        else:
-            # Configure MCP for local (non-Docker) session
-            self._configure_mcp_for_local_session(session)
 
         # Determine working directory
         work_dir = "/workspace" if self.use_docker else session.work_path
@@ -115,12 +112,14 @@ class TmuxProtocol(AgentProtocol):
         )
 
         if result.returncode == 0:
-            if session.agent_type.value == "executor":
+            if session.agent.name == "executor":
                 # For executors in bypass mode, send Down arrow then Enter to accept bypass warning
                 logger.info(f"Sending acceptance keys for executor {session.session_id}")
 
                 # Send Down arrow to select "Yes, I accept" option
-                self._exec(session, ["tmux", "-L", "orchestra", "send-keys", "-t", f"{session.session_id}:0.0", "Down"])
+                self._exec(
+                    session, ["tmux", "-L", get_tmux_server_name(), "send-keys", "-t", f"{session.session_id}:0.0", "Down"]
+                )
                 time.sleep(0.2)
 
                 # Send Enter to accept
@@ -274,7 +273,7 @@ class TmuxProtocol(AgentProtocol):
     def send_message(self, session: "Session", message: str) -> bool:
         """Send a message to a tmux session using paste buffer with retry logic (Docker or local mode)"""
         # Send message using buffer with retry logic
-        if session.agent_type.value == "designer" and self.is_in_permission_prompt(session):
+        if session.agent.name == "designer" and self.is_in_permission_prompt(session):
             self._send_key("Esc", session)
 
         if not self._send_with_retry(session, message + "\n"):
@@ -297,7 +296,7 @@ class TmuxProtocol(AgentProtocol):
                         container_name,
                         "tmux",
                         "-L",
-                        "orchestra",
+                        get_tmux_server_name(),
                         *build_tmux_cmd("attach-session", "-t", session.session_id)[3:],
                     ],
                 ),
@@ -312,7 +311,7 @@ class TmuxProtocol(AgentProtocol):
                     [
                         "sh",
                         "-c",
-                        f"TMUX= tmux -L orchestra attach-session -t {session.session_id}",
+                        f"TMUX= tmux -L {get_tmux_server_name()} attach-session -t {session.session_id}",
                     ],
                 ),
                 capture_output=True,
@@ -335,50 +334,6 @@ class TmuxProtocol(AgentProtocol):
                 text=True,
             )
         return True
-
-    def _configure_mcp_for_local_session(self, session: "Session") -> None:
-        """Configure MCP for local (non-Docker) session using .mcp.json and settings.json
-
-        Creates a project-specific .mcp.json and .claude/settings.json with pre-approved MCP permissions.
-        """
-        logger.info(f"Configuring MCP for local session {session.session_id}")
-
-        if not session.work_path:
-            logger.warning("Cannot configure MCP: work_path not set")
-            return
-
-        # MCP URL for local sessions (localhost, not host.docker.internal)
-        mcp_url = f"http://localhost:{self.mcp_port}/mcp"
-
-        # Create .mcp.json in the session's worktree
-        mcp_config = {"mcpServers": {"orchestra-mcp": {"url": mcp_url, "type": "http"}}}
-
-        mcp_config_path = Path(session.work_path) / ".mcp.json"
-        try:
-            with open(mcp_config_path, "w") as f:
-                json.dump(mcp_config, f, indent=2)
-            logger.info(f"Created .mcp.json at {mcp_config_path} (URL: {mcp_url})")
-        except Exception as e:
-            logger.error(f"Failed to create .mcp.json: {e}")
-
-        # Create .claude/settings.json with pre-approved MCP permissions
-        claude_dir = Path(session.work_path) / ".claude"
-        claude_dir.mkdir(parents=True, exist_ok=True)
-
-        settings_path = claude_dir / "settings.json"
-        settings_config = {
-            "permissions": {
-                "allow": ["mcp__orchestra-mcp__spawn_subagent", "mcp__orchestra-mcp__send_message_to_session"],
-                "allowPathRegex": ["^~/.orchestra/.*"],
-            }
-        }
-
-        try:
-            with open(settings_path, "w") as f:
-                json.dump(settings_config, f, indent=2)
-            logger.info(f"Created settings.json with MCP permissions at {settings_path}")
-        except Exception as e:
-            logger.error(f"Failed to create settings.json: {e}")
 
     def toggle_pairing(self, session: "Session") -> tuple[bool, str]:
         """

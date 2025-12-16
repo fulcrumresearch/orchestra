@@ -9,6 +9,7 @@ import importlib.resources as resources
 from pathlib import Path
 
 from ..logger import get_logger
+from ..config import get_orchestra_home, get_tmux_config_path
 
 logger = get_logger(__name__)
 
@@ -98,8 +99,8 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
     mounts = ["-v", f"{work_path}:/workspace"]
 
     # Ensure shared Claude Code directory and config file exist
-    shared_claude_dir = Path.home() / ".orchestra" / "shared-claude"
-    shared_claude_json = Path.home() / ".orchestra" / "shared-claude.json"
+    shared_claude_dir = get_orchestra_home() / "shared-claude"
+    shared_claude_json = get_orchestra_home() / "shared-claude.json"
     ensure_shared_claude_config(shared_claude_dir, shared_claude_json, mcp_port)
 
     # Mount shared .claude directory and .claude.json for all executor agents
@@ -109,8 +110,6 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
     )
 
     # Mount tmux config file for agent sessions to default location
-    from ..config import get_tmux_config_path
-
     tmux_config_path = get_tmux_config_path()
     mounts.extend(["-v", f"{tmux_config_path}:/home/executor/.tmux.conf:ro"])
 

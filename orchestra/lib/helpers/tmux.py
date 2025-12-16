@@ -9,14 +9,10 @@ from collections.abc import Sequence
 from typing import Union
 
 from ..logger import get_logger
-from ..config import get_tmux_config_path
+from ..config import get_tmux_config_path, get_tmux_server_name
 from .process import find_available_editor
 
 logger = get_logger(__name__)
-
-
-# Tmux socket name
-TMUX_SOCKET = "orchestra"
 
 
 # Tmux pane constants
@@ -35,7 +31,7 @@ def tmux_env() -> dict:
 
 def build_tmux_cmd(*args: str) -> list[str]:
     """Build tmux command for orchestra socket."""
-    return ["tmux", "-L", TMUX_SOCKET, *args]
+    return ["tmux", "-L", get_tmux_server_name(), *args]
 
 
 def execute_local(cmd: list[str]) -> subprocess.CompletedProcess:

@@ -9,9 +9,10 @@ dependencies = [
     "mcp>=1.0.0",
     "fastapi>=0.117.1",
     "uvicorn>=0.37.0",
-    "requests==2.30.0",
+    "requests>=2.30.0",
     "claude-agent-sdk>=0.1.0",
     "watchfiles>=0.24.0",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]

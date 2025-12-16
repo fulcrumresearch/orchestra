@@ -53,7 +53,7 @@ class SessionMonitor:
         # Get system prompt from prompts module
         system_prompt = get_monitor_prompt(
             session_id=self.session.session_id,
-            agent_type=self.session.agent_type.value if self.session.agent_type else "unknown",
+            agent_type=self.session.agent.name if self.session.agent else "unknown",
             parent_session_id=parent_session_id,
             source_path=self.session.source_path,
         )
