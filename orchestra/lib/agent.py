@@ -223,6 +223,8 @@ def _load_module_agent(name: str, module_spec: str, config_dir: Path) -> Agent:
 
         # Load module dynamically
         spec = importlib.util.spec_from_file_location(f"agent_{name}", module_path)
+        if spec is None or spec.loader is None:
+            raise ValueError(f"Failed to load module from {module_path}")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 
