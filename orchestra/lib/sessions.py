@@ -190,10 +190,6 @@ class Session:
         claude_dir = Path(self.work_path) / ".claude"
         claude_dir.mkdir(parents=True, exist_ok=True)
 
-        source_dir_name = Path(self.source_path).name
-        worktree_base = get_orchestra_home() / "worktrees" / source_dir_name
-        self.work_path = str(worktree_base / self.session_id)
-
         # Create .mcp.json with MCP servers
         config = load_config()
         mcp_port = config.get("mcp_port", 8765)
