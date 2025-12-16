@@ -211,8 +211,10 @@ def _load_module_agent(name: str, module_spec: str, config_dir: Path) -> Agent:
         config_dir: Base directory for relative paths
     """
     try:
-        module_path, class_name = module_spec.split(":")
-        module_path = Path(module_path)
+        if ":" not in module_spec:
+            raise ValueError(f"Invalid module spec '{module_spec}'. Expected format: 'path/to/file.py:ClassName'")
+        parts = module_spec.rsplit(":", 1)
+        module_path, class_name = Path(parts[0]), parts[1]
 
         # Module paths relative to config_dir
         if not module_path.is_absolute():
