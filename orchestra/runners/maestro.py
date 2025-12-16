@@ -8,8 +8,13 @@ from pathlib import Path
 from orchestra.frontend.app import UnifiedApp
 from orchestra.lib.logger import get_logger
 from orchestra.lib.config import load_config, get_orchestra_home
+<<<<<<< HEAD
 from orchestra.lib.tmux import build_tmux_cmd, execute_local
 from orchestra.lib.helpers import kill_process_gracefully
+=======
+from orchestra.lib.helpers.tmux import build_tmux_cmd, execute_local
+from orchestra.lib.helpers.process import kill_process_gracefully
+>>>>>>> main
 
 logger = get_logger(__name__)
 
@@ -21,6 +26,17 @@ def main():
     # Set terminal environment for better performance
     os.environ.setdefault("TERM", "xterm-256color")
     os.environ.setdefault("TMUX_TMPDIR", "/tmp")  # Use local tmp for better performance
+
+    # Check if orchestra-main session already exists
+
+    # If we get here, no session exists or attach failed - proceed with normal startup
+    logger.info("Starting new Orchestra session...")
+
+    # Clear the message queue on startup
+    messages_file = Path.cwd() / ".orchestra" / "messages.jsonl"
+    if messages_file.exists():
+        messages_file.unlink()
+        logger.debug("Cleared messages queue")
 
     # Start the MCP server in the background (HTTP transport)
     mcp_log = get_orchestra_home() / "mcp-server.log"
@@ -39,8 +55,12 @@ def main():
 
     # Start the monitoring server in the background
     if START_MONITOR:
+<<<<<<< HEAD
         config = load_config()
         monitor_port = config.get("monitor_port", 8081)
+=======
+        monitor_port = 8081
+>>>>>>> main
         monitor_log = get_orchestra_home() / "monitor-server.log"
         monitor_log.parent.mkdir(parents=True, exist_ok=True)
 
@@ -56,7 +76,7 @@ def main():
             )
         logger.info(f"Monitor server started with PID {monitor_proc.pid}")
 
-    def cleanup_servers():
+    def cleanup():
         """Clean up background servers on exit"""
         logger.info("Shutting down MCP server")
         kill_process_gracefully(mcp_proc)
@@ -65,7 +85,11 @@ def main():
             logger.info("Shutting down monitor server")
             kill_process_gracefully(monitor_proc)
 
-        # Kill the tmux server
+        # remove doc injection
+        claude_path = Path.cwd() / ".claude" / "CLAUDE.md"
+        if claude_path.exists():
+            claude_path.write_text(claude_path.read_text().replace("@orchestra.md", ""))
+
         logger.info("Shutting down tmux server")
         try:
             execute_local(build_tmux_cmd("kill-server"))
@@ -73,10 +97,10 @@ def main():
             logger.debug(f"Error killing tmux server: {e}")
 
     try:
-        UnifiedApp(shutdown_callback=cleanup_servers).run()
+        UnifiedApp(shutdown_callback=cleanup).run()
     except Exception as e:
         logger.exception(f"Unexpected error: {e}")
-        cleanup_servers()
+        cleanup()
         raise
 
 

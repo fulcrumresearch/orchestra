@@ -10,10 +10,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-from orchestra.lib.helpers import ensure_docker_image, ensure_shared_claude_config, get_docker_container_name
+from orchestra.lib.helpers.docker import ensure_docker_image, ensure_shared_claude_config, get_docker_container_name
+from orchestra.lib.config import get_tmux_server_name, get_orchestra_home
 from orchestra.lib.sessions import Session
 from orchestra.lib.tmux_agent import TmuxProtocol
 from orchestra.lib.config import get_orchestra_home
+from orchestra.lib.tmux_protocol import TmuxProtocol
 
 
 def main() -> int:
@@ -36,7 +38,7 @@ def main() -> int:
     try:
         # Kill orchestra tmux server
         subprocess.run(
-            ["tmux", "-L", "orchestra", "kill-server"],
+            ["tmux", "-L", get_tmux_server_name(), "kill-server"],
             capture_output=True,
             text=True,
         )
@@ -108,10 +110,10 @@ def main() -> int:
     if docker_available and docker_daemon_running:
         while True:
             response = input("\nDo you want to use Docker for sub-agents? (y/n): ").strip().lower()
-            if response in ['y', 'yes']:
+            if response in ["y", "yes"]:
                 use_docker = True
                 break
-            elif response in ['n', 'no']:
+            elif response in ["n", "no"]:
                 use_docker = False
                 break
             else:
@@ -178,9 +180,9 @@ def main() -> int:
 
             while True:
                 response = input("\nReady to start authentication session? (y/n): ").strip().lower()
-                if response in ['y', 'yes']:
+                if response in ["y", "yes"]:
                     break
-                elif response in ['n', 'no']:
+                elif response in ["n", "no"]:
                     print("\nAuthentication is required for Orchestra to work.")
                     print("Please run setup again when ready.")
                     return 1
@@ -191,15 +193,14 @@ def main() -> int:
 
             # Create a temporary session for authentication
             temp_work_dir = tempfile.mkdtemp(prefix="orchestra-setup-")
-            from orchestra.lib.sessions import AgentType
+            from orchestra.lib.agent import EXECUTOR_AGENT
 
             # Create a temporary session object
             session = Session(
                 session_name="setup-auth",
-                agent_type=AgentType.EXECUTOR,
+                agent=EXECUTOR_AGENT,
                 source_path=temp_work_dir,
                 work_path=temp_work_dir,
-                use_docker=True
             )
 
             # Create TmuxProtocol in Docker mode
@@ -222,11 +223,20 @@ def main() -> int:
             # Attach to the session interactively (this blocks until user exits)
             container_name = get_docker_container_name(session.session_id)
 
-            attach_result = subprocess.run([
-                "docker", "exec", "-it",
-                container_name,
-                "tmux", "-L", "orchestra", "attach-session", "-t", session.session_id
-            ])
+            attach_result = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "-it",
+                    container_name,
+                    "tmux",
+                    "-L",
+                    get_tmux_server_name(),
+                    "attach-session",
+                    "-t",
+                    session.session_id,
+                ]
+            )
 
             # Clean up the session
             print("\n" + "=" * 60)
@@ -266,9 +276,9 @@ def main() -> int:
 
                     while True:
                         response = input("\nHave you set up authentication? (y/n): ").strip().lower()
-                        if response in ['y', 'yes']:
+                        if response in ["y", "yes"]:
                             break
-                        elif response in ['n', 'no']:
+                        elif response in ["n", "no"]:
                             print("\nPlease set up authentication and run setup again.")
                             return 1
                         else:
@@ -292,13 +302,13 @@ def main() -> int:
 
             while True:
                 response = input("\nAre you authenticated with Claude CLI? (y/n): ").strip().lower()
-                if response in ['y', 'yes']:
+                if response in ["y", "yes"]:
                     if claude_config.exists():
                         print("✓ Authentication successful!")
                         break
                     else:
                         print("⚠️  Config file still not found. Please verify your authentication.")
-                elif response in ['n', 'no']:
+                elif response in ["n", "no"]:
                     print("\nPlease authenticate with Claude CLI and run setup again.")
                     return 1
                 else:

@@ -48,12 +48,12 @@ class SessionMonitor:
             return
 
         # Get parent session name if available
-        parent_session_id = getattr(self.session, 'parent_session_name', 'unknown')
+        parent_session_id = getattr(self.session, "parent_session_name", "unknown")
 
         # Get system prompt from prompts module
         system_prompt = get_monitor_prompt(
             session_id=self.session.session_id,
-            agent_type=self.session.agent_type.value if self.session.agent_type else "unknown",
+            agent_type=self.session.agent.name if self.session.agent else "unknown",
             parent_session_id=parent_session_id,
             source_path=self.session.source_path,
         )
@@ -141,44 +141,3 @@ class SessionMonitor:
                 # Mark all events as done
                 for _ in batch:
                     self.queue.task_done()
-
-
-@dataclass
-class SessionMonitorWatcher:
-    """Watches monitor.md files for a session and its children"""
-
-    session: Session
-
-    def get_monitor_files(self) -> Dict[str, Dict[str, Any]]:
-        """
-        Get monitor.md files for this session and all its children.
-        Returns dict: {session_id: {"path": path, "content": content, "mtime": mtime}}
-        """
-        monitors = {}
-        self._collect_from_session(self.session, monitors)
-        return monitors
-
-    def _collect_from_session(self, sess: Session, monitors: Dict[str, Dict[str, Any]]) -> None:
-        """Recursively collect monitor files from a session and its children"""
-        if not sess.work_path:
-            return
-
-        monitor_file = Path(sess.work_path) / ".orchestra" / "monitor.md"
-
-        if monitor_file.exists():
-            try:
-                content = monitor_file.read_text()
-                mtime = monitor_file.stat().st_mtime
-
-                monitors[sess.session_id] = {
-                    "path": str(monitor_file),
-                    "content": content,
-                    "mtime": mtime,
-                    "last_updated": datetime.fromtimestamp(mtime).isoformat(),
-                }
-            except Exception as e:
-                logger.error(f"Error reading {monitor_file}: {e}")
-
-        # Process children
-        for child in sess.children:
-            self._collect_from_session(child, monitors)

@@ -1,14 +1,27 @@
-"""Tmux command builder and executor for orchestra socket."""
+"""Tmux command builders and pane management utilities"""
 
 import os
 import subprocess
+import shutil
+import shlex
+from pathlib import Path
 from collections.abc import Sequence
 from typing import Union
 
-from .config import get_tmux_config_path
+from ..logger import get_logger
+from ..config import get_tmux_config_path, get_tmux_server_name
+from .process import find_available_editor
+
+logger = get_logger(__name__)
 
 
-TMUX_SOCKET = "orchestra"
+# Tmux pane constants
+PANE_UI = "0"
+PANE_EDITOR = "1"
+PANE_AGENT = "2"
+
+
+# Low-level command builders
 
 
 def tmux_env() -> dict:
@@ -18,7 +31,7 @@ def tmux_env() -> dict:
 
 def build_tmux_cmd(*args: str) -> list[str]:
     """Build tmux command for orchestra socket."""
-    return ["tmux", "-L", TMUX_SOCKET, *args]
+    return ["tmux", "-L", get_tmux_server_name(), *args]
 
 
 def execute_local(cmd: list[str]) -> subprocess.CompletedProcess:
@@ -78,3 +91,58 @@ def build_respawn_pane_cmd(pane: str, command: Union[str, Sequence[str]]) -> lis
     else:
         args.extend(command)
     return build_tmux_cmd(*args)
+
+
+# High-level pane management
+
+
+def respawn_pane(pane: str, command: str) -> bool:
+    """Generic helper to respawn a tmux pane with a command.
+
+    Args:
+        pane: The pane number to respawn
+        command: The command to run in the pane
+
+    Returns:
+        True if successful, False otherwise
+    """
+    result = subprocess.run(
+        build_respawn_pane_cmd(pane, command),
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
+
+
+def respawn_pane_with_vim(spec_file: Path) -> bool:
+    """Open an editor in the editor pane.
+
+    Args:
+        spec_file: Path to the file to open
+
+    Returns:
+        True if successful, False otherwise
+    """
+    editor = find_available_editor()
+
+    if not editor:
+        logger.error("No editor found. Please install nano, vim, or VS Code, or set the $EDITOR environment variable.")
+        return False
+
+    editor_cmd = (
+        f'$SHELL -c "{editor} {shlex.quote(str(spec_file))}; clear; echo \\"Press s to open spec editor\\"; exec $SHELL"'
+    )
+    return respawn_pane(PANE_EDITOR, editor_cmd)
+
+
+def respawn_pane_with_terminal(work_path: Path) -> bool:
+    """Open shell in editor pane.
+
+    Args:
+        work_path: Path to cd into before starting shell
+
+    Returns:
+        True if successful, False otherwise
+    """
+    bash_cmd = f'$SHELL -c "cd {shlex.quote(str(work_path))} && exec $SHELL"'
+    return respawn_pane(PANE_EDITOR, bash_cmd)

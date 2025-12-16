@@ -11,7 +11,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from orchestra.backend.mcp_server import spawn_subagent, send_message_to_session
+<<<<<<< HEAD
 from orchestra.lib.sessions import Session, AgentType, save_session
+=======
+from orchestra.lib.sessions import Session, save_session
+from orchestra.lib.agent import DESIGNER_AGENT, EXECUTOR_AGENT
+>>>>>>> main
 from orchestra.lib.config import get_orchestra_home
 
 
@@ -21,7 +26,7 @@ class TestSpawnSubagentIntegration:
     def test_spawn_creates_worktree_and_files(self, designer_session, orchestra_test_env):
         """Test that spawn_subagent creates a real git worktree and instruction files"""
         # Mock only the tmux start operation (we're not testing tmux startup here)
-        with patch("orchestra.lib.tmux_agent.TmuxProtocol.start", return_value=True):
+        with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
             result = spawn_subagent(
                 parent_session_name="designer",
                 child_session_name="test-child",
@@ -32,19 +37,24 @@ class TestSpawnSubagentIntegration:
         # Verify success
         assert "Successfully spawned child session 'test-child'" in result
 
-        # Verify worktree was created (use actual repo name, not hardcoded)
+        # Verify subagent directory was created
         repo_name = orchestra_test_env.repo.name
         session_id = f"{repo_name}-test-child"
+<<<<<<< HEAD
         worktree_path = get_orchestra_home() / "worktrees" / repo_name / session_id
         assert worktree_path.exists(), f"Worktree should exist at {worktree_path}"
+=======
+        subagent_path = get_orchestra_home() / "subagents" / session_id
+        assert subagent_path.exists(), f"Subagent directory should exist at {subagent_path}"
+>>>>>>> main
 
         # Verify instructions.md was created
-        instructions_file = worktree_path / "instructions.md"
+        instructions_file = subagent_path / "instructions.md"
         assert instructions_file.exists()
         assert "Build the login feature" in instructions_file.read_text()
 
         # Verify .claude/orchestra.md was created
-        orchestra_md = worktree_path / ".claude" / "orchestra.md"
+        orchestra_md = subagent_path / ".claude" / "orchestra.md"
         assert orchestra_md.exists()
 
 
@@ -62,7 +72,7 @@ class TestSpawnSubagentIntegration:
     def test_spawn_persists_to_sessions_file(self, designer_session, orchestra_test_env):
         """Test that spawned child is persisted in sessions.json"""
         # Spawn child
-        with patch("orchestra.lib.tmux_agent.TmuxProtocol.start", return_value=True):
+        with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
             spawn_subagent(
                 parent_session_name="designer",
                 child_session_name="child",
@@ -99,17 +109,15 @@ class TestSendMessageIntegration:
 
         assert "Error: Session 'nonexistent' not found" in result
 
-    def test_send_message(self, orchestra_test_env):
-        """Test that messages are prefixed with [From: sender_name]"""
-        # Create and start a real tmux session
-        target = Session(
-            session_name="target",
-            agent_type=AgentType.DESIGNER,
-            source_path=str(orchestra_test_env.repo),
-            use_docker=False,
-        )
-        target.prepare()
-        save_session(target, project_dir=orchestra_test_env.repo)
+    def test_send_message_to_executor(self, designer_session, orchestra_test_env):
+        """Test that messages to executor sessions are sent via tmux with [From: sender_name] prefix"""
+        # Create an executor as a child of designer (real scenario)
+        with patch("orchestra.lib.tmux_protocol.TmuxProtocol.start", return_value=True):
+            target = designer_session.spawn_child(
+                session_name="target",
+                instructions="Test task",
+            )
+        save_session(designer_session, project_dir=orchestra_test_env.repo)
 
         # Start a real tmux session for the target
         subprocess.run(
@@ -142,3 +150,27 @@ class TestSendMessageIntegration:
         assert "[From: my-sender] Test message" in pane_content, (
             f"Expected message not found in pane content: {pane_content}"
         )
+
+    def test_send_message_to_designer_queues_to_jsonl(self, designer_session, orchestra_test_env):
+        """Test that messages to designer sessions are written to messages.jsonl"""
+        # Send a message to the designer session
+        result = send_message_to_session(
+            session_name="designer",
+            message="Please review the PR",
+            source_path=str(orchestra_test_env.repo),
+            sender_name="child-executor",
+        )
+
+        # Verify success
+        assert "Successfully sent message" in result
+
+        # Verify message was written to messages.jsonl
+        messages_file = Path(designer_session.work_path) / ".orchestra" / "messages.jsonl"
+        assert messages_file.exists(), "messages.jsonl should exist"
+
+        # Read and verify message format
+        with open(messages_file) as f:
+            line = f.readline().strip()
+            message_obj = json.loads(line)
+            assert message_obj["sender"] == "child-executor"
+            assert message_obj["message"] == "Please review the PR"

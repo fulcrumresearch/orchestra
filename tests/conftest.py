@@ -102,7 +102,7 @@ def isolated_sessions_file(tmp_path, monkeypatch, isolated_orchestra_home):
 
     # Patch SESSIONS_FILE in all modules that use it
     monkeypatch.setattr("orchestra.lib.sessions.SESSIONS_FILE", temp_sessions_file)
-    monkeypatch.setattr("orchestra.lib.helpers.SESSIONS_FILE", temp_sessions_file)
+    monkeypatch.setattr("orchestra.lib.helpers.file_ops.SESSIONS_FILE", temp_sessions_file)
 
     # Initialize empty sessions file
     temp_sessions_file.write_text("{}")
@@ -161,8 +161,13 @@ def tmux(monkeypatch):
     def test_build_tmux_cmd(*args):
         return ["tmux", "-L", socket_name] + list(args)
 
-    monkeypatch.setattr("orchestra.lib.tmux.build_tmux_cmd", test_build_tmux_cmd)
-    monkeypatch.setattr("orchestra.lib.tmux_agent.build_tmux_cmd", test_build_tmux_cmd)
+    # Patch get_tmux_server_name to return test socket name
+    def test_get_tmux_server_name():
+        return socket_name
+
+    monkeypatch.setattr("orchestra.lib.helpers.tmux.build_tmux_cmd", test_build_tmux_cmd)
+    monkeypatch.setattr("orchestra.lib.tmux_protocol.build_tmux_cmd", test_build_tmux_cmd)
+    monkeypatch.setattr("orchestra.lib.config.get_tmux_server_name", test_get_tmux_server_name)
 
     yield socket_name
 
@@ -176,14 +181,15 @@ def tmux(monkeypatch):
 class OrchestraTestEnv:
     """Complete test environment for Orchestra integration tests"""
 
-    def __init__(self, git_repo: Path, sessions_file: Path, tmux_socket: str):
+    def __init__(self, git_repo: Path, sessions_file: Path, tmux_socket: str, orchestra_dir: Path):
         self.repo = git_repo
         self.sessions_file = sessions_file
         self.tmux = tmux_socket
+        self.orchestra_dir = orchestra_dir
 
 
 @pytest.fixture
-def orchestra_test_env(temp_git_repo, isolated_sessions_file, mock_config, tmux):
+def orchestra_test_env(temp_git_repo, isolated_sessions_file, mock_config, tmux, tmp_path, monkeypatch):
     """All-in-one fixture for Orchestra integration tests
 
     Provides a complete test environment with:
@@ -191,6 +197,8 @@ def orchestra_test_env(temp_git_repo, isolated_sessions_file, mock_config, tmux)
     - Isolated sessions.json file
     - Mocked config (use_docker=False, mcp_port=8765)
     - Isolated tmux server on test socket
+    - Temporary .orchestra directory
+    - ORCHESTRA_HOME_DIR environment variable set
 
     Usage:
         def test_something(orchestra_test_env):
@@ -200,15 +208,60 @@ def orchestra_test_env(temp_git_repo, isolated_sessions_file, mock_config, tmux)
             repo_path = env.repo
             sessions_file = env.sessions_file
             tmux_socket = env.tmux
+            orchestra_dir = env.orchestra_dir
 
             # Use tmux socket for subprocess calls
             subprocess.run(["tmux", "-L", env.tmux, "list-sessions"])
     """
+    # Create .orchestra directory in the repo (where sessions actually work)
+    orchestra_dir = temp_git_repo / ".orchestra"
+    orchestra_dir.mkdir(parents=True, exist_ok=True)
+
+    # Set ORCHESTRA_HOME_DIR for all tests using this fixture
+    monkeypatch.setenv("ORCHESTRA_HOME_DIR", str(orchestra_dir))
+
     return OrchestraTestEnv(
         git_repo=temp_git_repo,
         sessions_file=isolated_sessions_file,
         tmux_socket=tmux,
+        orchestra_dir=orchestra_dir,
     )
+
+
+@pytest.fixture
+def orchestra_test_env_with_custom_agents(orchestra_test_env):
+    """Orchestra test environment with custom agent fixtures pre-loaded
+
+    This fixture extends orchestra_test_env by copying custom agent files
+    into the test .orchestra directory, so tests can use custom agents
+    without manual setup.
+
+    Provides everything from orchestra_test_env plus:
+    - Custom agent Python modules in .orchestra/custom_agents/
+    - Custom agent config in .orchestra/config/agents.yaml
+
+    Usage:
+        def test_something(orchestra_test_env_with_custom_agents):
+            env = orchestra_test_env_with_custom_agents
+            # Custom agents are ready to use
+            agent = load_agent("hello-agent")
+    """
+    import shutil
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+
+    # Copy custom_agents directory
+    custom_agents_src = fixtures_dir / "custom_agents"
+    custom_agents_dst = orchestra_test_env.orchestra_dir / "custom_agents"
+    shutil.copytree(custom_agents_src, custom_agents_dst)
+
+    # Copy test agents.yaml
+    config_dir = orchestra_test_env.orchestra_dir / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    test_config = fixtures_dir / "config" / "agents.yaml"
+    shutil.copy(test_config, config_dir / "agents.yaml")
+
+    return orchestra_test_env
 
 
 @pytest.fixture
@@ -224,22 +277,50 @@ def designer_session(orchestra_test_env):
     Usage:
         def test_something(designer_session):
             # Session is ready to use
-            assert designer_session.agent_type == AgentType.DESIGNER
+            assert designer_session.agent.name == "designer"
             assert designer_session.work_path is not None
 
             # Spawn a child
-            designer_session.spawn_executor("child", "Task instructions")
+            designer_session.spawn_child("child", "Task instructions")
     """
-    from orchestra.lib.sessions import Session, AgentType, save_session
+    from orchestra.lib.sessions import Session, save_session
+    from orchestra.lib.agent import DESIGNER_AGENT
 
     session = Session(
         session_name="designer",
-        agent_type=AgentType.DESIGNER,
+        agent=DESIGNER_AGENT,
         source_path=str(orchestra_test_env.repo),
-        use_docker=False,
     )
     session.prepare()
     save_session(session, project_dir=orchestra_test_env.repo)
+
+    return session
+
+
+@pytest.fixture
+def designer_session_with_custom_agents(orchestra_test_env_with_custom_agents):
+    """Create a prepared designer session with custom agents available
+
+    Like designer_session, but with custom agent fixtures pre-loaded,
+    so spawned children can use custom agent types.
+
+    Usage:
+        def test_something(designer_session_with_custom_agents):
+            # Spawn a child with custom agent type
+            child = designer_session_with_custom_agents.spawn_child(
+                "test-child", "Do something", agent_type="hello-agent"
+            )
+    """
+    from orchestra.lib.sessions import Session, save_session
+    from orchestra.lib.agent import DESIGNER_AGENT
+
+    session = Session(
+        session_name="designer",
+        agent=DESIGNER_AGENT,
+        source_path=str(orchestra_test_env_with_custom_agents.repo),
+    )
+    session.prepare()
+    save_session(session, project_dir=orchestra_test_env_with_custom_agents.repo)
 
     return session
 
@@ -277,7 +358,7 @@ def docker_setup(docker_available):
             # orchestra-image is guaranteed to exist
             ...
     """
-    from orchestra.lib.helpers import ensure_docker_image
+    from orchestra.lib.helpers.docker import ensure_docker_image
 
     # Build image once for all tests
     ensure_docker_image()
@@ -306,7 +387,7 @@ def cleanup_containers(request):
             # ... test code that creates container ...
             # Container will be cleaned up automatically after test
     """
-    from orchestra.lib.helpers import stop_docker_container
+    from orchestra.lib.helpers.docker import stop_docker_container
 
     containers_to_cleanup = []
 
@@ -339,7 +420,7 @@ def mock_config_with_docker(monkeypatch):
     return test_config
 
 @pytest.fixture
-def executor_session(orchestra_test_env):
+def executor_session(orchestra_test_env, monkeypatch):
     """Create a prepared executor session for testing
 
     Returns a Session object that:
@@ -352,20 +433,27 @@ def executor_session(orchestra_test_env):
     Usage:
         def test_something(executor_session):
             # Session is ready to use
-            assert executor_session.agent_type == AgentType.EXECUTOR
+            assert executor_session.agent.name == "executor"
             assert executor_session.work_path is not None
             assert executor_session.work_path != executor_session.source_path
 
             # Test pairing
             executor_session.toggle_pairing()
     """
-    from orchestra.lib.sessions import Session, AgentType, save_session
+    from orchestra.lib.sessions import Session, save_session
+    from orchestra.lib.agent import EXECUTOR_AGENT
+    import os
+
+    # Temporarily unset ORCHESTRA_HOME_DIR so worktrees are created in default location
+    # This is needed for pairing tests to work correctly
+    if "ORCHESTRA_HOME_DIR" in os.environ:
+        monkeypatch.delenv("ORCHESTRA_HOME_DIR")
 
     session = Session(
         session_name="executor",
-        agent_type=AgentType.EXECUTOR,
+        agent=EXECUTOR_AGENT,
         source_path=str(orchestra_test_env.repo),
-        use_docker=False,
+        parent_session_name="test-parent",  # Make it non-root
     )
     session.prepare()
     save_session(session, project_dir=orchestra_test_env.repo)

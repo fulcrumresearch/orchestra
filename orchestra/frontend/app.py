@@ -2,6 +2,7 @@
 """Unified UI - Session picker and monitor combined (refactored)"""
 
 from __future__ import annotations
+
 import asyncio
 from pathlib import Path
 
@@ -22,27 +23,31 @@ from textual.binding import Binding
 # Import widgets from new locations
 from orchestra.frontend.widgets.hud import HUD
 from orchestra.frontend.widgets.diff_tab import DiffTab
+from orchestra.frontend.widgets.messages_tab import MessagesTab
 from orchestra.frontend.state import AppState
+from orchestra.lib.message import load_messages
 
 # Import from lib
 from orchestra.lib.sessions import (
     Session,
-    AgentType,
     save_session,
 )
+from orchestra.lib.agent import DESIGNER_AGENT
 from orchestra.lib.logger import get_logger
 from orchestra.lib.config import load_config
-from orchestra.lib.helpers import (
-    check_dependencies,
-    get_current_branch,
+from orchestra.lib.helpers.process import check_dependencies
+from orchestra.lib.helpers.git import get_current_branch
+from orchestra.lib.helpers.tmux import (
     respawn_pane,
     respawn_pane_with_vim,
     respawn_pane_with_terminal,
-    ensure_docker_image,
+    PANE_AGENT,
+)
+from orchestra.lib.helpers.docker import ensure_docker_image
+from orchestra.lib.helpers.file_ops import (
     ensure_orchestra_directory,
     is_first_run,
     SESSIONS_FILE,
-    PANE_AGENT,
 )
 
 logger = get_logger(__name__)
@@ -63,12 +68,12 @@ class UnifiedApp(App):
         padding: 0 1;
     }
 
-    
+
 
     #hud {
         height: 1;
         padding: 0;
-        color: $secondary;
+        color: $primary;
         text-align: center;
         width: 100%;
     }
@@ -106,8 +111,6 @@ class UnifiedApp(App):
         padding: 0;
     }
 
-    
-
     TabbedContent {
         height: 1fr;
         padding: 0;
@@ -126,6 +129,10 @@ class UnifiedApp(App):
 
     Tab.-active {
         text-style: bold;
+    }
+
+    Tab.-active:focus-within {
+        background: $primary 25%;
     }
 
     TabPane {
@@ -185,6 +192,7 @@ class UnifiedApp(App):
 
     ListItem {
         color: $foreground;
+        background: $background;
         width: 100%;
         padding: 0;
         margin: 0;
@@ -200,21 +208,18 @@ class UnifiedApp(App):
         overflow: hidden;       /* truncate visually */
     }
 
-    ListItem:hover {
-        background: $surface;
-        color: $accent;
-    }
-
     /* Left-side rectangular indicator bar for highlighted item */
     ListItem .indicator { width: 1; height: 1; background: transparent; }
 
-    ListView > ListItem.--highlight {
-        background: $surface;
-        color: $success;
-        text-style: bold;
+    /* Subtle purple background for highlighted item (both focused and unfocused) */
+    ListItem.-highlight {
+        background: $primary 25%;
     }
 
-    ListItem.--highlight .indicator { background: $success; }
+    ListItem.-highlight Label {
+        color: $text;
+        text-style: bold;
+    }
 
     RichLog {
         background: $background;
@@ -287,6 +292,9 @@ class UnifiedApp(App):
                     with TabbedContent(initial="diff-tab"):
                         with TabPane("Diff", id="diff-tab"):
                             yield DiffTab()
+                        with TabPane("Messages", id="messages-tab"):
+                            self.messages_tab = MessagesTab()
+                            yield self.messages_tab
 
     async def on_ready(self) -> None:
         """Load sessions and refresh list"""
@@ -311,7 +319,7 @@ class UnifiedApp(App):
 
                 new_session = Session(
                     session_name=branch_name,
-                    agent_type=AgentType.DESIGNER,
+                    agent=DESIGNER_AGENT,
                     source_path=str(Path.cwd()),
                 )
                 new_session.prepare()
@@ -330,24 +338,37 @@ class UnifiedApp(App):
         await self.action_refresh()
 
         if self.state.root_session:
+            # Regenerate instructions to ensure session context is current
+            self.state.root_session.add_instructions()
             self._attach_to_session(self.state.root_session)
 
         self.set_focus(self.session_list)
 
-        # Watch sessions.json for changes
-        async def on_sessions_file_change(path, change_type):
+        async def on_sessions_file_change(path, last_call_time):
             self.state.load(root_session_name=self.state.root_session_name)
             await self.action_refresh()
 
         self.state.file_watcher.register(SESSIONS_FILE, on_sessions_file_change)
-        await self.state.file_watcher.start()
 
-        # Ensure .orchestra directory and files exist
+        messages_file = Path.cwd() / ".orchestra" / "messages.jsonl"
+
+        def messages_filter(path: Path) -> bool:
+            """Only notify if message is for root session (designer)"""
+
+            all_messages = load_messages(Path.cwd())
+            if not all_messages:
+                return False
+            latest_msg = all_messages[-1]
+            return latest_msg.recipient == self.state.root_session.session_name
+
+        self.state.file_watcher.add_session_change_notifier(messages_file, self.state.root_session, messages_filter)
+
         designer_md, doc_md = ensure_orchestra_directory(self.state.project_dir)
 
-        # Add watcher for designer.md (once root session is ready)
         if self.state.root_session:
-            self.state.file_watcher.add_designer_watcher(designer_md, self.state.root_session)
+            self.state.file_watcher.add_session_change_notifier(designer_md, self.state.root_session)
+
+        await self.state.file_watcher.start()
 
         # Auto-open doc.md on first run, otherwise open designer.md
         if first_run:
@@ -368,7 +389,7 @@ class UnifiedApp(App):
             return
 
         paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_name == root.session_name else ""
-        label_text = f"{paired_marker}{root.session_name} [dim][#00ff9f](designer)[/#00ff9f][/dim]"
+        label_text = f"{paired_marker}{root.session_name} (designer)"
         self.session_list.append(
             ListItem(
                 Horizontal(
@@ -380,7 +401,7 @@ class UnifiedApp(App):
 
         for child in root.children:
             paired_marker = "[bold magenta]◆[/bold magenta] " if self.state.paired_session_name == child.session_name else ""
-            label_text = f"{paired_marker}  {child.session_name} [dim][#00d4ff](executor)[/#00d4ff][/dim]"
+            label_text = f"{paired_marker}  {child.session_name} (executor)"
             self.session_list.append(
                 ListItem(
                     Horizontal(
@@ -534,12 +555,13 @@ class UnifiedApp(App):
     def _attach_to_session(self, session: Session) -> None:
         """Select a session and update monitors to show it"""
         self.state.set_active_session(session.session_name)
+        self.messages_tab.refresh_messages()
         status = session.get_status()
 
         if not status.get("exists", False):
             if not session.start():
                 logger.error(f"Failed to start session: {session.session_id}")
-                error_cmd = f"bash -c 'echo \"Failed to start session {session.session_id}\"; exec bash'"
+                error_cmd = f"$SHELL -c 'echo \"Failed to start session {session.session_id}\"; exec $SHELL'"
                 respawn_pane(PANE_AGENT, error_cmd)
                 return
 
@@ -554,6 +576,17 @@ class UnifiedApp(App):
         """Override quit to show shutdown message and run cleanup"""
         self.status_indicator.update("⏳ Quitting...")
         logger.info("Shutting down Orchestra...")
+
+        # Unpair synchronously if needed
+        paired_session = self.state.get_paired_session()
+        if paired_session:
+            logger.info(f"Unpairing {paired_session.session_name} before shutdown...")
+            success, error_msg = paired_session.toggle_pairing()
+            if not success:
+                logger.error(f"Failed to unpair: {error_msg}")
+            else:
+                self.state.set_paired_session(None)
+
         asyncio.create_task(self._shutdown_task())
 
     async def _shutdown_task(self) -> None:
