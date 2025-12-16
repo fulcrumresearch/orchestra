@@ -8,13 +8,8 @@ from pathlib import Path
 from orchestra.frontend.app import UnifiedApp
 from orchestra.lib.logger import get_logger
 from orchestra.lib.config import load_config, get_orchestra_home
-<<<<<<< HEAD
 from orchestra.lib.tmux import build_tmux_cmd, execute_local
-from orchestra.lib.helpers import kill_process_gracefully
-=======
-from orchestra.lib.helpers.tmux import build_tmux_cmd, execute_local
 from orchestra.lib.helpers.process import kill_process_gracefully
->>>>>>> main
 
 logger = get_logger(__name__)
 
@@ -55,12 +50,8 @@ def main():
 
     # Start the monitoring server in the background
     if START_MONITOR:
-<<<<<<< HEAD
         config = load_config()
         monitor_port = config.get("monitor_port", 8081)
-=======
-        monitor_port = 8081
->>>>>>> main
         monitor_log = get_orchestra_home() / "monitor-server.log"
         monitor_log.parent.mkdir(parents=True, exist_ok=True)
 
