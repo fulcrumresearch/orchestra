@@ -4,7 +4,7 @@ import json
 import re
 import subprocess
 
-from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
+from .prompts import MERGE_CHILD_COMMAND, DESIGNER_PROMPT, EXECUTOR_PROMPT
 from .config import load_config, get_orchestra_home
 from orchestra.lib.tmux_protocol import TmuxProtocol
 from .logger import get_logger
