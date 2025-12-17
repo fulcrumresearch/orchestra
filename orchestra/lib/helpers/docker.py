@@ -68,8 +68,17 @@ def ensure_docker_image() -> None:
         logger.info("Docker image built successfully")
 
 
-def start_docker_container(container_name: str, work_path: str, mcp_port: int, paired: bool = False) -> bool:
+def start_docker_container(
+    container_name: str, work_path: str, mcp_port: int, monitor_port: int, paired: bool = False
+) -> bool:
     """Start Docker container with mounted worktree
+
+    Args:
+        container_name: Name for the container
+        work_path: Path to mount as /workspace
+        mcp_port: Port for MCP server on host
+        monitor_port: Port for monitor server on host
+        paired: Whether this is a paired session
 
     Returns:
         True on success, False on failure
@@ -124,6 +133,10 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
     if api_key:
         env_vars.extend(["-e", f"ANTHROPIC_API_KEY={api_key}"])
 
+    # Pass monitor URL to container for hook forwarding
+    monitor_url = f"http://localhost:{monitor_port}"
+    env_vars.extend(["-e", f"CLAUDE_MONITOR_BASE={monitor_url}"])
+
     # Get host user's UID and GID to run container as matching user
     uid = os.getuid()
     gid = os.getgid()
@@ -137,8 +150,10 @@ def start_docker_container(container_name: str, work_path: str, mcp_port: int, p
         container_name,
         "--user",
         f"{uid}:{gid}",  # Run as host user to match file permissions
-        "--add-host",
-        "host.docker.internal:host-gateway",  # Allow access to host
+        "-p",
+        f"127.0.0.1:{mcp_port}:{mcp_port}",
+        "-p",
+        f"127.0.0.1:{monitor_port}:{monitor_port}",
         *env_vars,
         *mounts,
         "-w",
@@ -181,8 +196,8 @@ def ensure_shared_claude_config(shared_claude_dir: Path, shared_claude_json: Pat
     # Ensure shared directory exists
     shared_claude_dir.mkdir(parents=True, exist_ok=True)
 
-    # MCP URL for Docker containers (always uses host.docker.internal)
-    mcp_url = f"http://host.docker.internal:{mcp_port}/mcp"
+    # MCP URL for Docker containers (uses localhost with port forwarding)
+    mcp_url = f"http://localhost:{mcp_port}/mcp"
 
     # Initialize or update shared .claude.json
     config = {}
