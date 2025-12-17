@@ -4,8 +4,9 @@ import json
 import re
 import subprocess
 
-from orchestra.lib.tmux_protocol import TmuxProtocol
+from .prompts import MERGE_CHILD_COMMAND, PROJECT_CONF, DESIGNER_PROMPT, EXECUTOR_PROMPT
 from .config import load_config, get_orchestra_home
+from orchestra.lib.tmux_protocol import TmuxProtocol
 from .logger import get_logger
 from .agent import Agent, DESIGNER_AGENT, EXECUTOR_AGENT, load_agent, ExecutorAgent, StaleAgent
 from .helpers.git import create_worktree
@@ -52,6 +53,7 @@ class Session:
         self.protocol = TmuxProtocol(
             default_command="claude",
             mcp_port=config.get("mcp_port", 8765),
+            monitor_port=config.get("monitor_port", 8081),
             use_docker=(allow_docker and agent.use_docker),
         )
 

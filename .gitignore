@@ -3,6 +3,7 @@
 __pycache__/
 .mcp.json
 instructions.md
-.orchestra/*
-!.orchestra/docs/
+.orchestra/designer.md
+.orchestra/doc.md
+.orchestra/messages.jsonl
 build/

@@ -32,6 +32,7 @@ class TmuxProtocol(AgentProtocol):
         self,
         default_command: str = "claude",
         mcp_port: int = 8765,
+        monitor_port: int = 8081,
         use_docker: bool = True,
     ):
         """
@@ -40,10 +41,12 @@ class TmuxProtocol(AgentProtocol):
         Args:
             default_command: Default command to run when starting a session
             mcp_port: Port where MCP server is running (default: 8765)
+            monitor_port: Port where Monitor server is running (default: 8081)
             use_docker: Whether to use Docker for sessions (default: True)
         """
         self.default_command = default_command
         self.mcp_port = mcp_port
+        self.monitor_port = monitor_port
         self.use_docker = use_docker
 
     def _exec(self, session: "Session", cmd: list[str]) -> subprocess.CompletedProcess:
@@ -85,6 +88,7 @@ class TmuxProtocol(AgentProtocol):
                 container_name=container_name,
                 work_path=session.work_path,
                 mcp_port=self.mcp_port,
+                monitor_port=self.monitor_port,
                 paired=session.paired,
             ):
                 return False
