@@ -13,7 +13,6 @@ from pathlib import Path
 from orchestra.lib.helpers.docker import ensure_docker_image, ensure_shared_claude_config, get_docker_container_name
 from orchestra.lib.config import get_tmux_server_name, get_orchestra_home
 from orchestra.lib.sessions import Session
-from orchestra.lib.config import get_orchestra_home
 from orchestra.lib.tmux_protocol import TmuxProtocol
 
 
